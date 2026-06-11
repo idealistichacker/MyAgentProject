@@ -1,0 +1,248 @@
+{
+  "currentUnitId": "dsa-003",
+  "completedUnitIds": [],
+  "attempts": {
+    "dsa-001": {
+      "count": 2,
+      "lastSubmittedAt": "2026-06-11T08:58:09.843Z"
+    },
+    "dsa-002": {
+      "count": 1,
+      "lastSubmittedAt": "2026-06-11T09:12:24.415Z"
+    },
+    "dsa-003": {
+      "count": 2,
+      "lastSubmittedAt": "2026-06-11T09:25:55.999Z"
+    }
+  },
+  "assessments": [
+    {
+      "unitId": "dsa-001",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 3,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "exercise-runner",
+          "passed": false,
+          "message": "spawn EINVAL"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "可以在线性扫描中维护两个位置的问题",
+          "expected": "可以在线性扫描中维护两个位置的问题"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "下一个保留元素应该写入的位置",
+          "expected": "下一个保留元素应该写入的位置"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "因为 slow 是最后一个保留元素的索引，长度等于索引加一。",
+          "expected": "因为 slow 是最后一个保留元素的索引，长度等于索引加一。"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure"
+      ],
+      "diagnosis": "本单元《数组与双指针：用两个游标压缩无效操作》评分：3/5。代码测试失败 1 个，优先检查：exercise-runner。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "未通过本单元。建议先查看错题和测试失败信息，再执行 fc submit dsa-001 重新提交。",
+      "createdAt": "2026-06-11T08:36:54.391Z"
+    },
+    {
+      "unitId": "dsa-001",
+      "assessmentType": "code+quiz",
+      "passed": true,
+      "score": 5,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty array",
+          "passed": true
+        },
+        {
+          "name": "single element",
+          "passed": true
+        },
+        {
+          "name": "all duplicates",
+          "passed": true
+        },
+        {
+          "name": "mixed duplicates",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "可以在线性扫描中维护两个位置的问题",
+          "expected": "可以在线性扫描中维护两个位置的问题"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "下一个保留元素应该写入的位置",
+          "expected": "下一个保留元素应该写入的位置"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "因为 slow 是最后一个保留元素的索引，长度等于索引加一。",
+          "expected": "因为 slow 是最后一个保留元素的索引，长度等于索引加一。"
+        }
+      ],
+      "mistakeTypes": [],
+      "diagnosis": "本单元《数组与双指针：用两个游标压缩无效操作》评分：5/5。代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "通过本单元。建议执行 fc next 进入 dsa-002。",
+      "createdAt": "2026-06-11T08:58:09.843Z"
+    },
+    {
+      "unitId": "dsa-002",
+      "assessmentType": "code+quiz",
+      "passed": true,
+      "score": 5,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "basic example",
+          "passed": true
+        },
+        {
+          "name": "negative numbers",
+          "passed": true
+        },
+        {
+          "name": "zero included",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "value -> index",
+          "expected": "value -> index"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "O(n)",
+          "expected": "O(n)"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "因为可能错误地把当前元素当成自己的 complement 使用。",
+          "expected": "因为可能错误地把当前元素当成自己的 complement 使用。"
+        }
+      ],
+      "mistakeTypes": [],
+      "diagnosis": "本单元《哈希表：把查找从线性扫描变成常数时间》评分：5/5。代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "通过本单元。建议执行 fc next 进入 dsa-003。",
+      "createdAt": "2026-06-11T09:12:24.415Z"
+    },
+    {
+      "unitId": "dsa-003",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 3,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "exercise-runner",
+          "passed": false,
+          "message": "'C:\\Program' �����ڲ����ⲿ���Ҳ���ǿ����еĳ���\r\n���������ļ���\r\n"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "后进先出 LIFO",
+          "expected": "后进先出 LIFO"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "最近一个未匹配的左括号",
+          "expected": "最近一个未匹配的左括号"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "说明所有左括号都被正确匹配。",
+          "expected": "说明所有左括号都被正确匹配。"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure"
+      ],
+      "diagnosis": "本单元《栈与括号匹配：用 LIFO 表达嵌套结构》评分：3/5。代码测试失败 1 个，优先检查：exercise-runner。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "未通过本单元。建议先查看错题和测试失败信息，再执行 fc submit dsa-003 重新提交。",
+      "createdAt": "2026-06-11T09:25:32.612Z"
+    },
+    {
+      "unitId": "dsa-003",
+      "assessmentType": "code+quiz",
+      "passed": true,
+      "score": 5,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty string",
+          "passed": true
+        },
+        {
+          "name": "simple valid",
+          "passed": true
+        },
+        {
+          "name": "nested valid",
+          "passed": true
+        },
+        {
+          "name": "invalid order",
+          "passed": true
+        },
+        {
+          "name": "missing close",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "后进先出 LIFO",
+          "expected": "后进先出 LIFO"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "最近一个未匹配的左括号",
+          "expected": "最近一个未匹配的左括号"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "说明所有左括号都被正确匹配。",
+          "expected": "说明所有左括号都被正确匹配。"
+        }
+      ],
+      "mistakeTypes": [],
+      "diagnosis": "本单元《栈与括号匹配：用 LIFO 表达嵌套结构》评分：5/5。代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "通过本单元。建议执行 fc next 进入 下一单元。",
+      "createdAt": "2026-06-11T09:25:55.999Z"
+    }
+  ],
+  "updatedAt": "2026-06-11T09:25:55.999Z"
+}

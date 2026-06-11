@@ -1,0 +1,397 @@
+{
+  "learnerProfile": {
+    "target": "学会写1+1=2",
+    "jsLevel": "basic",
+    "dsaLevel": "heard",
+    "weeklyHours": "2-5",
+    "learningStyle": "explain-first",
+    "codePractice": "yes",
+    "pace": "normal",
+    "nearTermGoal": "",
+    "rawAnswers": {},
+    "summary": "学习者目前 JavaScript/TypeScript 基础为 basic，数据结构与算法只是听说过，整体处于入门到起步阶段。每周可投入 2-5 小时，偏好先讲解再练习的学习方式，并愿意进行代码实践。当前目标表述为“学会写 1+1=2”，但综合信息显示其真实近中期目标是具备通过字节笔试的基础能力。适合以正常节奏，从语法基础、简单题和笔试常见题型开始系统训练。",
+    "createdAt": "2026-06-11T08:32:49.081Z"
+  },
+  "units": [
+    {
+      "id": "dsa-001",
+      "title": "数组与双指针：用两个游标压缩无效操作",
+      "description": "学习如何用双指针在有序数组上原地去重，并理解时间复杂度 O(n) 的来源。",
+      "prerequisites": [
+        "数组基础",
+        "for 循环",
+        "基本时间复杂度概念"
+      ],
+      "objectives": [
+        "理解双指针适合处理有序或可线性扫描的问题",
+        "能解释 slow/fast 两个指针分别代表什么",
+        "能实现原地数组去重并返回有效长度"
+      ],
+      "content": "# 数组与双指针：用两个游标压缩无效操作\n\n## 1. 为什么需要双指针？\n\n如果你要在有序数组里删除重复元素，最直观的方法可能是：遍历数组、遇到重复就删除、继续向后检查。\n但数组删除元素会让后面的元素整体移动，成本很高。双指针的核心思想是：不要真的删除，而是把需要保留的元素紧凑地搬到数组前面。\n\n## 2. slow / fast 指针模型\n\n- `fast`：负责向前探索，查看新元素\n- `slow`：指向下一个应该写入保留元素的位置\n\n当 `nums[fast] !== nums[slow]` 时，说明发现了一个新值：slow 向前移动一格，然后把 `nums[fast]` 写到 `nums[slow]`。\n最后 `slow + 1` 就是去重后有效部分的长度。\n\n## 3. 示例\n\n输入：`[1, 1, 2, 2, 3]`。\n过程：fast 从 1 开始扫描；遇到重复值就跳过；遇到新值就写入 slow 的下一个位置。\n最终前三个元素变为 `[1, 2, 3]`，返回长度 3。\n\n## 4. 代码模板\n\n```ts\nexport function removeDuplicates(nums: number[]): number {\n  if (nums.length === 0) return 0;\n  let slow = 0;\n  for (let fast = 1; fast < nums.length; fast++) {\n    if (nums[fast] !== nums[slow]) {\n      slow++;\n      nums[slow] = nums[fast];\n    }\n  }\n  return slow + 1;\n}\n```\n\n## 5. 你要完成的练习\n\n实现 `removeDuplicates(nums: number[]): number`。\n要求：不要创建新数组；原地修改 `nums`；返回去重后的有效长度；空数组返回 0。\n\n## 6. 小测\n\n1. 双指针为什么适合有序数组去重？\n2. `slow` 指针代表什么？\n3. 为什么返回值是 `slow + 1` 而不是 `slow`？\n\n## 7. 参考设计来源\n\n- CS61A：强调通过小 lab 建立直觉\n- UC Berkeley Data Structures：重视测试驱动的数据结构练习\n- freeCodeCamp：用闯关反馈帮助学习者持续修正",
+      "references": [
+        "https://cs61a.org/",
+        "https://sp26.datastructur.es/",
+        "https://www.freecodecamp.org/learn/front-end-development-libraries/#bootstrap/"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "双指针最适合解决哪类问题？",
+          "options": [
+            "必须枚举所有排列的问题",
+            "可以在线性扫描中维护两个位置的问题",
+            "只能递归解决的问题",
+            "必须使用哈希表的问题"
+          ],
+          "answer": "可以在线性扫描中维护两个位置的问题",
+          "explanation": "双指针本质是在一次线性扫描中维护两个有意义的索引。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "在原地去重中，slow 指针代表什么？",
+          "options": [
+            "当前正在探索的元素",
+            "下一个保留元素应该写入的位置",
+            "数组最后一个元素的位置",
+            "重复元素的个数"
+          ],
+          "answer": "下一个保留元素应该写入的位置",
+          "explanation": "fast 探索，slow 写入。"
+        },
+        {
+          "id": "q3",
+          "type": "short-answer",
+          "question": "为什么返回 slow + 1？",
+          "answer": "因为 slow 是最后一个保留元素的索引，长度等于索引加一。",
+          "explanation": "索引从 0 开始，所以长度需要加一。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-dsa-001",
+        "type": "typescript",
+        "functionName": "removeDuplicates",
+        "description": "实现有序数组原地去重，并返回去重后的有效长度。",
+        "starterCode": "export function removeDuplicates(nums: number[]): number {\n  // TODO: implement removeDuplicates\n  return 0;\n}\n",
+        "assertionMode": "mutate-and-return",
+        "testCases": [
+          {
+            "name": "empty array",
+            "input": [
+              []
+            ],
+            "expected": {
+              "k": 0,
+              "nums": []
+            }
+          },
+          {
+            "name": "single element",
+            "input": [
+              [
+                1
+              ]
+            ],
+            "expected": {
+              "k": 1,
+              "nums": [
+                1
+              ]
+            }
+          },
+          {
+            "name": "all duplicates",
+            "input": [
+              [
+                1,
+                1,
+                1
+              ]
+            ],
+            "expected": {
+              "k": 1,
+              "nums": [
+                1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "name": "mixed duplicates",
+            "input": [
+              [
+                1,
+                1,
+                2,
+                2,
+                3
+              ]
+            ],
+            "expected": {
+              "k": 3,
+              "nums": [
+                1,
+                2,
+                3,
+                2,
+                3
+              ]
+            }
+          }
+        ],
+        "hints": [
+          "先处理空数组。",
+          "让 fast 从 1 开始。",
+          "只有当 fast 指向新值时，slow 才前进。"
+        ]
+      },
+      "passCriteria": {
+        "quizMinScore": 2,
+        "exerciseMustPass": true
+      },
+      "nextIfPassed": "dsa-002",
+      "nextIfFailed": "dsa-001"
+    },
+    {
+      "id": "dsa-002",
+      "title": "哈希表：把查找从线性扫描变成常数时间",
+      "description": "学习 Map/Set 如何帮助你用空间换时间，解决 two-sum 类问题。",
+      "prerequisites": [
+        "数组遍历",
+        "对象/Map 基础",
+        "时间复杂度 O(n)"
+      ],
+      "objectives": [
+        "理解哈希表为什么能降低查找成本",
+        "能用 Map 记录值到索引的映射",
+        "能实现 twoSum 并解释一次遍历解法"
+      ],
+      "content": "# 哈希表：把查找从线性扫描变成常数时间\n\n## 1. 问题\n\n给定数组 `nums` 和目标值 `target`，找出两个数，使它们的和等于 `target`，并返回它们的下标。\n例如 `nums = [2, 7, 11, 15]`，`target = 9`，答案是 `[0, 1]`。\n\n## 2. 暴力思路的问题\n\n双重循环的时间复杂度是 O(n²)。当数组变大时，会非常慢。\n\n## 3. 用 Map 换时间\n\n我们真正需要知道的是：当前数字 `num` 的搭档 `target - num` 之前有没有出现过？\n如果出现过，就直接返回两个下标。因此可以用 Map 保存 `value -> index`。\n\n## 4. 一次遍历模板\n\n```ts\nexport function twoSum(nums: number[], target: number): number[] {\n  const seen = new Map<number, number>();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (seen.has(complement)) {\n      return [seen.get(complement)!, i];\n    }\n    seen.set(nums[i], i);\n  }\n  throw new Error(\"No solution found\");\n}\n```\n\n## 5. 你要完成的练习\n\n实现 `twoSum(nums: number[], target: number): number[]`。\n要求：返回两个下标；假设每组输入都有唯一解；不要重复使用同一个元素。\n\n## 6. 小测\n\n1. Map 里存的是 index -> value 还是 value -> index？\n2. 为什么一次遍历就能找到答案？\n3. 空间复杂度是多少？\n\n## 7. 参考设计来源\n\n- Full Stack Open：强调先理解问题，再写最小可运行代码\n- CS61A：用小例子建立抽象思维\n- freeCodeCamp：通过即时反馈强化练习",
+      "references": [
+        "https://fullstackopen.com/en/",
+        "https://cs61a.org/",
+        "https://www.freecodecamp.org/learn/front-end-development-libraries/#bootstrap/"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "twoSum 中 Map 最适合保存什么？",
+          "options": [
+            "value -> index",
+            "index -> value",
+            "target -> nums",
+            "i -> j"
+          ],
+          "answer": "value -> index",
+          "explanation": "我们需要根据 complement 快速找到之前出现过的下标。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "一次遍历 twoSum 的时间复杂度是多少？",
+          "options": [
+            "O(1)",
+            "O(n)",
+            "O(n²)",
+            "O(log n)"
+          ],
+          "answer": "O(n)",
+          "explanation": "每个元素最多访问一次。"
+        },
+        {
+          "id": "q3",
+          "type": "short-answer",
+          "question": "为什么不能先 set 当前元素再检查 complement？",
+          "answer": "因为可能错误地把当前元素当成自己的 complement 使用。",
+          "explanation": "题目要求不能使用同一个元素两次。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-dsa-002",
+        "type": "typescript",
+        "functionName": "twoSum",
+        "description": "实现 twoSum，返回和为 target 的两个下标。",
+        "starterCode": "export function twoSum(nums: number[], target: number): number[] {\n  // TODO: implement twoSum\n  return [];\n}\n",
+        "assertionMode": "return",
+        "testCases": [
+          {
+            "name": "basic example",
+            "input": [
+              [
+                2,
+                7,
+                11,
+                15
+              ],
+              9
+            ],
+            "expected": [
+              0,
+              1
+            ]
+          },
+          {
+            "name": "negative numbers",
+            "input": [
+              [
+                -1,
+                -2,
+                -3,
+                -4,
+                -5
+              ],
+              -8
+            ],
+            "expected": [
+              2,
+              4
+            ]
+          },
+          {
+            "name": "zero included",
+            "input": [
+              [
+                0,
+                4,
+                3,
+                0
+              ],
+              0
+            ],
+            "expected": [
+              0,
+              3
+            ]
+          }
+        ],
+        "hints": [
+          "遍历数组时，先查 complement。",
+          "Map 保存 value -> index。",
+          "找到答案后立即 return。"
+        ]
+      },
+      "passCriteria": {
+        "quizMinScore": 2,
+        "exerciseMustPass": true
+      },
+      "nextIfPassed": "dsa-003",
+      "nextIfFailed": "dsa-002"
+    },
+    {
+      "id": "dsa-003",
+      "title": "栈与括号匹配：用 LIFO 表达嵌套结构",
+      "description": "学习栈的后进先出特性，并用它解决括号匹配问题。",
+      "prerequisites": [
+        "数组基础",
+        "Map 基础",
+        "函数调用直觉"
+      ],
+      "objectives": [
+        "理解栈的后进先出 LIFO 特性",
+        "能用栈判断括号是否正确嵌套",
+        "能解释为什么右括号必须匹配最近的左括号"
+      ],
+      "content": "# 栈与括号匹配：用 LIFO 表达嵌套结构\n\n## 1. 什么是栈？\n\n栈是一种后进先出的数据结构，英文叫 Last In First Out，简称 LIFO。\n常见操作：`push` 入栈，`pop` 出栈，`peek` 查看栈顶。\n\n## 2. 括号匹配为什么需要栈？\n\n括号具有嵌套关系，例如 `([{}])`。最右边的左括号 `{` 必须最先被匹配，这正是栈的特性。\n当你遇到右括号时，它必须匹配最近一个还没匹配的左括号。\n\n## 3. 判断规则\n\n1. 遇到左括号，入栈\n2. 遇到右括号：如果栈为空则失败；弹出栈顶；检查是否匹配\n3. 遍历结束后，栈必须为空\n\n## 4. 模板\n\n```ts\nexport function isValidParentheses(s: string): boolean {\n  const stack: string[] = [];\n  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };\n  for (const ch of s) {\n    if (ch === '(' || ch === '[' || ch === '{') {\n      stack.push(ch);\n    } else {\n      const top = stack.pop();\n      if (top !== pairs[ch]) {\n        return false;\n      }\n    }\n  }\n  return stack.length === 0;\n}\n```\n\n## 5. 你要完成的练习\n\n实现 `isValidParentheses(s: string): boolean`。\n要求：只处理 `()`、`[]`、`{}`；空字符串视为有效；右括号必须匹配最近的左括号。\n\n## 6. 小测\n\n1. 栈的核心特性是什么？\n2. 为什么右括号要匹配最近的左括号？\n3. 遍历结束后栈为空说明什么？\n\n## 7. 参考设计来源\n\n- Data Structures 课程中的 lab/test 组织方式\n- CS61A 对递归和栈直觉的铺垫\n- The Odin Project 的项目式练习节奏",
+      "references": [
+        "https://sp26.datastructur.es/",
+        "https://cs61a.org/",
+        "https://www.theodinproject.com/"
+      ],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "栈的核心特性是什么？",
+          "options": [
+            "先进先出 FIFO",
+            "后进先出 LIFO",
+            "随机访问",
+            "只能访问中间元素"
+          ],
+          "answer": "后进先出 LIFO",
+          "explanation": "最后进入的元素最先离开。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "遇到右括号时，应该检查什么？",
+          "options": [
+            "数组第一个元素",
+            "最近一个未匹配的左括号",
+            "字符串最后一个字符",
+            "目标值 complement"
+          ],
+          "answer": "最近一个未匹配的左括号",
+          "explanation": "这正是栈顶元素。"
+        },
+        {
+          "id": "q3",
+          "type": "short-answer",
+          "question": "遍历结束后栈为空说明什么？",
+          "answer": "说明所有左括号都被正确匹配。",
+          "explanation": "如果栈不为空，说明还有未匹配的左括号。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-dsa-003",
+        "type": "typescript",
+        "functionName": "isValidParentheses",
+        "description": "判断括号字符串是否正确嵌套。",
+        "starterCode": "export function isValidParentheses(s: string): boolean {\n  // TODO: implement isValidParentheses\n  return true;\n}\n",
+        "assertionMode": "return",
+        "testCases": [
+          {
+            "name": "empty string",
+            "input": [
+              ""
+            ],
+            "expected": true
+          },
+          {
+            "name": "simple valid",
+            "input": [
+              "()[]{}"
+            ],
+            "expected": true
+          },
+          {
+            "name": "nested valid",
+            "input": [
+              "([{}])"
+            ],
+            "expected": true
+          },
+          {
+            "name": "invalid order",
+            "input": [
+              "([)]"
+            ],
+            "expected": false
+          },
+          {
+            "name": "missing close",
+            "input": [
+              "(()"
+            ],
+            "expected": false
+          }
+        ],
+        "hints": [
+          "左括号入栈。",
+          "右括号弹出栈顶并检查是否匹配。",
+          "遍历结束后栈必须为空。"
+        ]
+      },
+      "passCriteria": {
+        "quizMinScore": 2,
+        "exerciseMustPass": true
+      }
+    }
+  ],
+  "currentIndex": 0,
+  "createdAt": "2026-06-11T09:44:49.415Z",
+  "updatedAt": "2026-06-11T09:44:49.415Z"
+}
