@@ -1,14 +1,14 @@
 {
-  "target": "知道TypeScript的各个掌握程度需要学习哪些具体内容",
+  "target": "最终学习目标：**从零开始，用 Rust 构建一个能写代码的 AI Agent（如基于 LLM 的代码生成工具），并通过 LeetCode 刷题夯实算法与 Rust 语法，达到能独立设计并发、安全的中型 CLI 或后端服务的中级水平。**",
   "programmingLevel": "basic",
   "dsaLevel": "heard",
-  "weeklyHours": "5-10",
+  "weeklyHours": "2-5",
   "totalWeeks": "5-8",
-  "learningStyle": "explain-first",
-  "codePractice": "sometimes",
-  "pace": "normal",
+  "learningStyle": "project-first",
+  "codePractice": "yes",
+  "pace": "steady",
   "nearTermGoal": "无",
   "rawAnswers": {},
-  "summary": "学习者的主要目标是弄清楚 TypeScript 在不同掌握程度下需要学习哪些具体内容。当前编程基础较薄弱，数据结构与算法仅处于听说过或初学阶段，适合从基础概念和常见用法讲起。每周可投入约 5-10 小时，计划用 5-8 周按正常节奏学习，偏好先理解再练习的方式。代码实践频率为“有时”，因此学习路径应包含适量但不过量的练习，帮助逐步建立 TypeScript 的类型思维。",
+  "summary": "该学习者编程基础较弱，数据结构与算法仅停留在听说阶段，但目标明确：希望在5-8周内每周投入2-5小时，通过项目驱动的方式从零开始用Rust构建一个能写代码的AI Agent，并借助LeetCode刷题夯实算法与Rust语法，最终达到能独立设计并发、安全的中型CLI或后端服务的中级水平。学习风格偏好项目优先，喜欢在实践中学习，因此需要以实际项目为主线，逐步融入语法和算法练习。由于时间有限且基础薄弱，需合理规划学习路径，确保稳步推进。",
   "createdAt": "2026-06-11T08:32:49.081Z"
 }

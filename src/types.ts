@@ -40,10 +40,11 @@ export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
 
 export const exerciseSchema = z.object({
   id: z.string(),
-  language: z.enum(['typescript', 'python', 'bash']).default('typescript'),
+  language: z.string().default('typescript'),
   entrypoint: z.string(),
   description: z.string(),
   starterCode: z.string(),
+  testCode: z.string().optional(),
   assertionMode: z.enum(['return', 'mutate-and-return', 'stdout']).default('return'),
   testCases: z.array(
     z.object({
@@ -125,6 +126,7 @@ export type AssessmentResult = z.infer<typeof assessmentSchema>;
 export const stateSchema = z.object({
   currentUnitId: z.string(),
   completedUnitIds: z.array(z.string()).default([]),
+  skippedUnitIds: z.array(z.string()).default([]),
   attempts: z.record(
     z.object({
       count: z.number().int().min(0),

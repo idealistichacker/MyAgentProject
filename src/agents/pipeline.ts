@@ -125,7 +125,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
           });
 
           for (const call of response.tool_calls) {
-            console.log(`\n🔍 FCAgent 正在调用工具: ${call.function.name}...`);
+            // console.log(`\n🔍 FCAgent 正在调用工具: ${call.function.name}...`);
             const result = await toolManager.executeToolCall(call.function.name, call.function.arguments);
             messages.push({
               role: 'tool',
@@ -140,17 +140,36 @@ ${JSON.stringify(learnerProfile, null, 2)}
         }
       }
       
-      const parsed = JSON.parse(finalContent.replace(/^[\s\S]*?```json\n?/, '').replace(/\n?```[\s\S]*?$/, '').trim());
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        units = parsed.map((u: any, index: number) => ({
-          ...u,
-          id: u.id || `dyn-unit-${index}`,
-          title: u.title || 'Untitled',
-          description: u.description || '',
-          prerequisites: u.prerequisites || [],
-          objectives: u.objectives || [],
-          passCriteria: { quizMinScore: 1, exerciseMustPass: true },
-        })) as SeedUnit[];
+      let cleanContent = finalContent;
+      const jsonBlockMatch = finalContent.match(/```json\n([\s\S]*?)\n```/);
+      if (jsonBlockMatch) {
+        cleanContent = jsonBlockMatch[1];
+      } else {
+        const startIdx = cleanContent.indexOf('[');
+        const endIdx = cleanContent.lastIndexOf(']');
+        if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
+          cleanContent = cleanContent.substring(startIdx, endIdx + 1);
+        } else {
+          cleanContent = cleanContent.replace(/^[\s\S]*?```json\n?/, '').replace(/\n?```[\s\S]*?$/, '').trim();
+        }
+      }
+
+      try {
+        const parsed = JSON.parse(cleanContent);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          units = parsed.map((u: any, index: number) => ({
+            ...u,
+            id: u.id || `dyn-unit-${index}`,
+            title: u.title || 'Untitled',
+            description: u.description || '',
+            prerequisites: u.prerequisites || [],
+            objectives: u.objectives || [],
+            passCriteria: { quizMinScore: 1, exerciseMustPass: true },
+          })) as SeedUnit[];
+        }
+      } catch (parseErr: any) {
+        console.warn('\n⚠️ Failed to parse JSON from LLM:\n', cleanContent);
+        throw parseErr;
       }
     } catch (err) {
       console.warn('Failed to generate dynamic plan, falling back to seed.', err);
@@ -338,8 +357,9 @@ Ensure the final output reflects the premium quality of CS61A.
 
 You must construct:
 1. A JSON block containing a quiz (choice questions with options, answers, and detailed explanations) and a programming exercise (starter code description, test cases with assertion mode). The exercise should be challenging and deeply educational, matching CS61A rigor.
-   - Choose the MOST APPROPRIATE programming language for this unit (e.g. 'typescript', 'python', 'bash').
-   - For bash exercises, assertionMode should likely be 'stdout'. For python/typescript it can be 'return' or 'mutate-and-return'.
+   - Choose ANY programming language that best fits the learning objective (e.g. 'typescript', 'python', 'bash', 'rust', 'cpp', 'java', 'go', etc.).
+   - You MUST also provide a \`testCode\` field in the exercise JSON. This code will be compiled/executed remotely along with the user's \`starterCode\`. The \`testCode\` must import/call the user's entrypoint, run the test cases, and print exactly one JSON line per test case in the format: \`{"name": "test name", "passed": true/false, "message": "optional error message", "expected": "...", "actual": "..."}\`.
+   - For bash exercises, assertionMode should likely be 'stdout'. For others it can be 'return' or 'mutate-and-return'.
 2. The final Markdown CONTENT (using the refined course content). Keep it dense and copy it directly from the refined draft without expanding it with unnecessary verbose prose.
 3. The STARTER_CODE block for the exercise. This must be the raw code for the exercise.
 
@@ -371,7 +391,8 @@ The output MUST contain exactly these three sections, using your generated exerc
     "testCases": [
       { "name": "test 1", "input": ["actual_input"], "expected": "actual_output" }
     ],
-    "hints": ["hint 1"]
+    "hints": ["hint 1"],
+    "testCode": "import json\\nfrom solution import actual_function_name\\n...print(json.dumps({'name': 'test 1', 'passed': True}))"
   }
 }
 \`\`\`
@@ -525,6 +546,7 @@ export async function buildAssessment(
   quizResults: AssessmentResult['quizResults'],
   learnerCode?: string,
   provider?: LLMProvider,
+  attemptCount: number = 0,
   id = `assessment-${unit.id}-${Date.now()}`
 ): Promise<AssessmentResult> {
   const exercisePassed = testResults.every((result) => result.passed);
@@ -554,26 +576,37 @@ export async function buildAssessment(
   let diagnosis = buildFallbackAssessmentDiagnosis(unit, testResults, quizResults, score);
   let nextAction = passed
     ? `通过本单元。建议执行 fc next 进入${unit.nextIfPassed ? ' ' + unit.nextIfPassed : '下一单元'}。`
-    : `未通过本单元。建议先查看错题和测试失败信息，再执行 fc submit ${unit.id} 重新提交。`;
+    : `未通过本单元。建议先查看错题和测试失败信息，再执行 fc submit 重新提交。`;
 
   if (provider) {
     try {
+      let hintStrategy = "你必须只提供概念性的启发，指出误区，不要给出具体的代码修改建议。";
+      if (attemptCount === 2) {
+        hintStrategy = "你可以指出具体是哪一段代码（例如变量作用域、某一行逻辑）出了问题，并给出明确的修改方向，但不要直接写出完整答案。";
+      } else if (attemptCount >= 3) {
+        hintStrategy = "学习者已经尝试多次仍然失败，请直接提供详细的结构化伪代码，或者修正后的关键代码骨架片段，帮助他们渡过难关，保护学习积极性。";
+      }
+
       const prompt = `
 You are FCAgent AssessmentReviewer, an elite teaching assistant mirroring the pedagogy of CS61A. The learner just completed a unit.
 Unit: ${unit.title}
 Passed: ${passed}
+Attempt Count: ${attemptCount}
 Test Results: ${JSON.stringify(testResults)}
 Quiz Results: ${JSON.stringify(quizResults)}
 
 Learner's Actual Code Submission:
-\`\`\`typescript
+\`\`\`
 ${learnerCode || 'No code provided'}
 \`\`\`
 
+Here is your hint strategy based on the learner's attempt count (${attemptCount}):
+${hintStrategy}
+
 Analyze their performance:
-1. If tests failed, look at the actual code and test errors, and point out specifically where their logic went wrong (without giving the exact code answer away). Give a helpful hint.
+1. If tests failed, look at the actual code and test errors, and provide hints strictly following the hint strategy above.
 2. If concepts failed, explain the misconception.
-3. Write a supportive, concise diagnosis (3-4 sentences in Chinese).
+3. Write a supportive, concise diagnosis (3-4 sentences in Chinese), integrating the hints appropriately.
 4. Write a short 1-sentence nextAction recommending what to do next.
 
 Return exactly valid JSON ONLY:

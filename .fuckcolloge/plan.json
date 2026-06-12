@@ -1,489 +1,33 @@
 {
   "learnerProfile": {
-    "target": "知道TypeScript的各个掌握程度需要学习哪些具体内容",
+    "target": "最终学习目标：**从零开始，用 Rust 构建一个能写代码的 AI Agent（如基于 LLM 的代码生成工具），并通过 LeetCode 刷题夯实算法与 Rust 语法，达到能独立设计并发、安全的中型 CLI 或后端服务的中级水平。**",
     "programmingLevel": "basic",
     "dsaLevel": "heard",
-    "weeklyHours": "5-10",
+    "weeklyHours": "2-5",
     "totalWeeks": "5-8",
-    "learningStyle": "explain-first",
-    "codePractice": "sometimes",
-    "pace": "normal",
+    "learningStyle": "project-first",
+    "codePractice": "yes",
+    "pace": "steady",
     "nearTermGoal": "无",
     "rawAnswers": {},
-    "summary": "学习者的主要目标是弄清楚 TypeScript 在不同掌握程度下需要学习哪些具体内容。当前编程基础较薄弱，数据结构与算法仅处于听说过或初学阶段，适合从基础概念和常见用法讲起。每周可投入约 5-10 小时，计划用 5-8 周按正常节奏学习，偏好先理解再练习的方式。代码实践频率为“有时”，因此学习路径应包含适量但不过量的练习，帮助逐步建立 TypeScript 的类型思维。",
+    "summary": "该学习者编程基础较弱，数据结构与算法仅停留在听说阶段，但目标明确：希望在5-8周内每周投入2-5小时，通过项目驱动的方式从零开始用Rust构建一个能写代码的AI Agent，并借助LeetCode刷题夯实算法与Rust语法，最终达到能独立设计并发、安全的中型CLI或后端服务的中级水平。学习风格偏好项目优先，喜欢在实践中学习，因此需要以实际项目为主线，逐步融入语法和算法练习。由于时间有限且基础薄弱，需合理规划学习路径，确保稳步推进。",
     "createdAt": "2026-06-11T08:32:49.081Z"
   },
   "units": [
     {
-      "id": "ts-level-01",
-      "title": "TypeScript 定位：它解决什么问题",
-      "description": "先用概念讲清楚 TypeScript 与 JavaScript 的关系：TS 是 JS 的超集，主要价值是编译期类型检查、代码提示、重构安全和大型项目可维护性。了解类型、运行时、编译器、tsconfig 的基本作用。",
+      "id": "unit-1-rust-foundations",
+      "title": "Rust 入门与所有权机制：从零构建 CLI 工具",
+      "description": "从安装 Rust 工具链开始，掌握变量、类型、函数、控制流等基础语法，深入理解 Rust 核心的**所有权（Ownership）、借用（Borrowing）与生命周期**概念。通过构建一个命令行温度转换器或待办事项管理器作为实战项目，同步在 LeetCode 上完成 5-8 道简单数组/字符串题目，初步建立 Rust 语感。",
       "prerequisites": [
-        "了解基本编程概念：变量、函数、对象",
-        "知道 JavaScript 基础语法即可"
+        "具备任意一门编程语言的基础语法概念（变量、循环、函数）",
+        "已安装 VS Code 或同类编辑器"
       ],
       "objectives": [
-        "说明 TypeScript 和 JavaScript 的区别与联系",
-        "理解静态类型检查与动态语言运行时行为的不同",
-        "知道 TypeScript 学习路径大致分为：基础类型、工程配置、泛型、类型建模、高级类型和框架实战"
-      ],
-      "content": "# TypeScript 定位：JavaScript 的静态类型层\n\n## 0. 修订要点\n\n原稿方向正确，但需要更精确地区分：**TypeScript 的类型检查发生在开发期/编译期，不进入运行时**；TypeScript 不是“更安全的 JavaScript 运行时”，而是 JavaScript 的**静态类型层 + 编译器 + 工程工具链**。\n\n---\n\n## 1. TypeScript 与 JavaScript 的关系\n\nTypeScript，简称 TS，是 JavaScript，简称 JS 的**超集**。更准确地说：\n\n> TypeScript ≈ JavaScript 语法 + 静态类型系统 + 编译器/编辑器工具链\n\n语法层面，大多数 JavaScript 代码都可以作为 TypeScript 代码理解；但 TypeScript 增加了类型标注、类型推断、接口、泛型等能力。\n\n```ts\nfunction add(a: number, b: number): number {\n  return a + b;\n}\n\nadd(1, 2);     // OK\nadd(1, \"2\");   // TS 报错：不能把 string 传给 number\n```\n\n编译后，类型标注会被擦除：\n\n```js\nfunction add(a, b) {\n  return a + b;\n}\n\nadd(1, \"2\"); // 运行时仍会得到 \"12\"\n```\n\n关键 gotcha：\n\n> TypeScript 不会自动插入运行时类型检查。\n\n除非你自己写校验逻辑，否则错误类型仍然可能进入运行时。\n\n---\n\n## 2. TypeScript 解决什么问题？\n\nJavaScript 是动态类型语言：\n\n```js\nlet x = 1;\nx = \"hello\";\nx = { name: \"Alice\" };\n```\n\n这在小程序中灵活，但在大型项目中容易造成隐患：\n\n```js\nfunction add(a, b) {\n  return a + b;\n}\n\nadd(1, \"2\"); // 得到 \"12\"，但可能期望 3\n```\n\nTypeScript 通过静态类型检查，在代码运行前发现许多问题：\n\n```ts\nfunction add(a: number, b: number): number {\n  return a + b;\n}\n\nadd(1, \"2\"); // 编译期报错\n```\n\n它主要提升：\n\n1. **错误提前暴露**：减少 `undefined is not a function`、字段拼写错误等问题。\n2. **编辑器体验**：自动补全、跳转定义、重命名重构。\n3. **团队协作**：类型像机器可检查的文档。\n4. **大型项目维护**：修改接口、函数签名时更容易发现影响范围。\n5. **业务建模**：用类型表达状态、约束和数据结构。\n\n---\n\n## 3. 类型、运行时、编译器：必须分清\n\n### 3.1 类型层\n\n类型描述数据的形状：\n\n```ts\ntype User = {\n  id: number;\n  name: string;\n  tags?: string[];\n};\n\nconst user: User = {\n  id: 1,\n  name: \"Alice\",\n};\n```\n\nTypeScript 使用**结构类型系统**：只要结构匹配，就可以赋值。\n\n```ts\nconst obj = { id: 1, name: \"Alice\", age: 20 };\n\nconst user: User = obj; // OK，即使 obj 多了 age\n```\n\n但对象字面量有额外检查：\n\n```ts\nconst user2: User = {\n  id: 1,\n  name: \"Alice\",\n  age: 20, // 直接赋值时常会报错：多余属性\n};\n```\n\n### 3.2 运行时\n\n运行时仍然是 JavaScript 环境：浏览器、Node.js、Deno、Bun 等。\n\n```ts\nlet x: string = \"hello\";\n```\n\n编译后：\n\n```js\nlet x = \"hello\";\n```\n\n`string` 不会出现在运行时。\n\n### 3.3 编译器\n\n`tsc` 负责：\n\n- 类型检查；\n- 将 TS 转成 JS；\n- 根据配置生成 `.d.ts`、`.js`；\n- 控制目标语法版本和模块系统。\n\n---\n\n## 4. 静态类型检查 vs 动态运行时行为\n\nJavaScript 中，变量类型由运行时的值决定：\n\n```js\nlet value = 1;\nvalue = \"abc\"; // OK\n```\n\nTypeScript 中，类型在编码期被检查：\n\n```ts\nlet value: number = 1;\nvalue = \"abc\"; // TS 报错\n```\n\n即使不写类型，TS 也会推断：\n\n```ts\nlet value = 1;\nvalue = \"abc\"; // 仍然报错，因为推断为 number\n```\n\n但 TS 不是万能的。外部数据必须运行时校验：\n\n```ts\nconst data = JSON.parse(input) as User;\n```\n\n`as User` 只是告诉编译器“相信我”，不会验证 `input`。\n\n更安全写法：\n\n```ts\nfunction isUser(value: unknown): value is User {\n  return (\n    typeof value === \"object\" &&\n    value !== null &&\n    typeof (value as User).id === \"number\" &&\n    typeof (value as User).name === \"string\"\n  );\n}\n\nconst parsed: unknown = JSON.parse(input);\n\nif (isUser(parsed)) {\n  parsed.name; // 这里才是 User\n}\n```\n\n核心 gotcha：\n\n- `any`：关闭类型检查，容易失去 TS 价值。\n- `unknown`：必须收窄后才能使用，更安全。\n- `as`：类型断言，不是运行时转换。\n- `strictNullChecks`：让 `null` / `undefined` 必须显式处理。\n\n---\n\n## 5. tsconfig 的作用\n\n`tsconfig.json` 是 TypeScript 项目的工程配置：\n\n```json\n{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"Bundler\",\n    \"strict\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"declaration\": true,\n    \"outDir\": \"dist\",\n    \"noEmitOnError\": true\n  },\n  \"include\": [\"src\"]\n}\n```\n\n常见配置：\n\n| 配置 | 含义 |\n|---|---|\n| `target` | 输出哪个版本的 JavaScript |\n| `module` | 模块系统，如 CommonJS、ESNext |\n| `moduleResolution` | 如何解析 import |\n| `strict` | 开启严格类型检查 |\n| `lib` | 声明可用全局 API，如 DOM、ES2020 |\n| `outDir` | 编译产物目录 |\n| `declaration` | 生成 `.d.ts` 类型声明 |\n| `noEmit` | 只检查，不输出 JS |\n| `include/exclude` | 控制纳入检查的文件 |\n\n现代项目通常应开启 `strict: true`，否则 TypeScript 可能退化为“带注释的 JavaScript”。\n\n---\n\n## 6. 推荐学习路径\n\n1. **基础类型**：`number`、`string`、`boolean`、数组、元组、对象、函数、联合类型、字面量类型。\n2. **工程配置**：`tsconfig`、模块、构建、类型检查、`.d.ts`。\n3. **泛型**：让函数、接口、类支持“类型参数化”。\n4. **类型建模**：用 `interface`、`type`、`readonly`、`optional`、`as const` 表达业务约束。\n5. **高级类型**：条件类型、映射类型、索引访问、类型守卫、工具类型。\n6. **框架实战**：React/Vue/Node.js/API 类型共享/表单与状态建模。\n\n最终目标不是“到处写类型标注”，而是用类型系统表达程序意图，让错误更早暴露，让代码更容易推理和维护。",
-      "references": [],
-      "quiz": [
-        {
-          "id": "q1",
-          "type": "choice",
-          "question": "TypeScript 编译后，函数参数和返回值的类型标注会怎样？",
-          "options": [
-            "保留为运行时对象，并自动检查每个调用",
-            "被擦除为 JavaScript，运行时不会自动检查这些类型",
-            "只保留在浏览器控制台中，便于调试",
-            "转换成 if/throw 语句"
-          ],
-          "answer": "B",
-          "explanation": "TypeScript 的类型属于开发期/编译期层。tsc 会检查类型并输出 JavaScript，类型标注本身不会进入运行时。"
-        },
-        {
-          "id": "q2",
-          "type": "choice",
-          "question": "下面哪个说法最能解释 add(1, '2') 在 TypeScript 与 JavaScript 中的差异？",
-          "options": [
-            "TypeScript 会在运行时自动把它改成 3",
-            "TypeScript 在编译期发现类型不匹配；若绕过检查，JavaScript 运行时会按 + 的规则得到字符串拼接",
-            "JavaScript 没有类型，所以 TS 永远无法检查它",
-            "TypeScript 会把 string 自动转换成 number"
-          ],
-          "answer": "B",
-          "explanation": "TypeScript 的静态类型检查发生在运行前。若类型检查被绕过或禁用，底层 JavaScript 仍然会执行原始运算规则。"
-        },
-        {
-          "id": "q3",
-          "type": "choice",
-          "question": "const data = JSON.parse(input) as User; 中的 as User 做了什么？",
-          "options": [
-            "运行时把 JSON 转成 User 实例",
-            "如果失败会抛出类型错误",
-            "自动补齐缺失字段",
-            "只改变编译期视角，不验证输入"
-          ],
-          "answer": "D",
-          "explanation": "as User 是类型断言，只告诉 TypeScript 编译器把某个值当作 User 处理。它不会检查字段是否存在，也不会转换运行时数据。"
-        },
-        {
-          "id": "q4",
-          "type": "choice",
-          "question": "在结构类型系统中，const obj = { id: 1, name: 'Alice', age: 20 }; const user: User = obj; 为什么通常能通过？",
-          "options": [
-            "因为 obj 至少具备 User 所需的 id 和 name 字段",
-            "因为 TypeScript 会自动删除多余字段",
-            "因为对象字面量永远不允许多余字段",
-            "因为 age 会被自动改成 User 的一部分"
-          ],
-          "answer": "A",
-          "explanation": "TypeScript 使用结构类型系统：只要值的结构满足目标类型所需字段，通常就可以赋值。通过变量赋值时，额外字段一般不会被拒绝。"
-        },
-        {
-          "id": "q5",
-          "type": "choice",
-          "question": "把包含 age 的对象字面量直接赋给 User 时，为什么常常会触发多余属性检查？",
-          "options": [
-            "因为直接赋值的对象字面量更容易暴露拼写错误或多余字段",
-            "因为结构类型永远禁止额外字段",
-            "因为运行时会删除 age",
-            "因为 TypeScript 会修改 User 接口"
-          ],
-          "answer": "A",
-          "explanation": "对象字面量的多余属性检查是一种保护机制，用来发现字段拼写错误或误传字段。通过中间变量赋值时，额外字段通常仍可接受。"
-        },
-        {
-          "id": "q6",
-          "type": "choice",
-          "question": "unknown 与 any 的关键区别是什么？",
-          "options": [
-            "any 更安全，因为它允许所有操作",
-            "unknown 必须先收窄后才能使用；any 会关闭大部分类型检查",
-            "unknown 会在运行时存在，any 会被擦除",
-            "两者完全相同"
-          ],
-          "answer": "B",
-          "explanation": "unknown 表示值可能是任意类型，但使用前必须通过 typeof、Array.isArray、自定义类型守卫等方式收窄。any 会关闭类型检查，容易失去 TypeScript 的价值。"
-        },
-        {
-          "id": "q7",
-          "type": "choice",
-          "question": "tsconfig 中 strict: true 的主要意义是什么？",
-          "options": [
-            "让 TypeScript 在运行时校验所有值",
-            "只影响输出文件名",
-            "开启一组严格类型检查，让 null/undefined、函数参数、对象属性等错误更早暴露",
-            "禁用所有类型推断"
-          ],
-          "answer": "C",
-          "explanation": "strict: true 会启用多项严格类型检查，包括更严格的 null/undefined 处理、函数参数检查等，是现代 TypeScript 项目的推荐配置。"
-        },
-        {
-          "id": "q8",
-          "type": "choice",
-          "question": "noEmit: true 通常用于什么场景？",
-          "options": [
-            "只运行类型检查，不输出 JS 文件",
-            "把 TS 编译成 C++",
-            "关闭所有类型检查",
-            "自动生成运行时校验代码"
-          ],
-          "answer": "A",
-          "explanation": "noEmit: true 表示 TypeScript 只进行类型检查，不生成编译产物。它常用于 CI、预提交检查和纯类型验证流程。"
-        }
-      ],
-      "exercise": {
-        "id": "ex-ts-runtime-validation",
-        "language": "typescript",
-        "entrypoint": "parseRoster",
-        "description": "Implement parseRoster(input: string): ParseResult. The function parses a JSON string containing an array of user-like records, validates each record with runtime guards, normalizes strings, applies defaults, and returns both valid users and validation errors. This exercise reinforces that TypeScript's type system does not replace runtime validation.",
-        "starterCode": "type Role = \"student\" | \"mentor\" | \"admin\";\n\ntype User = {\n  id: number;\n  name: string;\n  email: string;\n  tags: string[];\n  role: Role;\n};\n\ntype ParseIssue = {\n  index: number;\n  path: string;\n  message: string;\n};\n\ntype ParseResult = {\n  users: User[];\n  errors: ParseIssue[];\n};\n\n/**\n * Parses a JSON string containing an array of user-like records and validates it.\n *\n * This exercise is about the boundary between TypeScript's static type system\n * and JavaScript's runtime data. `input` is only a string at runtime, so this\n * function must not trust `as User` blindly. It should parse the JSON, inspect\n * the resulting unknown value, and construct typed `User` objects only after\n * every required field has been checked.\n *\n * Validation rules:\n * 1. The whole input must be valid JSON.\n * 2. The decoded value must be an array.\n * 3. Each record must be a non-null object.\n * 4. `id` must be a positive integer.\n * 5. `name` and `email` must be strings that remain non-empty after trim.\n * 6. `tags` is optional; when present it must be an array of non-empty strings.\n *    Valid tags are trimmed, de-duplicated, and sorted lexicographically.\n * 7. `role` is optional; when present it must be \"student\", \"mentor\", or\n *    \"admin\". Missing role defaults to \"student\".\n * 8. A record with any validation error is not added to `users`.\n *\n * Examples:\n * >>> parseRoster(\"[]\")\n * { users: [], errors: [] }\n * >>> parseRoster('[{\"id\":1,\"name\":\" Alice \",\"email\":\"ALICE@EXAMPLE.com\",\"tags\":[\"js\",\"js\",\"ts\"],\"role\":\"mentor\"}]')\n * { users: [{ id: 1, name: \"Alice\", email: \"alice@example.com\", tags: [\"js\", \"ts\"], role: \"mentor\" }], errors: [] }\n * >>> parseRoster('[{\"id\":\"1\",\"name\":\"Alice\",\"email\":\"alice@example.com\"}]')\n * { users: [], errors: [{ index: 0, path: \"id\", message: \"id must be a positive integer\" }] }\n */\nexport function parseRoster(input: string): ParseResult {\n  const users: User[] = [];\n  const errors: ParseIssue[] = [];\n\n  // Step 1: Parse JSON inside a try/catch.\n  // TODO: If parsing fails, push { index: -1, path: \"$\", message: \"input must be valid JSON\" } and return.\n  let parsed: unknown;\n  try {\n    parsed = JSON.parse(input);\n  } catch {\n    // TODO: Return the JSON parse error.\n    return { users, errors };\n  }\n\n  // Step 2: Require the decoded value to be an array.\n  // TODO: If parsed is not an array, push { index: -1, path: \"$\", message: \"input must be a JSON array\" } and return.\n  if (!Array.isArray(parsed)) {\n    // TODO: Return the array-shape error.\n    return { users, errors };\n  }\n\n  // Step 3: Iterate through each record.\n  for (let index = 0; index < parsed.length; index++) {\n    const raw = parsed[index];\n    const recordErrors: ParseIssue[] = [];\n\n    // Step 4: Require each record to be a non-null object.\n    // TODO: Use isObject(raw). If false, push { index, path: \"$\", message: \"record must be an object\" } and continue.\n    if (!isObject(raw)) {\n      // TODO: Record the object-shape error and continue to the next item.\n      continue;\n    }\n\n    // Step 5: Validate id.\n    // TODO: If !isValidId(raw.id), push { index, path: \"id\", message: \"id must be a positive integer\" }.\n    if (!isValidId(raw.id)) {\n      // TODO: Record the id error.\n    }\n\n    // Step 6: Validate name.\n    // TODO: If typeof raw.name !== \"string\" or raw.name.trim() === \"\", push { index, path: \"name\", message: \"name must be a non-empty string\" }.\n    if (typeof raw.name !== \"string\" || raw.name.trim() === \"\") {\n      // TODO: Record the name error.\n    }\n\n    // Step 7: Validate email.\n    // TODO: If typeof raw.email !== \"string\" or raw.email.trim() === \"\", push { index, path: \"email\", message: \"email must be a non-empty string\" }.\n    if (typeof raw.email !== \"string\" || raw.email.trim() === \"\") {\n      // TODO: Record the email error.\n    }\n\n    // Step 8: Validate optional tags.\n    // TODO: If raw.tags is missing, use [].\n    // TODO: Otherwise, call normalizeTags(raw.tags).\n    // TODO: If normalizeTags returns undefined, push { index, path: \"tags\", message: \"tags must be an array of non-empty strings\" }.\n    let tags: string[] = [];\n    if (raw.tags !== undefined) {\n      // TODO: Normalize tags and handle invalid tags.\n    }\n\n    // Step 9: Validate optional role.\n    // TODO: If raw.role is missing, use \"student\".\n    // TODO: Otherwise, require isRole(raw.role); on failure push { index, path: \"role\", message: \"role must be one of: student, mentor, admin\" }.\n    let role: Role = \"student\";\n    if (raw.role !== undefined) {\n      // TODO: Validate and assign role.\n    }\n\n    // Step 10: Only push a User when the record has no validation errors.\n    // TODO: If recordErrors.length === 0, push { id: raw.id as number, name: ..., email: ..., tags, role }.\n    // TODO: Otherwise, append recordErrors to errors.\n    if (recordErrors.length === 0) {\n      // TODO: Build and push the normalized user.\n    } else {\n      // TODO: Append record errors.\n    }\n  }\n\n  return { users, errors };\n}\n\nfunction isObject(value: unknown): value is Record<string, unknown> {\n  // TODO: Step 1 - Return true only for non-null objects, not arrays.\n  return false;\n}\n\nfunction isValidId(value: unknown): value is number {\n  // TODO: Step 2 - Return true only when value is a number, is finite, is an integer, and is greater than 0.\n  return false;\n}\n\nfunction isRole(value: unknown): value is Role {\n  // TODO: Step 3 - Return true only for the three allowed role literals.\n  return false;\n}\n\nfunction normalizeTags(value: unknown): string[] | undefined {\n  // TODO: Step 4 - If value is not an array, return undefined.\n  // TODO: Step 5 - For each element, require typeof element === \"string\" and element.trim() !== \"\".\n  // TODO: Step 6 - Trim, de-duplicate, sort lexicographically, and return.\n  return undefined;\n}",
-        "assertionMode": "return",
-        "testCases": [
-          {
-            "name": "empty roster",
-            "input": [
-              "[]"
-            ],
-            "expected": {
-              "users": [],
-              "errors": []
-            }
-          },
-          {
-            "name": "normalize and deduplicate tags",
-            "input": [
-              "[{\"id\":1,\"name\":\" Alice \",\"email\":\"ALICE@EXAMPLE.com\",\"tags\":[\"js\",\"js\",\"ts\"],\"role\":\"mentor\"}]"
-            ],
-            "expected": {
-              "users": [
-                {
-                  "id": 1,
-                  "name": "Alice",
-                  "email": "alice@example.com",
-                  "tags": [
-                    "js",
-                    "ts"
-                  ],
-                  "role": "mentor"
-                }
-              ],
-              "errors": []
-            }
-          },
-          {
-            "name": "invalid records are reported",
-            "input": [
-              "[{\"id\":\"1\",\"email\":\"alice@example.com\"},{\"id\":0,\"name\":\"Bob\",\"email\":\"bob@example.com\"}]"
-            ],
-            "expected": {
-              "users": [],
-              "errors": [
-                {
-                  "index": 0,
-                  "path": "id",
-                  "message": "id must be a positive integer"
-                },
-                {
-                  "index": 0,
-                  "path": "name",
-                  "message": "name must be a non-empty string"
-                },
-                {
-                  "index": 1,
-                  "path": "id",
-                  "message": "id must be a positive integer"
-                }
-              ]
-            }
-          },
-          {
-            "name": "optional fields get defaults",
-            "input": [
-              "[{\"id\":2,\"name\":\"Bob\",\"email\":\"bob@example.com\"}]"
-            ],
-            "expected": {
-              "users": [
-                {
-                  "id": 2,
-                  "name": "Bob",
-                  "email": "bob@example.com",
-                  "tags": [],
-                  "role": "student"
-                }
-              ],
-              "errors": []
-            }
-          },
-          {
-            "name": "invalid tags and role",
-            "input": [
-              "[{\"id\":3,\"name\":\"Chen\",\"email\":\"chen@example.com\",\"tags\":[\"go\",123,\"go\"],\"role\":\"teacher\"}]"
-            ],
-            "expected": {
-              "users": [],
-              "errors": [
-                {
-                  "index": 0,
-                  "path": "tags",
-                  "message": "tags must be an array of non-empty strings"
-                },
-                {
-                  "index": 0,
-                  "path": "role",
-                  "message": "role must be one of: student, mentor, admin"
-                }
-              ]
-            }
-          },
-          {
-            "name": "invalid JSON",
-            "input": [
-              "not json"
-            ],
-            "expected": {
-              "users": [],
-              "errors": [
-                {
-                  "index": -1,
-                  "path": "$",
-                  "message": "input must be valid JSON"
-                }
-              ]
-            }
-          },
-          {
-            "name": "decoded value is not an array",
-            "input": [
-              "{}"
-            ],
-            "expected": {
-              "users": [],
-              "errors": [
-                {
-                  "index": -1,
-                  "path": "$",
-                  "message": "input must be a JSON array"
-                }
-              ]
-            }
-          }
-        ],
-        "hints": [
-          "JSON.parse returns data that should be treated as unknown until you prove its shape.",
-          "Use Array.isArray, typeof checks, and small type guards before constructing User objects.",
-          "Validate all fields for one record before deciding whether to push it into users.",
-          "Optional fields still need explicit handling: tags should default to [], and role should default to student."
-        ]
-      },
-      "passCriteria": {
-        "quizMinScore": 1,
-        "exerciseMustPass": true
-      }
-    },
-    {
-      "id": "ts-level-02",
-      "title": "入门级掌握：基础类型与类型标注",
-      "description": "适合编程基础较弱的学习者先建立类型思维。学习常见基础类型、变量标注、函数参数与返回值、对象字面量、数组、元组、联合类型等，配合少量练习。",
-      "prerequisites": [
-        "Unit ts-level-01",
-        "知道变量、函数、数组、对象的基本写法"
-      ],
-      "objectives": [
-        "使用 string、number、boolean、null、undefined、any、unknown、never 等基础类型",
-        "为函数参数和返回值添加类型标注",
-        "区分数组类型与元组类型",
-        "使用联合类型表达“多种可能值”"
-      ],
-      "content": "# 基础类型与类型标注：把“可能是什么”写清楚\n\nTypeScript 的类型是**编译期契约**：编译后会被擦除，不改变 JavaScript 运行时行为。它真正回答的问题是：这个表达式“可能”有哪些值？\n\n## 1. 基础类型\n\n```ts\nlet name: string = \"Ada\";\nlet age: number = 36;        // JS 的 number 包括 NaN、Infinity\nlet active: boolean = true;  // 只表示 true/false，不是“真值”\nlet empty: string | null = null;\nlet later: string | undefined = undefined;\n```\n\n- `null`：显式表示“没有值”。\n- `undefined`：变量未赋值、属性不存在、参数缺失等。\n- 开启 `strictNullChecks` / `strict` 后，`null`、`undefined` 不能直接赋给 `string` 等类型，除非写进联合类型。\n\n```ts\nlet title: string = null;            // strictNullChecks 下错误\nlet title2: string | null = null;    // 正确\n```\n\n- `any`：关闭类型检查。\n\n```ts\nlet data: any = 1;\ndata.noMethod(); // 编译通过，但运行可能 TypeError\n```\n\n- `unknown`：安全版 `any`。它可以接收任何值，但使用前必须收窄。\n\n```ts\nlet value: unknown = \"hello\";\n\nif (typeof value === \"string\") {\n  value.toUpperCase(); // OK：此处 value 是 string\n}\n```\n\n- `never`：表示“没有正常返回值”，常用于抛错、无限循环、穷尽检查。它不同于 `void`：`void` 可以正常结束并返回 `undefined`，`never` 不会正常结束。\n\n```ts\nfunction fail(): never {\n  throw new Error(\"失败\");\n}\n```\n\n## 2. 函数：标注边界，推断细节\n\n```ts\nfunction add(a: number, b: number): number {\n  return a + b;\n}\n\nfunction log(message: string): void {\n  console.log(message);\n}\n```\n\n参数和返回值是函数契约。TypeScript 会推断 `const x = 10` 为 `number`，但公开函数、回调、配置对象等“边界”建议显式标注，防止以后改坏接口。\n\n## 3. 对象、数组与元组\n\n```ts\ntype User = {\n  id: number;\n  name: string;\n  active?: boolean; // 可缺省；读取时类型为 boolean | undefined\n};\n\nconst user: User = { id: 1, name: \"Ada\" };\nconst active = user.active?.toString(); // 安全访问\n```\n\n可选属性表示键可以不存在；读取它时通常得到 `boolean | undefined`。\n\n数组表示“多个同类型元素”，长度通常可变：\n\n```ts\nlet scores: number[] = [90, 88];\nlet names: Array<string> = [\"Ada\"];\n```\n\n元组表示“每个位置的类型固定”：\n\n```ts\nlet point: [number, number] = [10, 20];\nconst [x, y] = point; // x: number, y: number\n```\n\nGotcha：元组不等于只读数组。若要禁止修改，使用 `readonly`：\n\n```ts\nlet fixed: readonly [number, number] = [10, 20];\n// fixed[0] = 30; // 错误\n// fixed.push(30); // 错误\n```\n\n带 rest 的元组可表达“至少两个数字”：\n\n```ts\ntype AtLeastTwo = [number, number, ...number[]];\n```\n\n## 4. 联合类型与类型收窄\n\n联合类型表示“这些类型之一”：\n\n```ts\ntype ID = string | number;\n\nfunction formatId(id: ID): string {\n  if (typeof id === \"number\") {\n    return `ID: ${id}`;\n  }\n  return `ID: ${id.toUpperCase()}`;\n}\n```\n\n收窄前，只能访问所有成员共有的操作；收窄后，TypeScript 会知道当前分支的具体类型。\n\n```ts\nfunction describe(value: string | number): string {\n  if (typeof value === \"string\") return value.toUpperCase();\n  return value.toFixed(2);\n}\n```\n\nGotcha：`typeof null === \"object\"`，所以检查 `null` 要写 `value === null`，不要只靠 `typeof`。\n\n## 5. `never` 的穷尽检查\n\n```ts\ntype Shape =\n  | { kind: \"circle\"; r: number }\n  | { kind: \"rect\"; w: number; h: number };\n\nfunction assertNever(x: never): never {\n  throw new Error(`未处理分支: ${JSON.stringify(x)}`);\n}\n\nfunction area(s: Shape): number {\n  switch (s.kind) {\n    case \"circle\": return Math.PI * s.r * s.r;\n    case \"rect\": return s.w * s.h;\n    default: return assertNever(s);\n  }\n}\n```\n\n如果以后新增 `Shape` 分支却忘了处理，`assertNever(s)` 会报错。这是用类型系统防止逻辑遗漏。\n\n## 6. 练习与参考解\n\n```ts\nfunction parseScore(score: string): number | null {\n  const n = Number(score);\n  return Number.isFinite(n) ? n : null;\n}\n```\n\n注意：`Number(\"\")` 和 `Number(\" \")` 都是 `0`；若空格不算有效输入，应先检查 `score.trim() !== \"\"`。\n\n```ts\nfunction firstTwo(nums: number[]): [number, number] {\n  const a = nums[0];\n  const b = nums[1];\n\n  if (a === undefined || b === undefined) {\n    throw new Error(\"至少需要两个数字\");\n  }\n\n  return [a, b];\n}\n```\n\n若开启 `noUncheckedIndexedAccess`，`nums[0]` 会是 `number | undefined`，这类检查更重要。\n\n核心问题：看到任何值，都问“它可能有哪些类型？我在使用前是否已经证明它是其中某一种？”",
-      "references": [],
-      "quiz": [
-        {
-          "id": "q1",
-          "type": "choice",
-          "question": "TypeScript 的类型标注主要发生在什么时候，编译后会发生什么？",
-          "options": [
-            "编译期检查；编译后的 JavaScript 中类型标注会被擦除",
-            "运行时检查；类型标注会改变 JavaScript 的行为",
-            "只在测试阶段检查；生产代码会保留类型",
-            "只检查 any 类型；其他类型不检查"
-          ],
-          "answer": "A",
-          "explanation": "TypeScript 的类型是编译期契约：它限制源码中表达式的可能值，但编译成 JS 后类型标注消失，不会给运行时增加检查。"
-        },
-        {
-          "id": "q2",
-          "type": "choice",
-          "question": "开启 strictNullChecks 后，下面哪句代码是正确的？",
-          "options": [
-            "let title: string | null = null;",
-            "let title: string = null;",
-            "let title: string = undefined;",
-            "null 和 undefined 永远可以赋给任何类型"
-          ],
-          "answer": "A",
-          "explanation": "strictNullChecks 开启后，null 和 undefined 不再能直接赋给 string；必须显式写成联合类型，例如 string | null。"
-        },
-        {
-          "id": "q3",
-          "type": "choice",
-          "question": "unknown 和 any 的核心区别是什么？",
-          "options": [
-            "unknown 可以接收任何值，但使用前必须收窄；any 会关闭类型检查",
-            "any 比 unknown 更安全，因为它允许所有操作",
-            "unknown 只能接收字符串；any 可以接收任意类型",
-            "两者完全相同，只是写法不同"
-          ],
-          "answer": "A",
-          "explanation": "unknown 是安全版 any：它可以接收任何值，但在访问方法或属性前必须通过类型收窄证明它的具体类型。"
-        },
-        {
-          "id": "q4",
-          "type": "choice",
-          "question": "never 和 void 的区别是什么？",
-          "options": [
-            "never 表示没有正常返回值；void 表示可以正常结束并返回 undefined",
-            "void 表示程序崩溃；never 表示函数返回 null",
-            "never 只能用于变量；void 只能用于函数参数",
-            "两者都表示函数没有返回值，完全等价"
-          ],
-          "answer": "A",
-          "explanation": "void 函数可以正常结束，只是没有有意义返回值；never 表示函数不会正常结束，例如抛错或无限循环。"
-        },
-        {
-          "id": "q5",
-          "type": "choice",
-          "question": "对于 type User = { active?: boolean }，读取 user.active 的类型通常是什么？",
-          "options": [
-            "boolean | undefined",
-            "boolean",
-            "null",
-            "any"
-          ],
-          "answer": "A",
-          "explanation": "可选属性表示键可以不存在，因此读取它时通常需要处理 undefined，类型为 boolean | undefined。"
-        },
-        {
-          "id": "q6",
-          "type": "choice",
-          "question": "使用 assertNever 做穷尽检查的主要价值是什么？",
-          "options": [
-            "让编译器在新联合分支出现时提醒你补上处理逻辑",
-            "让程序在运行时自动删除多余分支",
-            "把 unknown 自动转换成 any",
-            "让所有函数都不需要返回值"
-          ],
-          "answer": "A",
-          "explanation": "当 Shape 新增一个分支但 area 没有处理时，default 分支中的 assertNever 会收到非 never 类型，从而触发编译错误。"
-        }
-      ],
-      "exercise": {
-        "id": "ex-1",
-        "language": "typescript",
-        "entrypoint": "parseShapeArea",
-        "description": "实现 `parseShapeArea(input: unknown): number | null`。输入可能是任意 JSON-like 值：先把未知值收窄并解析成合法 `Shape`，非法输入返回 `null`；合法输入再计算面积。重点练习 `unknown`、类型收窄、`null`、元组和 `never` 的穷尽检查。",
-        "starterCode": "/**\n * Parse a JSON-like shape description and return its area.\n *\n * This exercise practices TypeScript's type system as a compile-time contract:\n * - `unknown` can hold anything, but you must narrow it before reading fields.\n * - `null` means \"invalid input\"; do not throw for ordinary bad input.\n * - A tuple `[number, number]` can model a fixed-size point.\n * - `never` powers an exhaustive check: if a new shape is added, the compiler\n *   should complain unless you update `area`.\n *\n * Valid shapes:\n * 1. `{ kind: \"circle\", r: number }` with finite positive radius.\n * 2. `{ kind: \"rect\", w: number, h: number }` with finite positive width and height.\n * 3. `{ kind: \"point\", p: [number, number] }` with two finite coordinates.\n *\n * Examples:\n * >>> parseShapeArea({ kind: \"circle\", r: 2 })\n * 12.566370614359172\n * >>> parseShapeArea({ kind: \"rect\", w: 3, h: 4 })\n * 12\n * >>> parseShapeArea({ kind: \"rect\", w: 3 })\n * null\n * >>> parseShapeArea({ kind: \"triangle\", a: 1 })\n * null\n * >>> parseShapeArea({ kind: \"point\", p: [1, -2] })\n * 0\n */\nexport type Shape =\n  | { kind: \"circle\"; r: number }\n  | { kind: \"rect\"; w: number; h: number }\n  | { kind: \"point\"; p: readonly [number, number] };\n\nexport function parseShapeArea(input: unknown): number | null {\n  // Step 1: Parse the unknown input into a validated Shape, or null.\n  const shape = parseShape(input);\n\n  // Step 2: Invalid input should produce null, not an exception.\n  if (shape === null) {\n    return null;\n  }\n\n  // Step 3: Once parsed, the type system knows exactly which shape we have.\n  return area(shape);\n}\n\nfunction parseShape(input: unknown): Shape | null {\n  // Step 1: Only plain objects can be shape records.\n  if (!isPlainObject(input)) {\n    return null;\n  }\n\n  // Step 2: Narrow by the discriminant field `kind`.\n  const kind = input.kind;\n\n  if (kind === \"circle\") {\n    // TODO: Check that input.r is a finite positive number.\n    // TODO: Return { kind: \"circle\", r } if valid; otherwise return null.\n    return null;\n  }\n\n  if (kind === \"rect\") {\n    // TODO: Check that input.w and input.h are finite positive numbers.\n    // TODO: Return { kind: \"rect\", w, h } if valid; otherwise return null.\n    return null;\n  }\n\n  if (kind === \"point\") {\n    // TODO: Check that input.p is an array-like pair.\n    // TODO: Check that both coordinates are finite numbers.\n    // TODO: Return { kind: \"point\", p: [x, y] } if valid; otherwise return null.\n    return null;\n  }\n\n  // Step 3: Unknown shape kinds are invalid input.\n  return null;\n}\n\nfunction isPlainObject(value: unknown): value is Record<string, unknown> {\n  // TODO: Exclude primitives and null.\n  // TODO: Accept only Object records, not arrays, Dates, or class instances.\n  // TODO: Return a type guard: value is Record<string, unknown>.\n  return false;\n}\n\nfunction isFiniteNumber(value: unknown): value is number {\n  // TODO: Require the runtime type to be number.\n  // TODO: Reject NaN and ±Infinity with Number.isFinite.\n  return false;\n}\n\nfunction isPositiveFiniteNumber(value: unknown): value is number {\n  // TODO: Reuse the finite-number guard.\n  // TODO: Add the positivity requirement.\n  return false;\n}\n\nfunction area(shape: Shape): number {\n  switch (shape.kind) {\n    case \"circle\":\n      return Math.PI * shape.r * shape.r;\n\n    case \"rect\":\n      return shape.w * shape.h;\n\n    case \"point\":\n      return 0;\n\n    default:\n      // Step 4: This branch should be unreachable if Shape is exhaustive.\n      return assertNever(shape);\n  }\n}\n\nfunction assertNever(value: never): never {\n  throw new Error(`Unhandled shape: ${JSON.stringify(value)}`);\n}",
-        "assertionMode": "return",
-        "testCases": [
-          {
-            "name": "valid circle",
-            "input": [
-              {
-                "kind": "circle",
-                "r": 2
-              }
-            ],
-            "expected": 12.566370614359172
-          },
-          {
-            "name": "valid rectangle",
-            "input": [
-              {
-                "kind": "rect",
-                "w": 3,
-                "h": 4
-              }
-            ],
-            "expected": 12
-          },
-          {
-            "name": "valid point",
-            "input": [
-              {
-                "kind": "point",
-                "p": [
-                  1,
-                  -2
-                ]
-              }
-            ],
-            "expected": 0
-          },
-          {
-            "name": "missing rectangle height",
-            "input": [
-              {
-                "kind": "rect",
-                "w": 3
-              }
-            ],
-            "expected": null
-          },
-          {
-            "name": "non-positive radius",
-            "input": [
-              {
-                "kind": "circle",
-                "r": 0
-              }
-            ],
-            "expected": null
-          },
-          {
-            "name": "stringified number is invalid",
-            "input": [
-              {
-                "kind": "circle",
-                "r": "2"
-              }
-            ],
-            "expected": null
-          },
-          {
-            "name": "non-object input",
-            "input": [
-              "not a shape"
-            ],
-            "expected": null
-          }
-        ],
-        "hints": [
-          "先把 unknown 收窄为 Record<string, unknown>，再读取字段。",
-          "半径、宽、高要做 Number.isFinite 检查；半径、宽、高还必须大于 0。",
-          "area 的 default 分支调用 assertNever，让 Shape 的穷尽性由编译器检查。"
-        ]
-      },
-      "passCriteria": {
-        "quizMinScore": 1,
-        "exerciseMustPass": true
-      }
-    },
-    {
-      "id": "ts-level-03",
-      "title": "初级掌握：对象建模、接口与类型别名",
-      "description": "从“给变量标类型”进阶到“给业务数据建模”。学习 interface、type alias、可选属性、只读属性、函数类型、对象结构，以及接口和类型别名的选择。",
-      "prerequisites": [
-        "Unit ts-level-02",
-        "理解对象和函数的基本使用"
-      ],
-      "objectives": [
-        "使用 interface 描述对象结构",
-        "使用 type alias 定义复杂类型",
-        "理解 optional property、readonly property 与属性索引签名",
-        "区分 interface 与 type 的常见使用场景"
+        "能独立使用 cargo 创建、编译、运行 Rust 项目",
+        "理解所有权、借用、切片的核心规则，能解释为什么 Rust 没有 GC 却内存安全",
+        "能用 struct 和 impl 组织简单数据与行为",
+        "完成一个可交互的 CLI 小工具（如温度转换器）",
+        "在 LeetCode 上完成至少 5 道 Easy 题目（Two Sum、Valid Palindrome 等）"
       ],
       "references": [],
       "passCriteria": {
@@ -492,18 +36,19 @@
       }
     },
     {
-      "id": "ts-level-04",
-      "title": "初级到中级：函数类型、类型推断与收窄",
-      "description": "解释 TypeScript 如何减少显式标注，并让代码更安全。学习函数类型、回调类型、类型推断、类型守卫、typeof、in、字面量类型和条件收窄。",
+      "id": "unit-2-data-structures-collections",
+      "title": "枚举、模式匹配与集合类型：构建文本分析器",
+      "description": "深入学习 Rust 的枚举（Enum）、模式匹配（match/if let）、泛型集合类型（Vec、HashMap、HashSet）及迭代器（Iterator）生态。以构建一个 CSV 解析器或词频统计工具为项目主线，将数据解析、清洗、聚合的流程用 Rust 惯用方式实现。同步在 LeetCode 上练习哈希表、双指针等中等难度题目，将 DSA 概念与 Rust 语法融合。",
       "prerequisites": [
-        "Unit ts-level-03",
-        "理解函数作为参数传递的概念"
+        "完成 Unit 1，理解所有权与借用",
+        "能在 Rust 中编写基本函数与结构体"
       ],
       "objectives": [
-        "为回调函数、事件处理函数、普通函数定义类型",
-        "理解 TypeScript 何时自动推断类型",
-        "使用 typeof、in、字面量联合类型进行类型收窄",
-        "避免过度使用 any，并理解 unknown 的安全处理方式"
+        "熟练使用 enum 和 match 进行控制流与错误处理",
+        "掌握 Vec、HashMap 的常用操作及迭代器适配器（map、filter、fold）",
+        "理解 String 与 &str 的区别及 UTF-8 处理要点",
+        "完成一个 CSV 解析/词频统计 CLI 工具",
+        "在 LeetCode 上完成 5-8 道涉及哈希表、双指针的题目（Group Anagrams、3Sum 等）"
       ],
       "references": [],
       "passCriteria": {
@@ -512,18 +57,19 @@
       }
     },
     {
-      "id": "ts-level-05",
-      "title": "中级掌握：泛型基础与可复用类型",
-      "description": "泛型是 TypeScript 掌握程度的分水岭。通过数组、Promise、函数、接口中的泛型例子，理解“类型参数”如何让类型更灵活、更可复用。",
+      "id": "unit-3-error-handling-concurrency",
+      "title": "错误处理与并发编程：构建并行网页抓取器",
+      "description": "系统学习 Rust 的错误处理哲学——Result、Option、? 运算符及自定义错误类型。引入并发编程核心：std::thread、mpsc 通道、Arc<Mutex<T>> 以及 Send/Sync trait。以构建一个多线程网页抓取器为项目，实践将任务分发给多个线程并聚合结果。同步在 LeetCode 上练习链表、栈、队列等基础数据结构题目，为后续复杂算法打基础。",
       "prerequisites": [
-        "Unit ts-level-04",
-        "理解函数参数和返回值类型"
+        "完成 Unit 2，熟悉集合类型与模式匹配",
+        "了解 HTTP 基本概念（GET 请求、状态码）"
       ],
       "objectives": [
-        "解释泛型的意义：用类型参数表达通用结构",
-        "为函数、接口、类或工具函数添加泛型参数",
-        "使用泛型约束 extends 限制类型范围",
-        "理解 Array<T>、Promise<T>、Record<K, V> 等常见泛型形式"
+        "能使用 Result 和 ? 进行优雅的错误传播",
+        "理解线程创建、join、以及 mpsc 通道的数据传递模式",
+        "掌握 Arc<Mutex<T>> 在多线程中共享可变状态",
+        "完成一个多线程网页抓取器（使用 reqwest 阻塞客户端）",
+        "在 LeetCode 上完成 5-8 道链表/栈/队列题目（Reverse Linked List、Valid Parentheses 等）"
       ],
       "references": [],
       "passCriteria": {
@@ -532,18 +78,20 @@
       }
     },
     {
-      "id": "ts-level-06",
-      "title": "中级掌握：内置工具类型与类型转换",
-      "description": "学习 TypeScript 官方常用工具类型，理解它们如何帮助从已有类型派生新类型。重点掌握 Partial、Required、Readonly、Pick、Omit、Record、ReturnType、Parameters 等。",
+      "id": "unit-4-ai-agent-core",
+      "title": "异步 Rust 与 AI Agent 核心：接入 LLM API",
+      "description": "引入 Tokio 异步运行时，学习 async/await、Future 及异步 HTTP 客户端（reqwest）。掌握 serde 进行 JSON 序列化/反序列化，构建与 OpenAI 兼容 API 交互的核心模块。项目主线是构建一个**命令行代码生成工具**——接收用户自然语言描述，调用 LLM API 返回 Rust/Python 代码并输出到终端。同步在 LeetCode 上练习二分搜索、二叉树遍历等算法。",
       "prerequisites": [
-        "Unit ts-level-05",
-        "熟悉 interface 和 type alias"
+        "完成 Unit 3，理解线程与通道",
+        "了解 REST API 基本概念（请求/响应、JSON 格式）",
+        "已获取 OpenAI API Key 或兼容服务（如 Groq、Ollama）的访问方式"
       ],
       "objectives": [
-        "使用 Partial、Required、Readonly 修改属性修饰",
-        "使用 Pick、Omit、Record 创建派生类型",
-        "使用 Parameters、ReturnType 从函数类型中提取类型",
-        "理解类型断言 as 的用途和风险"
+        "理解 async/await 与 Future 的基本原理，能使用 Tokio 编写异步程序",
+        "能用 serde 定义请求/响应结构体并完成 JSON 序列化",
+        "实现一个可调用 LLM API 并解析返回代码的 Rust 模块",
+        "完成命令行代码生成工具的 MVP 版本",
+        "在 LeetCode 上完成 5-8 道二分搜索/树遍历题目（Binary Search、Inorder Traversal 等）"
       ],
       "references": [],
       "passCriteria": {
@@ -552,78 +100,20 @@
       }
     },
     {
-      "id": "ts-level-07",
-      "title": "中高级掌握：字面量类型、联合交叉与条件类型",
-      "description": "进入 TypeScript 类型系统核心能力。学习字面量联合、交叉类型、条件类型、infer、模板字面量类型等，用于构建更精确、更自动化的类型。",
+      "id": "unit-5-agent-polish-engineering",
+      "title": "Agent 完善与工程化实践：打造生产级 AI 编码助手",
+      "description": "将 AI Agent 从 MVP 升级为功能完善的 CLI 工具：使用 clap 构建专业命令行界面（子命令、参数校验），引入模板引擎处理 prompt，支持从文件读取上下文代码，实现流式输出（SSE/Streaming），添加日志与错误恢复机制。编写单元测试与集成测试，使用 rustfmt 与 clippy 保证代码质量。同步在 LeetCode 上挑战动态规划与图基础题目，达到中级算法水平。最终交付一个可独立设计并发、安全的中型 CLI 服务的能力。",
       "prerequisites": [
-        "Unit ts-level-06",
-        "理解泛型和工具类型"
+        "完成 Unit 4，拥有可运行的 AI Agent MVP",
+        "了解命令行参数解析的基本概念",
+        "了解软件测试的基本概念（单元测试、断言）"
       ],
       "objectives": [
-        "使用字面量类型提高接口字段的精确度",
-        "理解联合类型与交叉类型的区别",
-        "编写简单条件类型 A extends B ? X : Y",
-        "理解 infer 在条件类型中提取类型的作用"
-      ],
-      "references": [],
-      "passCriteria": {
-        "quizMinScore": 1,
-        "exerciseMustPass": true
-      }
-    },
-    {
-      "id": "ts-level-08",
-      "title": "高级掌握：工程配置、严格模式与类型安全实践",
-      "description": "学习 TypeScript 在真实项目中的工程化用法。理解 tsconfig、strict、noImplicitAny、strictNullChecks、module、target、lib 等配置，以及如何逐步迁移 JS 项目到 TS。",
-      "prerequisites": [
-        "Unit ts-level-07",
-        "了解 npm、package.json 或基本前端项目结构"
-      ],
-      "objectives": [
-        "解释 tsconfig.json 的常见配置项",
-        "理解 strict 模式为什么能提升类型安全",
-        "知道如何逐步从 any 迁移到更安全类型",
-        "理解声明文件 .d.ts、第三方库类型和 @types 包的作用"
-      ],
-      "references": [],
-      "passCriteria": {
-        "quizMinScore": 1,
-        "exerciseMustPass": true
-      }
-    },
-    {
-      "id": "ts-level-09",
-      "title": "高级掌握：类型系统设计：API、表单、状态与领域模型",
-      "description": "把类型知识用于真实业务建模。学习如何为接口请求响应、表单数据、状态管理、错误处理、领域模型设计类型，减少运行时错误。",
-      "prerequisites": [
-        "Unit ts-level-08",
-        "了解基本前后端交互或 API 概念"
-      ],
-      "objectives": [
-        "为 API 请求参数、响应数据和错误结构设计类型",
-        "为表单、列表、分页、用户状态等常见业务场景建模",
-        "区分 UI 类型、业务类型和底层数据类型的边界",
-        "使用类型减少重复并提升代码可维护性"
-      ],
-      "references": [],
-      "passCriteria": {
-        "quizMinScore": 1,
-        "exerciseMustPass": true
-      }
-    },
-    {
-      "id": "ts-level-10",
-      "title": "精通方向：高级类型编程、库设计与持续学习路径",
-      "description": "了解 TypeScript 精通阶段需要学习的内容，而不是要求初学者立刻全部掌握。包括高级条件类型、递归类型、模板字面量类型、声明合并、装饰器、类型测试、库类型设计和源码阅读。",
-      "prerequisites": [
-        "Unit ts-level-09",
-        "有实际 TypeScript 项目练习经验"
-      ],
-      "objectives": [
-        "说明精通 TypeScript 需要掌握的类型系统高级主题",
-        "理解如何阅读和使用第三方库的类型定义",
-        "知道如何设计可复用、可维护的 TypeScript 工具函数和库类型",
-        "制定后续进阶路线：框架实战、源码阅读、复杂类型练习和工程规范"
+        "能使用 clap 构建具有子命令、参数校验的专业 CLI 应用",
+        "实现 LLM 流式响应的解析与实时输出",
+        "能为项目编写单元测试与集成测试（cargo test）",
+        "完成功能完善的 AI 编码助手（支持文件上下文、多模型切换、输出格式化）",
+        "在 LeetCode 上完成 5-8 道 DP/图题目（Climbing Stairs、Number of Islands 等），具备独立设计并发安全中型服务的中级能力"
       ],
       "references": [],
       "passCriteria": {
@@ -632,7 +122,7 @@
       }
     }
   ],
-  "currentIndex": 1,
-  "createdAt": "2026-06-12T06:19:48.404Z",
-  "updatedAt": "2026-06-12T07:17:26.937Z"
+  "currentIndex": 0,
+  "createdAt": "2026-06-12T10:22:44.610Z",
+  "updatedAt": "2026-06-12T10:22:44.610Z"
 }

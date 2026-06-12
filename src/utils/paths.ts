@@ -60,6 +60,17 @@ export function getExtensionForLanguage(language: string): string {
   switch (language) {
     case 'python': return '.py';
     case 'bash': return '.sh';
-    case 'typescript': default: return '.ts';
+    case 'rust': return '.rs';
+    case 'cpp': return '.cpp';
+    case 'java': return '.java';
+    case 'go': return '.go';
+    case 'ruby': return '.rb';
+    case 'php': return '.php';
+    case 'csharp': return '.cs';
+    case 'swift': return '.swift';
+    case 'kotlin': return '.kt';
+    case 'javascript': return '.js';
+    case 'typescript': return '.ts';
+    default: return '.txt'; // fallback
   }
 }
