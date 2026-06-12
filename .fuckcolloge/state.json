@@ -1,5 +1,5 @@
 {
-  "currentUnitId": "dsa-003",
+  "currentUnitId": "unit-2-fullstack-app-with-node-react",
   "completedUnitIds": [],
   "attempts": {
     "dsa-001": {
@@ -13,6 +13,10 @@
     "dsa-003": {
       "count": 2,
       "lastSubmittedAt": "2026-06-11T09:25:55.999Z"
+    },
+    "unit-2-fullstack-app-with-node-react": {
+      "count": 1,
+      "lastSubmittedAt": "2026-06-12T04:12:10.900Z"
     }
   },
   "assessments": [
@@ -242,7 +246,136 @@
       "diagnosis": "本单元《栈与括号匹配：用 LIFO 表达嵌套结构》评分：5/5。代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。概念小测通过，说明核心概念掌握较稳定。",
       "nextAction": "通过本单元。建议执行 fc next 进入 下一单元。",
       "createdAt": "2026-06-11T09:25:55.999Z"
+    },
+    {
+      "unitId": "unit-2-fullstack-app-with-node-react",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 1,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "test 1",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":200,\"body\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"}]}'\n",
+          "expected": "\"{\\\"status\\\":200,\\\"body\\\":[{\\\"id\\\":1,\\\"ownerId\\\":1,\\\"title\\\":\\\"A\\\",\\\"done\\\":false,\\\"createdAt\\\":\\\"t1\\\"}]}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 2",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":201,\"body\":{\"id\":4,\"ownerId\":2,\"title\":\"Write tests\",\"done\":false,\"createdAt\":\"t0\"}}'\n",
+          "expected": "\"{\\\"status\\\":201,\\\"body\\\":{\\\"id\\\":4,\\\"ownerId\\\":2,\\\"title\\\":\\\"Write tests\\\",\\\"done\\\":false,\\\"createdAt\\\":\\\"t0\\\"}}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 3",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":200,\"body\":{\"task\":{\"id\":1,\"ownerId\":1,\"title\":\"Buy milk\",\"done\":true,\"createdAt\":\"t1\"}}}'\n",
+          "expected": "\"{\\\"status\\\":200,\\\"body\\\":{\\\"task\\\":{\\\"id\\\":1,\\\"ownerId\\\":1,\\\"title\\\":\\\"Buy milk\\\",\\\"done\\\":true,\\\"createdAt\\\":\\\"t1\\\"}}}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 4",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":200,\"body\":{\"task\":{\"id\":2,\"ownerId\":1,\"title\":\"B\",\"done\":true,\"createdAt\":\"t2\"}}}'\n",
+          "expected": "\"{\\\"status\\\":200,\\\"body\\\":{\\\"task\\\":{\\\"id\\\":2,\\\"ownerId\\\":1,\\\"title\\\":\\\"B\\\",\\\"done\\\":true,\\\"createdAt\\\":\\\"t2\\\"}}}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 5",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":200,\"body\":{\"ok\":true}}'\n             ^\n",
+          "expected": "\"{\\\"status\\\":200,\\\"body\\\":{\\\"ok\\\":true}}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 6",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":403,\"error\":\"forbidden\"}'\n             ^\n",
+          "expected": "\"{\\\"status\\\":403,\\\"error\\\":\\\"forbidden\\\"}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 7",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":400,\"error\":\"invalid title\"}'\n",
+          "expected": "\"{\\\"status\\\":400,\\\"error\\\":\\\"invalid title\\\"}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 8",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":400,\"error\":\"invalid json\"}'\n",
+          "expected": "\"{\\\"status\\\":400,\\\"error\\\":\\\"invalid json\\\"}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        },
+        {
+          "name": "test 9",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ '{\"status\":500,\"error\":\"not implemented\"}'\n- '{\"status\":400,\"error\":\"invalid action\"}'\n",
+          "expected": "\"{\\\"status\\\":400,\\\"error\\\":\\\"invalid action\\\"}\"",
+          "actual": "\"{\\\"status\\\":500,\\\"error\\\":\\\"not implemented\\\"}\""
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": false,
+          "answer": "1）A",
+          "expected": "A"
+        },
+        {
+          "id": "q2",
+          "passed": false,
+          "answer": "A",
+          "expected": "C"
+        },
+        {
+          "id": "q3",
+          "passed": false,
+          "answer": "A",
+          "expected": "B"
+        },
+        {
+          "id": "q4",
+          "passed": false,
+          "answer": "b",
+          "expected": "C"
+        },
+        {
+          "id": "q5",
+          "passed": false,
+          "answer": "3",
+          "expected": "B"
+        },
+        {
+          "id": "q6",
+          "passed": false,
+          "answer": "1",
+          "expected": "D"
+        },
+        {
+          "id": "q7",
+          "passed": false,
+          "answer": "4",
+          "expected": "A"
+        },
+        {
+          "id": "q8",
+          "passed": false,
+          "answer": "5",
+          "expected": "B"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure",
+        "concept-gap"
+      ],
+      "diagnosis": "所有测试都返回 `{status:500,error:\"not implemented\"}`，说明 `applyTaskCommand` 直接走到了最后的占位 `return`，没有完成 JSON 解析、action/user/state 校验、按 action 分支处理、所有权检查和不可变更新。概念上，这个练习不是写 Express 路由本身，而是把路由逻辑抽象成纯函数：输入字符串 → 响应字符串，不能修改 `command.state.tasks`，而要创建新数组/对象。测验全错也提示你对 HTTP-like 状态码（200/201/400/403/404）与验证优先级的理解还不稳定，例如 title/id/action 校验应在对应操作前完成。下一步可以先按 `list/create/update/toggle/delete` 画出状态转换表，再逐条实现分支并用测试验证。",
+      "nextAction": "先补全 `applyTaskCommand` 的解析和校验骨架，再逐个实现五个 action 的不可变更新。",
+      "createdAt": "2026-06-12T04:12:10.900Z"
     }
   ],
-  "updatedAt": "2026-06-11T09:25:55.999Z"
+  "updatedAt": "2026-06-12T04:12:10.900Z"
 }

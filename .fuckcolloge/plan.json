@@ -1,397 +1,507 @@
 {
   "learnerProfile": {
-    "target": "学会写1+1=2",
-    "jsLevel": "basic",
-    "dsaLevel": "heard",
+    "target": "成为一个优秀的全栈工程师",
+    "programmingLevel": "basic",
+    "dsaLevel": "none",
     "weeklyHours": "2-5",
-    "learningStyle": "explain-first",
+    "learningStyle": "project-first",
     "codePractice": "yes",
     "pace": "normal",
-    "nearTermGoal": "",
+    "nearTermGoal": "能构建简单的全栈应用",
     "rawAnswers": {},
-    "summary": "学习者目前 JavaScript/TypeScript 基础为 basic，数据结构与算法只是听说过，整体处于入门到起步阶段。每周可投入 2-5 小时，偏好先讲解再练习的学习方式，并愿意进行代码实践。当前目标表述为“学会写 1+1=2”，但综合信息显示其真实近中期目标是具备通过字节笔试的基础能力。适合以正常节奏，从语法基础、简单题和笔试常见题型开始系统训练。",
+    "summary": "学习者目标是成为优秀的全栈工程师，目前编程基础处于入门到基础阶段，JavaScript/TypeScript 需要系统巩固。数据结构与算法基础较弱，建议从简单概念、基础题型和常见笔试题型逐步补起。每周可投入 2–5 小时，偏好项目驱动学习，适合边做小项目边练习代码。整体节奏可按正常速度推进，近期目标是能够独立构建简单的全栈应用。",
     "createdAt": "2026-06-11T08:32:49.081Z"
   },
   "units": [
     {
-      "id": "dsa-001",
-      "title": "数组与双指针：用两个游标压缩无效操作",
-      "description": "学习如何用双指针在有序数组上原地去重，并理解时间复杂度 O(n) 的来源。",
+      "id": "unit-1-js-ts-fundamentals-with-project",
+      "title": "JavaScript/TypeScript 基础与前端项目入门",
+      "description": "以项目驱动方式系统巩固 JavaScript 与 TypeScript 基础，学习 HTML/CSS、DOM、异步请求、组件化思想，并完成一个可交互的前端小应用。参考 freeCodeCamp、The Odin Project、MDN 和 roadmap.sh 的 Full Stack/JavaScript 学习路径，重点放在“边写代码边理解”。",
       "prerequisites": [
-        "数组基础",
-        "for 循环",
-        "基本时间复杂度概念"
+        "了解基本计算机操作",
+        "知道变量、条件、循环等最基础编程概念",
+        "每周可投入 2–5 小时进行练习"
       ],
       "objectives": [
-        "理解双指针适合处理有序或可线性扫描的问题",
-        "能解释 slow/fast 两个指针分别代表什么",
-        "能实现原地数组去重并返回有效长度"
+        "掌握 JavaScript 基础语法、函数、数组、对象、模块和异步编程",
+        "能够使用 HTML、CSS 和 JavaScript 构建响应式页面",
+        "了解 TypeScript 的类型、接口、泛型基础，并能在小项目中使用",
+        "完成一个前端项目，例如任务管理应用、个人作品集页面或小型数据展示页面",
+        "能够使用 Git/GitHub 管理代码并提交项目"
       ],
-      "content": "# 数组与双指针：用两个游标压缩无效操作\n\n## 1. 为什么需要双指针？\n\n如果你要在有序数组里删除重复元素，最直观的方法可能是：遍历数组、遇到重复就删除、继续向后检查。\n但数组删除元素会让后面的元素整体移动，成本很高。双指针的核心思想是：不要真的删除，而是把需要保留的元素紧凑地搬到数组前面。\n\n## 2. slow / fast 指针模型\n\n- `fast`：负责向前探索，查看新元素\n- `slow`：指向下一个应该写入保留元素的位置\n\n当 `nums[fast] !== nums[slow]` 时，说明发现了一个新值：slow 向前移动一格，然后把 `nums[fast]` 写到 `nums[slow]`。\n最后 `slow + 1` 就是去重后有效部分的长度。\n\n## 3. 示例\n\n输入：`[1, 1, 2, 2, 3]`。\n过程：fast 从 1 开始扫描；遇到重复值就跳过；遇到新值就写入 slow 的下一个位置。\n最终前三个元素变为 `[1, 2, 3]`，返回长度 3。\n\n## 4. 代码模板\n\n```ts\nexport function removeDuplicates(nums: number[]): number {\n  if (nums.length === 0) return 0;\n  let slow = 0;\n  for (let fast = 1; fast < nums.length; fast++) {\n    if (nums[fast] !== nums[slow]) {\n      slow++;\n      nums[slow] = nums[fast];\n    }\n  }\n  return slow + 1;\n}\n```\n\n## 5. 你要完成的练习\n\n实现 `removeDuplicates(nums: number[]): number`。\n要求：不要创建新数组；原地修改 `nums`；返回去重后的有效长度；空数组返回 0。\n\n## 6. 小测\n\n1. 双指针为什么适合有序数组去重？\n2. `slow` 指针代表什么？\n3. 为什么返回值是 `slow + 1` 而不是 `slow`？\n\n## 7. 参考设计来源\n\n- CS61A：强调通过小 lab 建立直觉\n- UC Berkeley Data Structures：重视测试驱动的数据结构练习\n- freeCodeCamp：用闯关反馈帮助学习者持续修正",
-      "references": [
-        "https://cs61a.org/",
-        "https://sp26.datastructur.es/",
-        "https://www.freecodecamp.org/learn/front-end-development-libraries/#bootstrap/"
-      ],
+      "content": "# JavaScript/TypeScript 基础与前端项目入门\n\n## 1. 学习目标：从“会写语法”到“能建模”\n\n本单元以项目驱动方式学习前端基础。目标是完成一个可运行的前端应用，例如 **Task Manager**、个人作品集或小型数据展示页面，并能清楚解释：\n\n> 用户事件如何改变状态，状态如何驱动 DOM 更新，数据如何被持久化或异步加载。\n\n**CS61A 式要求**：不要只背 API，要理解 **抽象、状态表示、数据流和函数职责边界**。\n\n---\n\n## 2. 项目规格：Task Manager\n\n建议功能：\n\n- 添加、删除、标记完成任务\n- 按 **全部 / 未完成 / 已完成** 筛选\n- 使用 `localStorage` 持久化\n- 使用 `fetch` 加载模拟数据或 API\n- 使用 TypeScript 定义数据模型\n- 使用模块拆分 DOM、状态、存储、API\n- 使用 Git/GitHub 管理版本\n\n核心数据模型：\n\n```ts\ntype Task = {\n  id: string;\n  title: string;\n  done: boolean;\n  createdAt: number;\n};\n\ntype Filter = \"all\" | \"active\" | \"done\";\n```\n\n关键 gotchas：\n\n- `id` 不要用数组下标，否则删除后状态会混乱。\n- 标题必须 `trim()`，空任务不能提交。\n- 渲染任务标题优先用 `textContent`，避免 `innerHTML` 造成 XSS 风险。\n\n---\n\n## 3. JavaScript 基础：值、作用域与函数\n\n```js\nconst tasks = [];\nlet filter = \"all\";\n```\n\n- `const`：绑定不可重新赋值，但对象/数组内部仍可修改。\n- `let`：用于会变化的状态。\n- `var`：函数作用域，容易产生 bug，现代代码中通常避免。\n\n```js\ntasks.push({ id: \"1\", title: \"学习 DOM\", done: false });\n// tasks = [] // 错误：const 不能重新赋值\n```\n\n函数是一等公民，可以作为参数、返回值和对象属性：\n\n```js\nfunction toggleDone(task) {\n  return { ...task, done: !task.done };\n}\n\nconst updateTask = (tasks, id, updater) =>\n  tasks.map((task) => (task.id === id ? updater(task) : task));\n```\n\n数组方法：\n\n- `map`：逐个转换，返回新数组\n- `filter`：筛选元素\n- `find`：查找第一个匹配项\n- `reduce`：累计计算\n- `some` / `every`：判断条件\n\n注意：优先使用不可变更新，例如 `{ ...task }`，而不是直接修改旧对象。\n\n---\n\n## 4. HTML/CSS/DOM：结构、样式与交互\n\nHTML 应语义化：\n\n```html\n<form id=\"task-form\" aria-label=\"添加任务\">\n  <label for=\"task-input\">任务标题</label>\n  <input id=\"task-input\" placeholder=\"输入任务\" />\n  <button type=\"submit\">添加</button>\n</form>\n\n<ul id=\"task-list\" aria-live=\"polite\"></ul>\n```\n\nCSS 使用 Flex/Grid 和媒体查询：\n\n```css\n.container {\n  display: grid;\n  gap: 1rem;\n  max-width: 720px;\n  margin: auto;\n}\n\n@media (max-width: 600px) {\n  .container {\n    grid-template-columns: 1fr;\n    padding: 1rem;\n  }\n}\n```\n\nDOM 交互要围绕状态更新，而不是直接“拼页面”：\n\n```js\nform.addEventListener(\"submit\", (event) => {\n  event.preventDefault();\n\n  const input = document.querySelector(\"#task-input\");\n  const title = input.value.trim();\n\n  if (!title) return;\n\n  const task = {\n    id: crypto.randomUUID(),\n    title,\n    done: false,\n    createdAt: Date.now(),\n  };\n\n  tasks.push(task);\n  render();\n  input.value = \"\";\n});\n```\n\nGotchas：\n\n- 表单提交默认会刷新页面，必须 `event.preventDefault()`。\n- 输入框类型可能是 `Element`，TypeScript 中需要判断是否为 `HTMLInputElement`。\n- 大量任务时，频繁 `innerHTML +=` 会低效且危险；可用 `replaceChildren()` 重建列表。\n\n---\n\n## 5. 异步编程：Promise、async/await 与错误处理\n\n```ts\nasync function loadTasks(): Promise<Task[]> {\n  const response = await fetch(\"/api/tasks\");\n\n  if (!response.ok) {\n    throw new Error(`请求失败：HTTP ${response.status}`);\n  }\n\n  return response.json();\n}\n\ntry {\n  const tasks = await loadTasks();\n  render(tasks);\n} catch (error) {\n  showError(\"任务加载失败，请稍后重试\");\n}\n```\n\n重点：\n\n- `fetch` 返回 `Promise<Response>`。\n- `await` 只能在 `async` 函数或模块顶层中使用。\n- `async` 函数总是返回 Promise。\n- `response.ok` 为 `false` 时，`fetch` 不一定会 throw。\n- 网络失败、JSON 解析失败、HTTP 错误都应处理。\n\n---\n\n## 6. TypeScript：类型、接口与泛型\n\nTypeScript 是 JavaScript 的超集，最终编译为 JavaScript。类型系统的价值是提前发现错误，而不是运行时“魔法”。\n\n```ts\ninterface TodoState {\n  tasks: Task[];\n  filter: Filter;\n}\n```\n\n`type` 与 `interface`：\n\n- `type`：可表示联合类型、元组、函数类型。\n- `interface`：适合描述对象结构，可被扩展。\n- 初学者不要滥用 `any`，它会关闭类型检查。\n\n泛型示例：\n\n```ts\nfunction first<T>(items: T[]): T | undefined {\n  return items[0];\n}\n\nconst task = first(tasks);\n```\n\nTypeScript gotchas：\n\n- `const x = 1` 推断为字面量类型 `1`，不是宽泛的 `number`。\n- 数组方法可能返回 `undefined`，例如 `find()`。\n- DOM API 类型很具体，需根据元素类型收窄。\n\n---\n\n## 7. 模块化与工程结构\n\n推荐结构：\n\n```txt\ntask-manager/\n├─ index.html\n├─ src/\n│  ├─ main.ts\n│  ├─ types.ts\n│  ├─ render.ts\n│  ├─ storage.ts\n│  └─ api.ts\n├─ style.css\n├─ package.json\n└─ tsconfig.json\n```\n\n模块示例：\n\n```ts\n// storage.ts\nexport function saveTasks(tasks: Task[]): void {\n  localStorage.setItem(\"tasks\", JSON.stringify(tasks));\n}\n\nexport function loadTasks(): Task[] {\n  try {\n    return JSON.parse(localStorage.getItem(\"tasks\") || \"[]\");\n  } catch {\n    return [];\n  }\n}\n```\n\n```html\n<script type=\"module\" src=\"/src/main.js\"></script>\n```\n\n注意：浏览器原生模块路径通常需要 `.js` 后缀；构建工具如 Vite 会处理 `.ts` 到 `.js` 的转换。\n\n---\n\n## 8. Git/GitHub 工作流\n\n从第一天开始版本控制：\n\n```bash\ngit init\ngit add .\ngit commit -m \"Initial task manager app\"\ngit branch -M main\ngit remote add origin <repo-url>\ngit push -u origin main\n```\n\n建议：\n\n- 每次提交只完成一个清晰目标。\n- 提交信息使用动词开头，例如 `Add task form`、`Persist tasks`。\n- 忽略 `node_modules/`、`dist/`、环境变量文件。\n- 使用 Pull Request 或 GitHub Issues 记录功能与 bug。\n\n---\n\n## 9. 验收标准\n\n完成项目后，你应该能够：\n\n- 解释应用的状态模型和数据流。\n- 用 HTML/CSS 构建响应式、可访问页面。\n- 用 JavaScript 处理事件、数组、对象和函数。\n- 用 TypeScript 定义类型、接口、泛型。\n- 用模块组织代码，避免所有逻辑堆在 `main.ts`。\n- 正确处理异步请求失败。\n- 使用 Git/GitHub 管理项目历史。\n\n最终标准不是“代码能跑”，而是你能独立回答：\n\n> 这个状态存在哪里？哪个函数修改它？修改后页面如何更新？失败时用户看到什么？",
+      "references": [],
       "quiz": [
         {
           "id": "q1",
           "type": "choice",
-          "question": "双指针最适合解决哪类问题？",
+          "question": "在 Task Manager 中，为什么任务 id 不应使用数组下标？",
           "options": [
-            "必须枚举所有排列的问题",
-            "可以在线性扫描中维护两个位置的问题",
-            "只能递归解决的问题",
-            "必须使用哈希表的问题"
+            "数组下标是位置，删除或筛选后会改变，可能让状态指向错误的任务",
+            "数组下标无法被 TypeScript 类型检查",
+            "数组下标只能用于数字标题",
+            "数组下标会导致 localStorage 无法保存 JSON"
           ],
-          "answer": "可以在线性扫描中维护两个位置的问题",
-          "explanation": "双指针本质是在一次线性扫描中维护两个有意义的索引。"
+          "answer": "A",
+          "explanation": "id 表示任务的身份，而不是它在数组中的位置。删除任务后，后续元素会前移；如果 id 来自下标，同一个 id 可能代表不同任务，状态更新、删除和持久化都会变得不可预测。"
         },
         {
           "id": "q2",
           "type": "choice",
-          "question": "在原地去重中，slow 指针代表什么？",
+          "question": "下面哪句话正确描述了 `const tasks: Task[] = []` 之后执行 `tasks.push(...)`？",
           "options": [
-            "当前正在探索的元素",
-            "下一个保留元素应该写入的位置",
-            "数组最后一个元素的位置",
-            "重复元素的个数"
+            "合法，因为 const 只禁止重新绑定 tasks，不禁止修改数组内容",
+            "非法，因为 push 会改变数组引用",
+            "合法，但 push 会清空数组",
+            "非法，必须改用 var"
           ],
-          "answer": "下一个保留元素应该写入的位置",
-          "explanation": "fast 探索，slow 写入。"
+          "answer": "A",
+          "explanation": "`const` 限制的是变量绑定本身不能被重新赋值，例如 `tasks = []` 是非法的；但数组或对象内部仍然可以修改，例如 `push`、属性更新或对象内部字段变化。"
         },
         {
           "id": "q3",
-          "type": "short-answer",
-          "question": "为什么返回 slow + 1？",
-          "answer": "因为 slow 是最后一个保留元素的索引，长度等于索引加一。",
-          "explanation": "索引从 0 开始，所以长度需要加一。"
+          "type": "choice",
+          "question": "`fetch('/api/tasks')` 在服务器返回 404 时，通常会发生什么？",
+          "options": [
+            "Promise 自动 reject，只能由 catch 捕获",
+            "Promise 通常 resolve 为一个 Response，但 response.ok 为 false",
+            "浏览器会刷新页面",
+            "TypeScript 会在编译期阻止所有 404"
+          ],
+          "answer": "B",
+          "explanation": "`fetch` 只在网络层失败时通常 reject；HTTP 404/500 这类响应通常仍会 resolve 为 `Response`。因此必须检查 `response.ok`，必要时主动 `throw new Error(...)`。"
+        },
+        {
+          "id": "q4",
+          "type": "choice",
+          "question": "为什么初学者不应滥用 TypeScript 的 `any`？",
+          "options": [
+            "any 会关闭类型检查，容易把字段拼写错误和 undefined 推迟到运行期",
+            "any 会让代码运行更快",
+            "any 只能用于 DOM API",
+            "any 会自动生成测试"
+          ],
+          "answer": "A",
+          "explanation": "`any` 会绕过 TypeScript 的类型保护，使接口错误、拼写错误和缺失字段无法在编译期被发现。应优先使用明确的 `type`、`interface` 和泛型表达数据模型。"
+        },
+        {
+          "id": "q5",
+          "type": "choice",
+          "question": "显示用户输入的任务标题时，为什么优先使用 `textContent` 而不是 `innerHTML`？",
+          "options": [
+            "`textContent` 更美观",
+            "`textContent` 可以避免把用户输入解释成 HTML 或脚本，降低 XSS 风险",
+            "`innerHTML` 不支持中文",
+            "`textContent` 会自动保存到 localStorage"
+          ],
+          "answer": "B",
+          "explanation": "用户输入是不可信数据。`innerHTML` 会解析 HTML，可能引入脚本或恶意标记；`textContent` 只设置文本内容，是更安全、更符合职责边界的 DOM 更新方式。"
+        },
+        {
+          "id": "q6",
+          "type": "choice",
+          "question": "在纯 reducer 中，为什么应返回新的 state 而不是直接修改原 state？",
+          "options": [
+            "新对象让数据流更可预测，便于渲染、测试和调试",
+            "JavaScript 不允许修改对象",
+            "只有数组能修改，对象不能修改",
+            "直接修改会让 TypeScript 自动报错"
+          ],
+          "answer": "A",
+          "explanation": "状态更新应像数学函数一样：给定旧状态和动作，产生新状态。返回新对象可以避免隐藏副作用，让 UI 渲染、持久化和测试都围绕清晰的数据流展开。"
         }
       ],
       "exercise": {
-        "id": "ex-dsa-001",
-        "type": "typescript",
-        "functionName": "removeDuplicates",
-        "description": "实现有序数组原地去重，并返回去重后的有效长度。",
-        "starterCode": "export function removeDuplicates(nums: number[]): number {\n  // TODO: implement removeDuplicates\n  return 0;\n}\n",
-        "assertionMode": "mutate-and-return",
-        "testCases": [
-          {
-            "name": "empty array",
-            "input": [
-              []
-            ],
-            "expected": {
-              "k": 0,
-              "nums": []
-            }
-          },
-          {
-            "name": "single element",
-            "input": [
-              [
-                1
-              ]
-            ],
-            "expected": {
-              "k": 1,
-              "nums": [
-                1
-              ]
-            }
-          },
-          {
-            "name": "all duplicates",
-            "input": [
-              [
-                1,
-                1,
-                1
-              ]
-            ],
-            "expected": {
-              "k": 1,
-              "nums": [
-                1,
-                1,
-                1
-              ]
-            }
-          },
-          {
-            "name": "mixed duplicates",
-            "input": [
-              [
-                1,
-                1,
-                2,
-                2,
-                3
-              ]
-            ],
-            "expected": {
-              "k": 3,
-              "nums": [
-                1,
-                2,
-                3,
-                2,
-                3
-              ]
-            }
-          }
-        ],
-        "hints": [
-          "先处理空数组。",
-          "让 fast 从 1 开始。",
-          "只有当 fast 指向新值时，slow 才前进。"
-        ]
-      },
-      "passCriteria": {
-        "quizMinScore": 2,
-        "exerciseMustPass": true
-      },
-      "nextIfPassed": "dsa-002",
-      "nextIfFailed": "dsa-001"
-    },
-    {
-      "id": "dsa-002",
-      "title": "哈希表：把查找从线性扫描变成常数时间",
-      "description": "学习 Map/Set 如何帮助你用空间换时间，解决 two-sum 类问题。",
-      "prerequisites": [
-        "数组遍历",
-        "对象/Map 基础",
-        "时间复杂度 O(n)"
-      ],
-      "objectives": [
-        "理解哈希表为什么能降低查找成本",
-        "能用 Map 记录值到索引的映射",
-        "能实现 twoSum 并解释一次遍历解法"
-      ],
-      "content": "# 哈希表：把查找从线性扫描变成常数时间\n\n## 1. 问题\n\n给定数组 `nums` 和目标值 `target`，找出两个数，使它们的和等于 `target`，并返回它们的下标。\n例如 `nums = [2, 7, 11, 15]`，`target = 9`，答案是 `[0, 1]`。\n\n## 2. 暴力思路的问题\n\n双重循环的时间复杂度是 O(n²)。当数组变大时，会非常慢。\n\n## 3. 用 Map 换时间\n\n我们真正需要知道的是：当前数字 `num` 的搭档 `target - num` 之前有没有出现过？\n如果出现过，就直接返回两个下标。因此可以用 Map 保存 `value -> index`。\n\n## 4. 一次遍历模板\n\n```ts\nexport function twoSum(nums: number[], target: number): number[] {\n  const seen = new Map<number, number>();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (seen.has(complement)) {\n      return [seen.get(complement)!, i];\n    }\n    seen.set(nums[i], i);\n  }\n  throw new Error(\"No solution found\");\n}\n```\n\n## 5. 你要完成的练习\n\n实现 `twoSum(nums: number[], target: number): number[]`。\n要求：返回两个下标；假设每组输入都有唯一解；不要重复使用同一个元素。\n\n## 6. 小测\n\n1. Map 里存的是 index -> value 还是 value -> index？\n2. 为什么一次遍历就能找到答案？\n3. 空间复杂度是多少？\n\n## 7. 参考设计来源\n\n- Full Stack Open：强调先理解问题，再写最小可运行代码\n- CS61A：用小例子建立抽象思维\n- freeCodeCamp：通过即时反馈强化练习",
-      "references": [
-        "https://fullstackopen.com/en/",
-        "https://cs61a.org/",
-        "https://www.freecodecamp.org/learn/front-end-development-libraries/#bootstrap/"
-      ],
-      "quiz": [
-        {
-          "id": "q1",
-          "type": "choice",
-          "question": "twoSum 中 Map 最适合保存什么？",
-          "options": [
-            "value -> index",
-            "index -> value",
-            "target -> nums",
-            "i -> j"
-          ],
-          "answer": "value -> index",
-          "explanation": "我们需要根据 complement 快速找到之前出现过的下标。"
-        },
-        {
-          "id": "q2",
-          "type": "choice",
-          "question": "一次遍历 twoSum 的时间复杂度是多少？",
-          "options": [
-            "O(1)",
-            "O(n)",
-            "O(n²)",
-            "O(log n)"
-          ],
-          "answer": "O(n)",
-          "explanation": "每个元素最多访问一次。"
-        },
-        {
-          "id": "q3",
-          "type": "short-answer",
-          "question": "为什么不能先 set 当前元素再检查 complement？",
-          "answer": "因为可能错误地把当前元素当成自己的 complement 使用。",
-          "explanation": "题目要求不能使用同一个元素两次。"
-        }
-      ],
-      "exercise": {
-        "id": "ex-dsa-002",
-        "type": "typescript",
-        "functionName": "twoSum",
-        "description": "实现 twoSum，返回和为 target 的两个下标。",
-        "starterCode": "export function twoSum(nums: number[], target: number): number[] {\n  // TODO: implement twoSum\n  return [];\n}\n",
+        "id": "ex-1",
+        "language": "typescript",
+        "entrypoint": "runTaskActions",
+        "description": "Implement a pure TypeScript reducer for a Task Manager. Given an initial state and a list of actions, return a new state. Requirements: trim titles, ignore empty titles, ignore duplicate ids, validate filters, and never mutate the input state. This mirrors the frontend data flow: event -> action -> state -> render.",
+        "starterCode": "export type Task = {\n  id: string;\n  title: string;\n  done: boolean;\n  createdAt: number;\n};\n\nexport type Filter = \"all\" | \"active\" | \"done\";\n\nexport type TaskManagerState = {\n  tasks: Task[];\n  filter: Filter;\n};\n\nexport type AddTaskAction = {\n  type: \"add\";\n  id: string;\n  title: string;\n  done?: boolean;\n  createdAt: number;\n};\n\nexport type ToggleTaskAction = {\n  type: \"toggle\";\n  id: string;\n};\n\nexport type DeleteTaskAction = {\n  type: \"delete\";\n  id: string;\n};\n\nexport type SetFilterAction = {\n  type: \"setFilter\";\n  filter: Filter;\n};\n\nexport type ClearDoneAction = {\n  type: \"clearDone\";\n};\n\nexport type TaskAction =\n  | AddTaskAction\n  | ToggleTaskAction\n  | DeleteTaskAction\n  | SetFilterAction\n  | ClearDoneAction;\n\nconst VALID_FILTERS = [\"all\", \"active\", \"done\"] as const;\n\nfunction isFilter(value: string): value is Filter {\n  // TODO: Step 1 - Validate that value is one of the allowed filters.\n  return (VALID_FILTERS as readonly string[]).includes(value);\n}\n\nfunction hasTask(tasks: Task[], id: string): boolean {\n  // TODO: Step 2 - Return true if any task has the given id.\n  return tasks.some((task) => task.id === id);\n}\n\nfunction normalizeTask(task: Task): Task | null {\n  // TODO: Step 3 - Trim task.title; if it becomes empty, return null.\n  const title = task.title.trim();\n  if (title === \"\") {\n    return null;\n  }\n\n  // TODO: Step 4 - Return a new task object with the trimmed title.\n  return { ...task, title };\n}\n\n/**\n * Run a sequence of Task Manager actions and return a new immutable state.\n *\n * This function models the core frontend data flow without touching the DOM:\n * user event -> action -> state update -> render. Implement it as a pure\n * reducer: do not mutate `state`, `state.tasks`, or any action object.\n *\n * Supported actions:\n * - add: insert a task if its id is non-empty, its title is non-empty after trim(),\n *   and the id is not already present.\n * - toggle: flip done for the matching task, or leave state unchanged.\n * - delete: remove the matching task, or leave state unchanged.\n * - setFilter: change the filter only when it is \"all\", \"active\", or \"done\".\n * - clearDone: remove every completed task.\n *\n * Examples:\n *  * >>> runTaskActions({ tasks: [{ id: \"t1\", title: \"Read\", done: false, createdAt: 1 }], filter: \"all\" }, [{ type: \"toggle\", id: \"t1\" }])\n * { tasks: [{ id: \"t1\", title: \"Read\", done: true, createdAt: 1 }], filter: \"all\" }\n * >>> runTaskActions({ tasks: [{ id: \"t1\", title: \"Read\", done: false, createdAt: 1 }, { id: \"t2\", title: \"Write\", done: true, createdAt: 2 }], filter: \"all\" }, [{ type: \"clearDone\" }])\n * { tasks: [{ id: \"t1\", title: \"Read\", done: false, createdAt: 1 }], filter: \"all\" }\n *  */\nexport function runTaskActions(state: TaskManagerState, actions: TaskAction[]): TaskManagerState {\n  // TODO: Step 5 - Create local nextTasks from state.tasks, normalizing each task.\n  let nextTasks = state.tasks\n    .map(normalizeTask)\n    .filter((task): task is Task => task !== null);\n\n  // TODO: Step 6 - Create local nextFilter; if the initial filter is invalid, use \"all\".\n  let nextFilter = isFilter(state.filter) ? state.filter : \"all\";\n\n  for (const action of actions) {\n    switch (action.type) {\n      case \"add\": {\n        const id = action.id.trim();\n        const title = action.title.trim();\n\n        // TODO: Step 7 - If id or title is empty, break.\n        // TODO: Step 8 - If id already exists, break.\n        // TODO: Step 9 - Append a new task object; do not mutate nextTasks in place.\n        // Hint: nextTasks = [...nextTasks, { id, title, done: Boolean(action.done), createdAt: action.createdAt }];\n        break;\n      }\n\n      case \"toggle\": {\n        // TODO: Step 10 - Use map to return a copied toggled task only when ids match.\n        break;\n      }\n\n      case \"delete\": {\n        // TODO: Step 11 - Use filter to remove the task with action.id.\n        break;\n      }\n\n      case \"setFilter\": {\n        // TODO: Step 12 - Validate action.filter before assigning nextFilter.\n        break;\n      }\n\n      case \"clearDone\": {\n        // TODO: Step 13 - Use filter to remove completed tasks.\n        break;\n      }\n    }\n  }\n\n  // TODO: Step 14 - Return a new state object.\n  return { tasks: nextTasks, filter: nextFilter };\n}",
         "assertionMode": "return",
         "testCases": [
           {
-            "name": "basic example",
+            "name": "add trim, toggle, delete, and set active filter",
             "input": [
+              {
+                "tasks": [
+                  {
+                    "id": "t1",
+                    "title": "Read",
+                    "done": false,
+                    "createdAt": 1
+                  },
+                  {
+                    "id": "t2",
+                    "title": "Write",
+                    "done": true,
+                    "createdAt": 2
+                  }
+                ],
+                "filter": "all"
+              },
               [
-                2,
-                7,
-                11,
-                15
-              ],
-              9
+                {
+                  "type": "add",
+                  "id": "t3",
+                  "title": "   Test reducer   ",
+                  "createdAt": 3
+                },
+                {
+                  "type": "toggle",
+                  "id": "t1"
+                },
+                {
+                  "type": "delete",
+                  "id": "t2"
+                },
+                {
+                  "type": "setFilter",
+                  "filter": "active"
+                }
+              ]
             ],
-            "expected": [
-              0,
-              1
-            ]
+            "expected": "{\"tasks\":[{\"id\":\"t1\",\"title\":\"Read\",\"done\":true,\"createdAt\":1},{\"id\":\"t3\",\"title\":\"Test reducer\",\"done\":false,\"createdAt\":3}],\"filter\":\"active\"}"
           },
           {
-            "name": "negative numbers",
+            "name": "ignore empty add, duplicate id, invalid filter, and clear done",
             "input": [
+              {
+                "tasks": [
+                  {
+                    "id": "t1",
+                    "title": "Keep",
+                    "done": false,
+                    "createdAt": 1
+                  },
+                  {
+                    "id": "t2",
+                    "title": "Remove",
+                    "done": true,
+                    "createdAt": 2
+                  }
+                ],
+                "filter": "done"
+              },
               [
-                -1,
-                -2,
-                -3,
-                -4,
-                -5
-              ],
-              -8
+                {
+                  "type": "add",
+                  "id": "t1",
+                  "title": "Duplicate ignored",
+                  "createdAt": 3
+                },
+                {
+                  "type": "add",
+                  "id": "e1",
+                  "title": "   ",
+                  "createdAt": 4
+                },
+                {
+                  "type": "setFilter",
+                  "filter": "completed"
+                },
+                {
+                  "type": "clearDone"
+                }
+              ]
             ],
-            "expected": [
-              2,
-              4
-            ]
+            "expected": "{\"tasks\":[{\"id\":\"t1\",\"title\":\"Keep\",\"done\":false,\"createdAt\":1}],\"filter\":\"done\"}"
           },
           {
-            "name": "zero included",
+            "name": "missing ids are no-ops",
             "input": [
+              {
+                "tasks": [
+                  {
+                    "id": "a",
+                    "title": "Alpha",
+                    "done": false,
+                    "createdAt": 10
+                  },
+                  {
+                    "id": "b",
+                    "title": "Beta",
+                    "done": false,
+                    "createdAt": 20
+                  }
+                ],
+                "filter": "all"
+              },
               [
-                0,
-                4,
-                3,
-                0
-              ],
-              0
+                {
+                  "type": "toggle",
+                  "id": "missing"
+                },
+                {
+                  "type": "delete",
+                  "id": "missing"
+                },
+                {
+                  "type": "setFilter",
+                  "filter": "done"
+                }
+              ]
             ],
-            "expected": [
-              0,
-              3
-            ]
+            "expected": "{\"tasks\":[{\"id\":\"a\",\"title\":\"Alpha\",\"done\":false,\"createdAt\":10},{\"id\":\"b\",\"title\":\"Beta\",\"done\":false,\"createdAt\":20}],\"filter\":\"done\"}"
+          },
+          {
+            "name": "clear done after multiple adds",
+            "input": [
+              {
+                "tasks": [],
+                "filter": "all"
+              },
+              [
+                {
+                  "type": "add",
+                  "id": "a",
+                  "title": "Buy milk",
+                  "done": false,
+                  "createdAt": 1
+                },
+                {
+                  "type": "add",
+                  "id": "b",
+                  "title": "Pay bills",
+                  "done": true,
+                  "createdAt": 2
+                },
+                {
+                  "type": "add",
+                  "id": "c",
+                  "title": "  Call mentor  ",
+                  "done": false,
+                  "createdAt": 3
+                },
+                {
+                  "type": "clearDone"
+                }
+              ]
+            ],
+            "expected": "{\"tasks\":[{\"id\":\"a\",\"title\":\"Buy milk\",\"done\":false,\"createdAt\":1},{\"id\":\"c\",\"title\":\"Call mentor\",\"done\":false,\"createdAt\":3}],\"filter\":\"all\"}"
           }
         ],
         "hints": [
-          "遍历数组时，先查 complement。",
-          "Map 保存 value -> index。",
-          "找到答案后立即 return。"
+          "Keep `nextTasks` and `nextFilter` as local variables; return a fresh state object at the end.",
+          "Use `map` for `toggle`, `filter` for `delete`/`clearDone`, and spread syntax for copied task objects.",
+          "Validate `filter` before assigning it; unknown filters should leave the current filter unchanged."
         ]
       },
       "passCriteria": {
-        "quizMinScore": 2,
+        "quizMinScore": 1,
         "exerciseMustPass": true
-      },
-      "nextIfPassed": "dsa-003",
-      "nextIfFailed": "dsa-002"
+      }
     },
     {
-      "id": "dsa-003",
-      "title": "栈与括号匹配：用 LIFO 表达嵌套结构",
-      "description": "学习栈的后进先出特性，并用它解决括号匹配问题。",
+      "id": "unit-2-fullstack-app-with-node-react",
+      "title": "React + Node.js 简单全栈应用构建",
+      "description": "在 Unit 1 基础上学习 React、Node.js/Express、REST API、数据库基础与认证流程，完成一个简单但完整的全栈应用。结合项目实践补充基础数据结构与算法，如数组、哈希表、栈、队列、字符串和简单复杂度分析，为后续进阶打基础。",
       "prerequisites": [
-        "数组基础",
-        "Map 基础",
-        "函数调用直觉"
+        "完成 Unit 1 或具备 JavaScript/TypeScript 基础",
+        "了解 HTML/CSS/JavaScript 基本用法",
+        "能够使用 Git 进行基本提交",
+        "愿意通过项目练习代码"
       ],
       "objectives": [
-        "理解栈的后进先出 LIFO 特性",
-        "能用栈判断括号是否正确嵌套",
-        "能解释为什么右括号必须匹配最近的左括号"
+        "掌握 React 组件、状态、表单、路由和基础数据流",
+        "能够使用 Node.js/Express 构建 REST API",
+        "理解数据库基础概念，并能完成简单 CRUD 操作",
+        "完成一个简单全栈项目，例如任务管理系统、博客系统或小型记账应用",
+        "掌握基础数据结构与算法概念，并能完成简单编程练习",
+        "能够将项目部署到基础云平台或静态托管平台，形成可展示作品"
       ],
-      "content": "# 栈与括号匹配：用 LIFO 表达嵌套结构\n\n## 1. 什么是栈？\n\n栈是一种后进先出的数据结构，英文叫 Last In First Out，简称 LIFO。\n常见操作：`push` 入栈，`pop` 出栈，`peek` 查看栈顶。\n\n## 2. 括号匹配为什么需要栈？\n\n括号具有嵌套关系，例如 `([{}])`。最右边的左括号 `{` 必须最先被匹配，这正是栈的特性。\n当你遇到右括号时，它必须匹配最近一个还没匹配的左括号。\n\n## 3. 判断规则\n\n1. 遇到左括号，入栈\n2. 遇到右括号：如果栈为空则失败；弹出栈顶；检查是否匹配\n3. 遍历结束后，栈必须为空\n\n## 4. 模板\n\n```ts\nexport function isValidParentheses(s: string): boolean {\n  const stack: string[] = [];\n  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };\n  for (const ch of s) {\n    if (ch === '(' || ch === '[' || ch === '{') {\n      stack.push(ch);\n    } else {\n      const top = stack.pop();\n      if (top !== pairs[ch]) {\n        return false;\n      }\n    }\n  }\n  return stack.length === 0;\n}\n```\n\n## 5. 你要完成的练习\n\n实现 `isValidParentheses(s: string): boolean`。\n要求：只处理 `()`、`[]`、`{}`；空字符串视为有效；右括号必须匹配最近的左括号。\n\n## 6. 小测\n\n1. 栈的核心特性是什么？\n2. 为什么右括号要匹配最近的左括号？\n3. 遍历结束后栈为空说明什么？\n\n## 7. 参考设计来源\n\n- Data Structures 课程中的 lab/test 组织方式\n- CS61A 对递归和栈直觉的铺垫\n- The Odin Project 的项目式练习节奏",
-      "references": [
-        "https://sp26.datastructur.es/",
-        "https://cs61a.org/",
-        "https://www.theodinproject.com/"
-      ],
+      "content": "# React + Node.js 全栈应用构建：任务管理系统\n\n## 0. 修订重点\n\n原稿覆盖了主线，但需要加强：接口契约、错误处理、安全、数据库设计、异步数据流、部署细节与可测试性。本单元按 CS61A 风格强调：**抽象边界清晰、数据流可追踪、每个函数/组件/接口都有输入输出契约**。\n\n---\n\n## 1. 系统视角：从页面到数据流\n\n目标项目：一个可部署的任务管理系统。\n\n```text\nReact 表单\n  ↓ POST /api/tasks + Authorization: Bearer token\nExpress 路由\n  ↓ 校验输入、鉴权\n数据库\n  ↓ INSERT 返回新任务\nReact 更新本地状态\n```\n\n核心问题不是“页面能显示”，而是：\n\n- 数据从哪里来？\n- 谁可以修改数据？\n- 请求失败时 UI 如何反馈？\n- 数据库状态与前端状态是否一致？\n\n---\n\n## 2. React：组件、状态、表单与副作用\n\n组件是 UI 抽象；状态是组件内部会变化的数据。\n\n```jsx\nfunction TaskForm({ onAdd }) {\n  const [title, setTitle] = useState(\"\");\n\n  async function handleSubmit(e) {\n    e.preventDefault();\n    try {\n      await onAdd(title);\n      setTitle(\"\");\n    } catch (err) {\n      alert(\"添加失败，请稍后重试\");\n    }\n  }\n\n  return (\n    <form onSubmit={handleSubmit}>\n      <input\n        value={title}\n        onChange={(e) => setTitle(e.target.value)}\n        placeholder=\"任务标题\"\n      />\n      <button>添加</button>\n    </form>\n  );\n}\n```\n\nGotchas：\n\n- `<input value={...}>` 是受控组件，必须用 `onChange` 更新状态。\n- 列表渲染必须使用稳定 `key`，不要用数组下标作为唯一 key。\n- `setState` 是异步批处理的，不要依赖立即更新后的状态。\n- 如果通过 `useEffect` 请求 API，要处理依赖数组，避免无限请求。\n- 生产环境不要把敏感信息写入前端代码或浏览器 localStorage；JWT 更安全的方式通常是 `httpOnly` cookie。\n\n---\n\n## 3. Express REST API：契约、状态码与错误处理\n\nREST API 用资源、HTTP 方法和状态码表达操作：\n\n| 操作 | 方法 | 路径 |\n|---|---|---|\n| 查询任务 | GET | `/api/tasks` |\n| 创建任务 | POST | `/api/tasks` |\n| 查询单个任务 | GET | `/api/tasks/:id` |\n| 部分修改 | PATCH | `/api/tasks/:id` |\n| 删除 | DELETE | `/api/tasks/:id` |\n\n示例：\n\n```js\napp.post(\"/api/tasks\", requireAuth, async (req, res, next) => {\n  try {\n    const { title } = req.body;\n\n    if (typeof title !== \"string\" || title.trim() === \"\") {\n      return res.status(400).json({ error: \"title is required\" });\n    }\n\n    const result = await pool.query(\n      `INSERT INTO tasks (title, user_id)\n       VALUES ($1, $2)\n       RETURNING id, title, done, created_at`,\n      [title.trim(), req.user.id]\n    );\n\n    res.status(201).json(result.rows[0]);\n  } catch (err) {\n    next(err);\n  }\n});\n```\n\nGotchas：\n\n- `GET` 不应产生副作用；`POST` 创建资源；`PATCH` 部分更新。\n- 永远不要拼接用户输入生成 SQL，必须使用参数化查询。\n- 后端要校验输入，不能信任前端。\n- 统一错误处理中间件可以让 API 行为一致。\n- 跨域请求需要正确配置 CORS；如果发送 cookie，还要设置 `credentials`。\n\n---\n\n## 4. 数据库：表、主键、外键与 CRUD\n\n任务系统至少需要：\n\n```text\nusers\n- id: 主键\n- email: 唯一\n- password_hash: 哈希后的密码\n- created_at\n\ntasks\n- id: 主键\n- title\n- done\n- user_id: 外键，指向 users.id\n- created_at\n```\n\nCRUD 对应：\n\n```sql\nINSERT INTO tasks (title, user_id) VALUES ($1, $2);\nSELECT * FROM tasks WHERE user_id = $1;\nUPDATE tasks SET done = $1 WHERE id = $2 AND user_id = $3;\nDELETE FROM tasks WHERE id = $1 AND user_id = $2;\n```\n\nGotchas：\n\n- `user_id` 防止用户访问他人任务。\n- `done` 使用布尔值，不要用字符串 `\"true\"` / `\"false\"`。\n- 查询用户任务时，WHERE 条件必须同时检查 `id` 和 `user_id`。\n- 对 `user_id`、`email` 等常用查询字段建立索引。\n- 数据库结构变化应使用 migration，而不是手动改表。\n\n---\n\n## 5. 认证与授权：谁登录，谁能操作\n\n认证回答“你是谁”；授权回答“你能做什么”。\n\n密码必须使用 bcrypt/argon2 等慢哈希算法保存，不能明文保存，也不能使用普通 MD5/SHA。\n\nJWT 中间件示例：\n\n```js\nfunction requireAuth(req, res, next) {\n  const header = req.headers.authorization || \"\";\n  const token = header.replace(/^Bearer /, \"\");\n\n  try {\n    req.user = verifyToken(token); // 包含 user id\n    next();\n  } catch {\n    res.status(401).json({ error: \"Unauthorized\" });\n  }\n}\n```\n\nGotchas：\n\n- Token 应设置过期时间。\n- 不要把密码或敏感信息放入 JWT。\n- `localStorage` 存 token 易受 XSS 影响；生产环境优先考虑 `httpOnly` cookie。\n- 登录失败不要透露是“邮箱不存在”还是“密码错误”。\n\n---\n\n## 6. 数据结构与算法：选择合适抽象\n\n| 结构 | 用途 | 复杂度 |\n|---|---|---|\n| 数组 | 保存任务列表 | 按索引访问 O(1)，遍历 O(n) |\n| Map | 按 id 快速查找任务 | 平均 O(1) |\n| 栈 | 撤销、历史记录 | push/pop O(1) |\n| 队列 | 后台任务、消息处理 | enqueue/dequeue O(1) |\n| 排序 | 按时间/优先级排序 | 常见 O(n log n) |\n\n例子：\n\n```js\nconst doneTasks = tasks.filter((t) => t.done);          // O(n)\nconst sorted = [...tasks].sort((a, b) => a.id - b.id);  // O(n log n)\n```\n\nGotchas：`Array.prototype.sort()` 会修改原数组，通常应先复制。\n\n---\n\n## 7. 项目交付与部署\n\n推荐结构：\n\n```text\nmy-app\n├─ client/          # React/Vite\n├─ server/          # Express API\n├─ README.md\n└─ package.json\n```\n\n必须包含：\n\n1. 注册、登录、退出。\n2. 任务 CRUD。\n3. 后端数据库持久化。\n4. 基础错误处理与输入校验。\n5. API 文档，可用 README 或 OpenAPI。\n6. 部署链接，例如 Vercel/Netlify + Render/Railway/Fly.io。\n\n部署前检查：\n\n- 使用环境变量保存 `DATABASE_URL`、`JWT_SECRET`、`CLIENT_ORIGIN`。\n- 前端构建后只包含静态文件。\n- 后端提供 `/health` 健康检查。\n- 数据库迁移能自动运行。\n- README 写清本地运行、测试、部署和已知限制。\n\n最终目标：你不仅能“跑起来”一个全栈应用，还能解释每一步的数据流、安全边界、接口契约与复杂度。",
+      "references": [],
       "quiz": [
         {
           "id": "q1",
           "type": "choice",
-          "question": "栈的核心特性是什么？",
+          "question": "在 React 受控表单中，`<input value={title} onChange={...}>` 的核心作用是什么？",
           "options": [
-            "先进先出 FIFO",
-            "后进先出 LIFO",
-            "随机访问",
-            "只能访问中间元素"
+            "A. 让输入框的显示值由 React state 驱动，状态变化通过 onChange 回流。",
+            "B. 绕过组件状态，直接让浏览器把值写入数据库。",
+            "C. 让按钮自动触发 submit，不再需要 form。",
+            "D. 禁用浏览器默认行为，因此不需要 e.preventDefault()。"
           ],
-          "answer": "后进先出 LIFO",
-          "explanation": "最后进入的元素最先离开。"
+          "answer": "A",
+          "explanation": "受控组件让 React state 成为 UI 的单一事实来源：`value` 决定显示内容，`onChange` 负责把用户输入写回 state。这样才能让表单、校验、提交和错误提示共享同一份可追踪的数据流。"
         },
         {
           "id": "q2",
           "type": "choice",
-          "question": "遇到右括号时，应该检查什么？",
+          "question": "使用 `useEffect` 请求任务列表时，哪种情况最容易造成无限请求？",
           "options": [
-            "数组第一个元素",
-            "最近一个未匹配的左括号",
-            "字符串最后一个字符",
-            "目标值 complement"
+            "A. 依赖数组为 []，请求函数只读取稳定环境变量。",
+            "B. 依赖数组包含 userId，请求函数使用 userId 且 userId 不变化。",
+            "C. 依赖数组包含每次渲染都会重新创建的 fetchTasks 函数，而 fetchTasks 没有 memoize。",
+            "D. 在组件卸载时取消请求。"
           ],
-          "answer": "最近一个未匹配的左括号",
-          "explanation": "这正是栈顶元素。"
+          "answer": "C",
+          "explanation": "`useEffect` 会在依赖变化后重新执行。如果依赖项是每次渲染都会新建的函数，那么每次渲染都会让 effect 重新运行；effect 再触发 state 更新，又会引发下一次渲染，从而形成循环。"
         },
         {
           "id": "q3",
-          "type": "short-answer",
-          "question": "遍历结束后栈为空说明什么？",
-          "answer": "说明所有左括号都被正确匹配。",
-          "explanation": "如果栈不为空，说明还有未匹配的左括号。"
+          "type": "choice",
+          "question": "创建任务成功时，Express 路由最合适的响应是什么？",
+          "options": [
+            "A. 200 + HTML 页面。",
+            "B. 201 + JSON，例如 `{ id, title, done, created_at }`。",
+            "C. 302 redirect 到首页。",
+            "D. 204 + 空 body。"
+          ],
+          "answer": "B",
+          "explanation": "`POST` 创建资源成功后通常返回 `201 Created`。API 响应一般使用 JSON，并返回新创建资源的稳定字段，方便前端更新本地状态。"
+        },
+        {
+          "id": "q4",
+          "type": "choice",
+          "question": "为什么 Express 后端必须校验 `req.body` 并使用参数化 SQL？",
+          "options": [
+            "A. 因为前端校验永远正确。",
+            "B. 因为参数化查询会自动设置 201 状态码。",
+            "C. 因为后端不能信任客户端，且拼接 SQL 可能导致注入。",
+            "D. 因为数据库会拒绝所有字符串。"
+          ],
+          "answer": "C",
+          "explanation": "前端校验只能改善用户体验，不能作为安全边界。后端必须重新校验输入；SQL 必须使用参数化查询，避免把用户输入拼进 SQL 字符串造成注入漏洞。"
+        },
+        {
+          "id": "q5",
+          "type": "choice",
+          "question": "认证 authentication 与授权 authorization 的区别是什么？",
+          "options": [
+            "A. 认证决定能访问哪些资源；授权决定密码哈希算法。",
+            "B. 认证回答“你是谁”；授权回答“你能做什么”。",
+            "C. 两者都只发生在浏览器。",
+            "D. 授权就是 JWT 字符串本身。"
+          ],
+          "answer": "B",
+          "explanation": "认证确认请求者身份，例如验证 JWT 中包含哪个用户；授权检查该身份是否有权执行某个操作，例如只能修改 `ownerId === user.id` 的任务。"
+        },
+        {
+          "id": "q6",
+          "type": "choice",
+          "question": "为什么 `tasks` 表需要 `user_id` 外键，并且查询、修改、删除单个任务时要同时检查 `id` 和 `user_id`？",
+          "options": [
+            "A. 为了让任务 id 可以重复。",
+            "B. 为了避免数据库迁移。",
+            "C. 为了让所有用户共享同一批任务。",
+            "D. 为了防止用户访问或修改他人任务。"
+          ],
+          "answer": "D",
+          "explanation": "`user_id` 是资源归属关系的核心。只检查 `id` 会让用户可能通过猜测或篡改 id 访问其他用户的数据；同时检查 `id` 和 `user_id` 才能实现对象级授权。"
+        },
+        {
+          "id": "q7",
+          "type": "choice",
+          "question": "为什么 `const sorted = [...tasks].sort((a, b) => a.id - b.id)` 比 `tasks.sort(...)` 更适合作为纯数据流处理？",
+          "options": [
+            "A. `sort()` 会修改原数组，先复制可以避免意外改变 UI 状态。",
+            "B. `sort()` 只能用于对象，不能用于数组。",
+            "C. 复制数组会把复杂度降到 O(1)。",
+            "D. 没有区别，因为 JavaScript 数组总是不可变。"
+          ],
+          "answer": "A",
+          "explanation": "JavaScript 数组是可变的，`sort()` 会原地修改数组。先复制再排序可以保持原 state 不变，使数据流更容易推理，也更容易测试。"
+        },
+        {
+          "id": "q8",
+          "type": "choice",
+          "question": "部署全栈应用时，哪组信息最适合通过环境变量注入，而不是写死在代码或前端 localStorage？",
+          "options": [
+            "A. 任务标题和完成状态。",
+            "B. `DATABASE_URL`、`JWT_SECRET`、`CLIENT_ORIGIN`。",
+            "C. CSS 颜色和按钮文字。",
+            "D. 列表排序规则。"
+          ],
+          "answer": "B",
+          "explanation": "数据库连接串、JWT 密钥和允许的前端来源都属于部署环境配置或敏感信息。它们应通过环境变量注入，避免泄露到源码、构建产物或浏览器。"
         }
       ],
       "exercise": {
-        "id": "ex-dsa-003",
-        "type": "typescript",
-        "functionName": "isValidParentheses",
-        "description": "判断括号字符串是否正确嵌套。",
-        "starterCode": "export function isValidParentheses(s: string): boolean {\n  // TODO: implement isValidParentheses\n  return true;\n}\n",
+        "id": "ex-1",
+        "language": "typescript",
+        "entrypoint": "applyTaskCommand",
+        "description": "Implement a pure TypeScript function `applyTaskCommand(input: string): string` that simulates the server-side contract for a task manager. It should parse a JSON command, validate the action and payload, enforce ownership (`ownerId === user.id`), and return a JSON API response without mutating the input state. This mirrors Express route behavior before database persistence.",
+        "starterCode": "/**\n * Applies one JSON task command to immutable task state.\n *\n * This function is a pure model of an Express route: parse input, validate\n * the contract, enforce ownership, and return a JSON API response. Do not\n * mutate `command.state.tasks`; build new arrays/objects instead.\n *\n * Command shape:\n *   {\n *     action: \"list\" | \"create\" | \"update\" | \"toggle\" | \"delete\",\n *     user: { id: number },\n *     body?: { id?: number, title?: string, done?: boolean },\n *     state: { tasks: Task[], nextId: number, clock: string }\n *   }\n *\n * Response shape:\n *   { status: 200, body: ... }\n *   { status: 201, body: task }\n *   { status: 400, error: \"invalid json\" | \"invalid action\" | \"invalid title\" | \"invalid id\" }\n *   { status: 403, error: \"forbidden\" }\n *   { status: 404, error: \"task not found\" }\n *\n * Examples:\n * >>> applyTaskCommand(JSON.stringify({ action: \"list\", user: { id: 1 }, state: { tasks: [{ id: 1, ownerId: 1, title: \"A\", done: false, createdAt: \"t1\" }], nextId: 2, clock: \"t2\" } }))\n * \"{\\\"status\\\":200,\\\"body\\\":[{\\\"id\\\":1,\\\"ownerId\\\":1,\\\"title\\\":\\\"A\\\",\\\"done\\\":false,\\\"createdAt\\\":\\\"t1\\\"}]}\"\n * >>> applyTaskCommand(JSON.stringify({ action: \"create\", user: { id: 2 }, body: { title: \"  Write tests  \" }, state: { tasks: [], nextId: 4, clock: \"t0\" } }))\n * \"{\\\"status\\\":201,\\\"body\\\":{\\\"id\\\":4,\\\"ownerId\\\":2,\\\"title\\\":\\\"Write tests\\\",\\\"done\\\":false,\\\"createdAt\\\":\\\"t0\\\"}}\"\n *\n * TODO:\n *   // Step 1: Parse the JSON input safely and return { status: 400, error: \"invalid json\" } on failure.\n *   // Step 2: Validate `action`, `user.id`, and optional `body`.\n *   // Step 3: For task-specific actions, find the task by id and check `ownerId`.\n *   // Step 4: Build a new state using immutable updates.\n *   // Step 5: Return `JSON.stringify(response)` with the status/body/error contract above.\n */\nexport type TaskAction = \"list\" | \"create\" | \"update\" | \"toggle\" | \"delete\";\n\nexport interface User {\n  id: number;\n}\n\nexport interface Task {\n  id: number;\n  ownerId: number;\n  title: string;\n  done: boolean;\n  createdAt: string;\n}\n\nexport interface CommandState {\n  tasks: Task[];\n  nextId: number;\n  clock: string;\n}\n\nexport interface Command {\n  action: TaskAction;\n  user: User;\n  body?: {\n    id?: number;\n    title?: string;\n    done?: boolean;\n  };\n  state: CommandState;\n}\n\nexport interface ApiResponse {\n  status: number;\n  body?: unknown;\n  error?: string;\n}\n\nfunction jsonResponse(status: number, body?: unknown, error?: string): string {\n  const response: ApiResponse = error ? { status, error } : { status, body };\n  return JSON.stringify(response);\n}\n\nfunction isTaskForUser(task: Task | undefined, userId: number): boolean {\n  return task !== undefined && task.ownerId === userId;\n}\n\nfunction isPositiveInteger(value: unknown): boolean {\n  return Number.isInteger(value) && (value as number) > 0;\n}\n\nexport function applyTaskCommand(input: string): string {\n  // TODO: Step 1 - Parse `input` with `JSON.parse` inside a try/catch.\n  //         On failure, return a 400 JSON response with error \"invalid json\".\n\n  // TODO: Step 2 - Check that the parsed command has a supported action,\n  //         a valid user id, and a valid state object.\n  //         Return 400 for invalid action, invalid user, or invalid state.\n\n  // TODO: Step 3 - For actions that target a task (`update`, `toggle`, `delete`),\n  //         read `body.id`, validate it, find the task, and reject:\n  //           - missing/non-integer id with { status: 400, error: \"invalid id\" }\n  //           - task exists but ownerId !== user.id with { status: 403, error: \"forbidden\" }\n  //           - task does not exist with { status: 404, error: \"task not found\" }\n\n  // TODO: Step 4 - For `create` and `update`, validate title when present:\n  //         it must be a string, trim to non-empty, and have length <= 120.\n  //         Return { status: 400, error: \"invalid title\" } on failure.\n\n  // TODO: Step 5 - Apply the action using immutable updates:\n  //         - list: return the current user's tasks sorted by id ascending.\n  //         - create: append a new task with id = state.nextId and done = false.\n  //         - update: replace only the fields present in body.\n  //         - toggle: flip `done`.\n  //         - delete: remove the task.\n  //         Do not mutate `command.state.tasks` directly.\n\n  // TODO: Step 6 - Return the JSON response with the correct HTTP-like status:\n  //         200 for list/update/toggle/delete, 201 for create.\n\n  return jsonResponse(500, undefined, \"not implemented\");\n}",
         "assertionMode": "return",
         "testCases": [
           {
-            "name": "empty string",
+            "name": "test 1",
             "input": [
-              ""
+              "{\"action\":\"list\",\"user\":{\"id\":1},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":2,\"title\":\"B\",\"done\":true,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
             ],
-            "expected": true
+            "expected": "{\"status\":200,\"body\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"}]}"
           },
           {
-            "name": "simple valid",
+            "name": "test 2",
             "input": [
-              "()[]{}"
+              "{\"action\":\"create\",\"user\":{\"id\":2},\"body\":{\"title\":\"  Write tests  \"},\"state\":{\"tasks\":[],\"nextId\":4,\"clock\":\"t0\"}}"
             ],
-            "expected": true
+            "expected": "{\"status\":201,\"body\":{\"id\":4,\"ownerId\":2,\"title\":\"Write tests\",\"done\":false,\"createdAt\":\"t0\"}}"
           },
           {
-            "name": "nested valid",
+            "name": "test 3",
             "input": [
-              "([{}])"
+              "{\"action\":\"update\",\"user\":{\"id\":1},\"body\":{\"title\":\"Buy milk\",\"done\":true},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"Milk\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":1,\"title\":\"Eggs\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
             ],
-            "expected": true
+            "expected": "{\"status\":200,\"body\":{\"task\":{\"id\":1,\"ownerId\":1,\"title\":\"Buy milk\",\"done\":true,\"createdAt\":\"t1\"}}}"
           },
           {
-            "name": "invalid order",
+            "name": "test 4",
             "input": [
-              "([)]"
+              "{\"action\":\"toggle\",\"user\":{\"id\":1},\"body\":{\"id\":2},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":1,\"title\":\"B\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
             ],
-            "expected": false
+            "expected": "{\"status\":200,\"body\":{\"task\":{\"id\":2,\"ownerId\":1,\"title\":\"B\",\"done\":true,\"createdAt\":\"t2\"}}}"
           },
           {
-            "name": "missing close",
+            "name": "test 5",
             "input": [
-              "(()"
+              "{\"action\":\"delete\",\"user\":{\"id\":1},\"body\":{\"id\":1},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":2,\"title\":\"B\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
             ],
-            "expected": false
+            "expected": "{\"status\":200,\"body\":{\"ok\":true}}"
+          },
+          {
+            "name": "test 6",
+            "input": [
+              "{\"action\":\"update\",\"user\":{\"id\":1},\"body\":{\"id\":2,\"title\":\"Steal task\"},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":2,\"title\":\"B\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
+            ],
+            "expected": "{\"status\":403,\"error\":\"forbidden\"}"
+          },
+          {
+            "name": "test 7",
+            "input": [
+              "{\"action\":\"create\",\"user\":{\"id\":1},\"body\":{\"title\":\"\"},\"state\":{\"tasks\":[],\"nextId\":1,\"clock\":\"t0\"}}"
+            ],
+            "expected": "{\"status\":400,\"error\":\"invalid title\"}"
+          },
+          {
+            "name": "test 8",
+            "input": [
+              "not json"
+            ],
+            "expected": "{\"status\":400,\"error\":\"invalid json\"}"
+          },
+          {
+            "name": "test 9",
+            "input": [
+              "{\"action\":\"complete\",\"user\":{\"id\":1},\"body\":{},\"state\":{\"tasks\":[],\"nextId\":1,\"clock\":\"t0\"}}"
+            ],
+            "expected": "{\"status\":400,\"error\":\"invalid action\"}"
           }
         ],
         "hints": [
-          "左括号入栈。",
-          "右括号弹出栈顶并检查是否匹配。",
-          "遍历结束后栈必须为空。"
+          "Parse once, then treat the parsed command as read-only.",
+          "For every task-changing action, first locate the task and check `ownerId` before mutating.",
+          "Return new arrays and objects instead of modifying `state.tasks` directly."
         ]
       },
       "passCriteria": {
-        "quizMinScore": 2,
+        "quizMinScore": 1,
         "exerciseMustPass": true
       }
     }
   ],
-  "currentIndex": 0,
-  "createdAt": "2026-06-11T09:44:49.415Z",
-  "updatedAt": "2026-06-11T09:44:49.415Z"
+  "currentIndex": 1,
+  "createdAt": "2026-06-12T03:43:58.376Z",
+  "updatedAt": "2026-06-12T03:55:17.784Z"
 }

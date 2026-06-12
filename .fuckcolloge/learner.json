@@ -1,13 +1,13 @@
 {
-  "target": "学会写1+1=2",
-  "jsLevel": "basic",
-  "dsaLevel": "heard",
+  "target": "成为一个优秀的全栈工程师",
+  "programmingLevel": "basic",
+  "dsaLevel": "none",
   "weeklyHours": "2-5",
-  "learningStyle": "explain-first",
+  "learningStyle": "project-first",
   "codePractice": "yes",
   "pace": "normal",
-  "nearTermGoal": "",
+  "nearTermGoal": "能构建简单的全栈应用",
   "rawAnswers": {},
-  "summary": "学习者目前 JavaScript/TypeScript 基础为 basic，数据结构与算法只是听说过，整体处于入门到起步阶段。每周可投入 2-5 小时，偏好先讲解再练习的学习方式，并愿意进行代码实践。当前目标表述为“学会写 1+1=2”，但综合信息显示其真实近中期目标是具备通过字节笔试的基础能力。适合以正常节奏，从语法基础、简单题和笔试常见题型开始系统训练。",
+  "summary": "学习者目标是成为优秀的全栈工程师，目前编程基础处于入门到基础阶段，JavaScript/TypeScript 需要系统巩固。数据结构与算法基础较弱，建议从简单概念、基础题型和常见笔试题型逐步补起。每周可投入 2–5 小时，偏好项目驱动学习，适合边做小项目边练习代码。整体节奏可按正常速度推进，近期目标是能够独立构建简单的全栈应用。",
   "createdAt": "2026-06-11T08:32:49.081Z"
 }

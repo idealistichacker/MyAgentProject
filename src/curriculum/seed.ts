@@ -108,8 +108,8 @@ export const SEED_CURRICULUM: SeedUnit[] = [
     ],
     exercise: {
       id: 'ex-dsa-001',
-      type: 'typescript',
-      functionName: 'removeDuplicates',
+      language: 'typescript',
+      entrypoint: 'removeDuplicates',
       description: '实现有序数组原地去重，并返回去重后的有效长度。',
       assertionMode: 'mutate-and-return',
       starterCode: `export function removeDuplicates(nums: number[]): number {
@@ -217,8 +217,8 @@ export const SEED_CURRICULUM: SeedUnit[] = [
     ],
     exercise: {
       id: 'ex-dsa-002',
-      type: 'typescript',
-      functionName: 'twoSum',
+      language: 'typescript',
+      entrypoint: 'twoSum',
       description: '实现 twoSum，返回和为 target 的两个下标。',
       assertionMode: 'return',
       starterCode: `export function twoSum(nums: number[], target: number): number[] {
@@ -331,8 +331,8 @@ export const SEED_CURRICULUM: SeedUnit[] = [
     ],
     exercise: {
       id: 'ex-dsa-003',
-      type: 'typescript',
-      functionName: 'isValidParentheses',
+      language: 'typescript',
+      entrypoint: 'isValidParentheses',
       description: '判断括号字符串是否正确嵌套。',
       assertionMode: 'return',
       starterCode: `export function isValidParentheses(s: string): boolean {

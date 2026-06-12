@@ -2,6 +2,6 @@
   "provider": "openai-compatible",
   "baseUrl": "https://api.siliconflow.cn/v1",
   "model": "nex-agi/Nex-N2-Pro",
-  "apiKey": "sk-bjvjofhymtgnnoqjwdrotnvyrlgtuzpbvwfzfmvyuhutfpiw",
+  "apiKey": "YOUR_API_KEY_HERE",
   "temperature": 0.2
 }

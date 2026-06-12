@@ -1,44 +1,29 @@
 import { execFile } from 'node:child_process';
-import path from 'node:path';
-import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 import type { ExerciseSpec, TestResult } from '../types.js';
 import { getTestPath } from '../utils/paths.js';
 import { writeTextFile } from '../state/fsState.js';
+import type { ExerciseRunResult } from './types.js';
 
 const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const tsxPackageDir = path.dirname(require.resolve('tsx/package.json'));
-const tsxCliPath = path.join(tsxPackageDir, 'dist/cli.mjs');
 
-export interface ExerciseRunResult {
-  unitId: string;
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  signal: NodeJS.Signals | null;
-  testResults: TestResult[];
-  passed: boolean;
-}
-
-export async function runTypeScriptExercise(
+export async function runPythonExercise(
   unitId: string,
   exercise: ExerciseSpec,
   exerciseDir: string
 ): Promise<ExerciseRunResult> {
-  const testPath = getTestPath(unitId);
+  const testPath = getTestPath(unitId, '.py');
   const testSource = buildTestSource(exercise);
   writeTextFile(testPath, testSource);
 
   try {
     const { stdout, stderr } = await execFileAsync(
-      process.execPath,
-      [tsxCliPath, 'test.ts'],
+      'python',
+      ['test.py'],
       {
         cwd: exerciseDir,
         env: {
           ...process.env,
-          NODE_ENV: 'test',
         },
         timeout: 5000,
         maxBuffer: 1024 * 1024,
@@ -84,64 +69,55 @@ export async function runTypeScriptExercise(
 }
 
 function buildTestSource(exercise: ExerciseSpec): string {
-  const functionName = exercise.functionName;
-  const testCasesJson = JSON.stringify(exercise.testCases, null, 2);
+  const functionName = exercise.entrypoint;
+  const testCasesJson = JSON.stringify(exercise.testCases);
 
-  return `import assert from 'node:assert/strict';
-import { ${functionName} } from './solution.ts';
+  return `import json
+import sys
+import copy
 
-const assertionMode = ${JSON.stringify(exercise.assertionMode)};
-const tests = ${testCasesJson} as Array<{
-  name: string;
-  input: unknown[];
-  expected: unknown;
-}>;
+try:
+    from solution import ${functionName}
+except ImportError as e:
+    print(json.dumps({"name": "import-error", "passed": False, "message": str(e)}))
+    sys.exit(1)
 
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
+tests = json.loads('${testCasesJson.replace(/'/g, "\\'")}')
+assertion_mode = '${exercise.assertionMode}'
+passed_count = 0
 
-function cloneInput(input: unknown[]): unknown[] {
-  return input.map((item) => {
-    try {
-      return JSON.parse(JSON.stringify(item));
-    } catch {
-      return item;
-    }
-  });
-}
+for test in tests:
+    try:
+        # Clone input to avoid mutation issues across tests
+        cloned_input = copy.deepcopy(test['input'])
+        actual_value = ${functionName}(*cloned_input)
+        
+        actual = actual_value
+        if assertion_mode == 'mutate-and-return':
+            actual = {"k": actual_value, "nums": cloned_input[0]}
+            
+        if actual == test['expected']:
+            passed_count += 1
+            print(json.dumps({"name": test['name'], "passed": True}))
+        else:
+            print(json.dumps({
+                "name": test['name'],
+                "passed": False,
+                "message": "Assertion failed",
+                "expected": test['expected'],
+                "actual": actual
+            }))
+    except Exception as e:
+        print(json.dumps({
+            "name": test['name'],
+            "passed": False,
+            "message": str(e),
+            "expected": test['expected'],
+            "actual": None
+        }))
 
-let passedCount = 0;
-
-for (const test of tests) {
-  const clonedInput = cloneInput(test.input);
-  const actualValue = ${functionName}(...clonedInput as any[]);
-  const actual = assertionMode === 'mutate-and-return'
-    ? { k: actualValue, nums: clonedInput[0] }
-    : actualValue;
-
-  try {
-    assert.deepEqual(actual, test.expected);
-    passedCount++;
-    console.log(JSON.stringify({ name: test.name, passed: true }));
-  } catch (error) {
-    console.log(JSON.stringify({
-      name: test.name,
-      passed: false,
-      message: error instanceof Error ? error.message : String(error),
-      expected: safeStringify(test.expected),
-      actual: safeStringify(actual),
-    }));
-  }
-}
-
-if (passedCount !== tests.length) {
-  process.exitCode = 1;
-}
+if passed_count != len(tests):
+    sys.exit(1)
 `;
 }
 

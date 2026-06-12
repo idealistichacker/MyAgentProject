@@ -12,7 +12,7 @@ export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 
 export const learnerProfileSchema = z.object({
   target: z.string().default('数据结构与算法入门'),
-  jsLevel: z.enum(['zero', 'basic', 'small-projects', 'comfortable']).default('basic'),
+  programmingLevel: z.enum(['zero', 'basic', 'small-projects', 'comfortable']).default('basic'),
   dsaLevel: z.enum(['none', 'heard', 'some-practice', 'systematic']).default('none'),
   weeklyHours: z.enum(['<2', '2-5', '5-10', '10+']).default('2-5'),
   learningStyle: z.enum(['explain-first', 'example-first', 'practice-first', 'project-first']).default('example-first'),
@@ -39,11 +39,11 @@ export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
 
 export const exerciseSchema = z.object({
   id: z.string(),
-  type: z.literal('typescript').default('typescript'),
-  functionName: z.string(),
+  language: z.enum(['typescript', 'python', 'bash']).default('typescript'),
+  entrypoint: z.string(),
   description: z.string(),
   starterCode: z.string(),
-  assertionMode: z.enum(['return', 'mutate-and-return']).default('return'),
+  assertionMode: z.enum(['return', 'mutate-and-return', 'stdout']).default('return'),
   testCases: z.array(
     z.object({
       name: z.string(),
@@ -63,10 +63,10 @@ export const seedUnitSchema = z.object({
   description: z.string(),
   prerequisites: z.array(z.string()).default([]),
   objectives: z.array(z.string()).default([]),
-  content: z.string(),
+  content: z.string().optional(),
   references: z.array(z.string()).default([]),
-  quiz: z.array(quizQuestionSchema).default([]),
-  exercise: exerciseSchema,
+  quiz: z.array(quizQuestionSchema).optional(),
+  exercise: exerciseSchema.optional(),
   passCriteria: z.object({
     quizMinScore: z.number().int().min(0).default(2),
     exerciseMustPass: z.boolean().default(true),

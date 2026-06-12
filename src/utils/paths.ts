@@ -48,10 +48,18 @@ export function getExerciseDir(unitId: string): string {
   return path.join(getExercisesDir(), unitId);
 }
 
-export function getSolutionPath(unitId: string): string {
-  return path.join(getExerciseDir(unitId), 'solution.ts');
+export function getSolutionPath(unitId: string, extension = '.ts'): string {
+  return path.join(getExerciseDir(unitId), `solution${extension}`);
 }
 
-export function getTestPath(unitId: string): string {
-  return path.join(getExerciseDir(unitId), 'test.ts');
+export function getTestPath(unitId: string, extension = '.ts'): string {
+  return path.join(getExerciseDir(unitId), `test${extension}`);
+}
+
+export function getExtensionForLanguage(language: string): string {
+  switch (language) {
+    case 'python': return '.py';
+    case 'bash': return '.sh';
+    case 'typescript': default: return '.ts';
+  }
 }

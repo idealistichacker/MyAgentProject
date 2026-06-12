@@ -2,10 +2,11 @@
 import { Command } from 'commander';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { buildAssessment, diagnoseLearner, generatePlan, getCurrentUnit, gradeQuiz } from './agents/pipeline.js';
+import { buildAssessment, diagnoseLearner, generatePlan, generateUnitContent, getCurrentUnit, gradeQuiz } from './agents/pipeline.js';
 import { getSeedUnit } from './curriculum/seed.js';
 import { createProvider } from './providers/types.js';
-import { runTypeScriptExercise } from './runner/tsxRunner.js';
+import fs from 'node:fs';
+import { runExercise } from './runner/runnerFactory.js';
 import {
   ensureProjectDirs,
   loadConfig,
@@ -22,6 +23,7 @@ import {
   getExerciseDir,
   getLessonPath,
   getSolutionPath,
+  getExtensionForLanguage,
 } from './utils/paths.js';
 import type { LearnerProfile, LearningPlan, LearningState, QuizQuestion } from './types.js';
 
@@ -70,7 +72,7 @@ program.command('config')
 program.command('diagnose')
   .description('Create or update learner profile')
   .option('--target <text>', 'Learning target')
-  .option('--js-level <level>', 'zero | basic | small-projects | comfortable')
+  .option('--programming-level <level>', 'zero | basic | small-projects | comfortable')
   .option('--dsa-level <level>', 'none | heard | some-practice | systematic')
   .option('--weekly-hours <hours>', '<2 | 2-5 | 5-10 | 10+')
   .option('--learning-style <style>', 'explain-first | example-first | practice-first | project-first')
@@ -84,7 +86,7 @@ program.command('diagnose')
     const rawProfile: LearnerProfile = {
       ...(existing ?? {}),
       target: options.target ?? existing?.target ?? '数据结构与算法入门',
-      jsLevel: (options.jsLevel ?? existing?.jsLevel ?? 'basic') as LearnerProfile['jsLevel'],
+      programmingLevel: (options.programmingLevel ?? existing?.programmingLevel ?? 'basic') as LearnerProfile['programmingLevel'],
       dsaLevel: (options.dsaLevel ?? existing?.dsaLevel ?? 'none') as LearnerProfile['dsaLevel'],
       weeklyHours: (options.weeklyHours ?? existing?.weeklyHours ?? '2-5') as LearnerProfile['weeklyHours'],
       learningStyle: (options.learningStyle ?? existing?.learningStyle ?? 'example-first') as LearnerProfile['learningStyle'],
@@ -95,7 +97,7 @@ program.command('diagnose')
       summary: existing?.summary ?? '',
     };
 
-    if (!options.target && !options.jsLevel && !options.dsaLevel && !options.weeklyHours && !options.learningStyle && !options.codePractice && !options.pace && !options.goal) {
+    if (!options.target && !options.programmingLevel && !options.dsaLevel && !options.weeklyHours && !options.learningStyle && !options.codePractice && !options.pace && !options.goal) {
       await fillDiagnosisWithPrompts(rawProfile);
     }
 
@@ -109,7 +111,7 @@ program.command('diagnose')
 
 program.command('plan')
   .description('Generate learning plan from learner profile')
-  .action(() => {
+  .action(async () => {
     ensureProjectDirs();
     const learner = loadLearner();
     if (!learner) {
@@ -118,9 +120,11 @@ program.command('plan')
       return;
     }
 
-    const plan = generatePlan(learner);
+    const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+    console.log('FCAgent CurriculumPlanner is generating your plan...');
+    const plan = await generatePlan(learner, provider);
     savePlan(plan);
-    console.log(`Learning plan saved to .fuckcolloge/plan.json with ${plan.units.length} seed units.`);
+    console.log(`Learning plan saved to .fuckcolloge/plan.json with ${plan.units.length} units.`);
     for (const unit of plan.units) {
       console.log(`- ${unit.id}: ${unit.title}`);
     }
@@ -128,7 +132,7 @@ program.command('plan')
 
 program.command('start [unitId]')
   .description('Start a learning unit and generate lesson/exercise files')
-  .action((unitId?: string) => {
+  .action(async (unitId?: string) => {
     ensureProjectDirs();
     const plan = loadPlan();
     if (!plan) {
@@ -137,14 +141,29 @@ program.command('start [unitId]')
       return;
     }
 
-    const unit = getCurrentUnit(plan, unitId);
-    writeTextFile(getLessonPath(unit.id), unit.content);
-    writeTextFile(getSolutionPath(unit.id), unit.exercise.starterCode);
+    let unit = getCurrentUnit(plan, unitId);
+    const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
+    if (!unit.content || !unit.exercise || isFallback) {
+      console.log(`FCAgent ContentGenerator is generating content and exercises for unit ${unit.id}...`);
+      const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+      unit = await generateUnitContent(unit, plan.learnerProfile, provider);
+      const index = plan.units.findIndex(u => u.id === unit.id);
+      if (index !== -1) {
+        plan.units[index] = unit;
+        savePlan(plan);
+      }
+    }
+
+    const extension = getExtensionForLanguage(unit.exercise?.language ?? 'typescript');
+    writeTextFile(getLessonPath(unit.id), unit.content || '');
+    if (unit.exercise) {
+      writeTextFile(getSolutionPath(unit.id, extension), unit.exercise.starterCode);
+    }
 
     console.log(`Started ${unit.id}: ${unit.title}`);
     console.log(`Lesson: ${getLessonPath(unit.id)}`);
-    console.log(`Solution: ${getSolutionPath(unit.id)}`);
-    console.log('Edit solution.ts, then run `fc submit`.');
+    console.log(`Solution: ${getSolutionPath(unit.id, extension)}`);
+    console.log(`Edit solution${extension}, then run \`fc submit\`.`);
   });
 
 program.command('lesson [unitId]')
@@ -162,7 +181,7 @@ program.command('lesson [unitId]')
   });
 
 program.command('submit [unitId]')
-  .description('Submit solution.ts and run TypeScript exercise tests')
+  .description('Submit solution file and run exercise tests')
   .option('--quiz <answers>', 'Quiz answers, e.g. q1=B,q2=O(n),q3=因为 slow 是索引')
   .action(async (unitId, options) => {
     ensureProjectDirs();
@@ -174,14 +193,29 @@ program.command('submit [unitId]')
     }
 
     const unit = getCurrentUnit(plan, unitId);
+    if (!unit.exercise) {
+      console.error('Unit exercise not generated. Run `fc start` first.');
+      process.exitCode = 1;
+      return;
+    }
+
     const exerciseDir = getExerciseDir(unit.id);
-    const runResult = await runTypeScriptExercise(unit.id, unit.exercise, exerciseDir);
+    const runResult = await runExercise(unit.id, unit.exercise, exerciseDir);
     const quizAnswers = process.stdin.isTTY
-      ? await askQuizAnswers(unit.quiz)
+      ? await askQuizAnswers(unit.quiz || [])
       : parseQuizAnswers(options.quiz);
 
-    const quizResults = gradeQuiz(unit.quiz, quizAnswers);
-    const assessment = buildAssessment(unit, runResult.testResults, quizResults);
+    const quizResults = gradeQuiz(unit.quiz || [], quizAnswers);
+    console.log('FCAgent AssessmentReviewer is analyzing your performance...');
+    const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+    let learnerCode = '';
+    try {
+      const extension = getExtensionForLanguage(unit.exercise.language);
+      learnerCode = fs.readFileSync(getSolutionPath(unit.id, extension), 'utf-8');
+    } catch (err) {
+      console.warn('Could not read solution code:', err);
+    }
+    const assessment = await buildAssessment(unit, runResult.testResults, quizResults, learnerCode, provider);
 
     const state = loadState() ?? createInitialState(unit.id);
     state.currentUnitId = unit.id;
@@ -228,17 +262,17 @@ program.command('next')
       return;
     }
 
-    const currentUnit = getSeedUnit(state.currentUnitId);
-    const nextUnit = getSeedUnit(currentUnit?.nextIfPassed ?? '');
-    if (!nextUnit) {
-      console.log('You have completed all seed units in the MVP plan. Congratulations!');
+    const currentIndex = plan.currentIndex;
+    if (currentIndex + 1 >= plan.units.length) {
+      console.log('You have completed all units in the dynamic learning plan. Congratulations!');
       return;
     }
 
-    const nextIndex = Math.max(0, plan.units.findIndex((unit) => unit.id === nextUnit.id));
-    plan.currentIndex = nextIndex;
+    plan.currentIndex = currentIndex + 1;
     plan.updatedAt = new Date().toISOString();
     savePlan(plan);
+
+    const nextUnit = plan.units[plan.currentIndex];
     state.currentUnitId = nextUnit.id;
     state.updatedAt = plan.updatedAt;
     saveState(state);
@@ -262,7 +296,7 @@ program.parseAsync(process.argv);
 async function fillDiagnosisWithPrompts(profile: LearnerProfile): Promise<void> {
   const rl = readline.createInterface({ input, output });
   profile.target = await prompt(rl, '你的学习目标是什么？', profile.target || '数据结构与算法入门');
-  profile.jsLevel = await prompt(rl, 'TypeScript/JavaScript 水平？[zero/basic/small-projects/comfortable]', profile.jsLevel) as LearnerProfile['jsLevel'];
+  profile.programmingLevel = await prompt(rl, '编程语言水平？[zero/basic/small-projects/comfortable]', profile.programmingLevel) as LearnerProfile['programmingLevel'];
   profile.dsaLevel = await prompt(rl, '数据结构与算法水平？[none/heard/some-practice/systematic]', profile.dsaLevel) as LearnerProfile['dsaLevel'];
   profile.weeklyHours = await prompt(rl, '每周可投入时间？[<2/2-5/5-10/10+]', profile.weeklyHours) as LearnerProfile['weeklyHours'];
   profile.learningStyle = await prompt(rl, '学习偏好？[explain-first/example-first/practice-first/project-first]', profile.learningStyle) as LearnerProfile['learningStyle'];
