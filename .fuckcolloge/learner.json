@@ -1,13 +1,14 @@
 {
-  "target": "成为一个优秀的全栈工程师",
+  "target": "知道TypeScript的各个掌握程度需要学习哪些具体内容",
   "programmingLevel": "basic",
-  "dsaLevel": "none",
-  "weeklyHours": "2-5",
-  "learningStyle": "project-first",
-  "codePractice": "yes",
+  "dsaLevel": "heard",
+  "weeklyHours": "5-10",
+  "totalWeeks": "5-8",
+  "learningStyle": "explain-first",
+  "codePractice": "sometimes",
   "pace": "normal",
-  "nearTermGoal": "能构建简单的全栈应用",
+  "nearTermGoal": "无",
   "rawAnswers": {},
-  "summary": "学习者目标是成为优秀的全栈工程师，目前编程基础处于入门到基础阶段，JavaScript/TypeScript 需要系统巩固。数据结构与算法基础较弱，建议从简单概念、基础题型和常见笔试题型逐步补起。每周可投入 2–5 小时，偏好项目驱动学习，适合边做小项目边练习代码。整体节奏可按正常速度推进，近期目标是能够独立构建简单的全栈应用。",
+  "summary": "学习者的主要目标是弄清楚 TypeScript 在不同掌握程度下需要学习哪些具体内容。当前编程基础较薄弱，数据结构与算法仅处于听说过或初学阶段，适合从基础概念和常见用法讲起。每周可投入约 5-10 小时，计划用 5-8 周按正常节奏学习，偏好先理解再练习的方式。代码实践频率为“有时”，因此学习路径应包含适量但不过量的练习，帮助逐步建立 TypeScript 的类型思维。",
   "createdAt": "2026-06-11T08:32:49.081Z"
 }

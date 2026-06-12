@@ -1,289 +1,282 @@
 {
   "learnerProfile": {
-    "target": "成为一个优秀的全栈工程师",
+    "target": "知道TypeScript的各个掌握程度需要学习哪些具体内容",
     "programmingLevel": "basic",
-    "dsaLevel": "none",
-    "weeklyHours": "2-5",
-    "learningStyle": "project-first",
-    "codePractice": "yes",
+    "dsaLevel": "heard",
+    "weeklyHours": "5-10",
+    "totalWeeks": "5-8",
+    "learningStyle": "explain-first",
+    "codePractice": "sometimes",
     "pace": "normal",
-    "nearTermGoal": "能构建简单的全栈应用",
+    "nearTermGoal": "无",
     "rawAnswers": {},
-    "summary": "学习者目标是成为优秀的全栈工程师，目前编程基础处于入门到基础阶段，JavaScript/TypeScript 需要系统巩固。数据结构与算法基础较弱，建议从简单概念、基础题型和常见笔试题型逐步补起。每周可投入 2–5 小时，偏好项目驱动学习，适合边做小项目边练习代码。整体节奏可按正常速度推进，近期目标是能够独立构建简单的全栈应用。",
+    "summary": "学习者的主要目标是弄清楚 TypeScript 在不同掌握程度下需要学习哪些具体内容。当前编程基础较薄弱，数据结构与算法仅处于听说过或初学阶段，适合从基础概念和常见用法讲起。每周可投入约 5-10 小时，计划用 5-8 周按正常节奏学习，偏好先理解再练习的方式。代码实践频率为“有时”，因此学习路径应包含适量但不过量的练习，帮助逐步建立 TypeScript 的类型思维。",
     "createdAt": "2026-06-11T08:32:49.081Z"
   },
   "units": [
     {
-      "id": "unit-1-js-ts-fundamentals-with-project",
-      "title": "JavaScript/TypeScript 基础与前端项目入门",
-      "description": "以项目驱动方式系统巩固 JavaScript 与 TypeScript 基础，学习 HTML/CSS、DOM、异步请求、组件化思想，并完成一个可交互的前端小应用。参考 freeCodeCamp、The Odin Project、MDN 和 roadmap.sh 的 Full Stack/JavaScript 学习路径，重点放在“边写代码边理解”。",
+      "id": "ts-level-01",
+      "title": "TypeScript 定位：它解决什么问题",
+      "description": "先用概念讲清楚 TypeScript 与 JavaScript 的关系：TS 是 JS 的超集，主要价值是编译期类型检查、代码提示、重构安全和大型项目可维护性。了解类型、运行时、编译器、tsconfig 的基本作用。",
       "prerequisites": [
-        "了解基本计算机操作",
-        "知道变量、条件、循环等最基础编程概念",
-        "每周可投入 2–5 小时进行练习"
+        "了解基本编程概念：变量、函数、对象",
+        "知道 JavaScript 基础语法即可"
       ],
       "objectives": [
-        "掌握 JavaScript 基础语法、函数、数组、对象、模块和异步编程",
-        "能够使用 HTML、CSS 和 JavaScript 构建响应式页面",
-        "了解 TypeScript 的类型、接口、泛型基础，并能在小项目中使用",
-        "完成一个前端项目，例如任务管理应用、个人作品集页面或小型数据展示页面",
-        "能够使用 Git/GitHub 管理代码并提交项目"
+        "说明 TypeScript 和 JavaScript 的区别与联系",
+        "理解静态类型检查与动态语言运行时行为的不同",
+        "知道 TypeScript 学习路径大致分为：基础类型、工程配置、泛型、类型建模、高级类型和框架实战"
       ],
-      "content": "# JavaScript/TypeScript 基础与前端项目入门\n\n## 1. 学习目标：从“会写语法”到“能建模”\n\n本单元以项目驱动方式学习前端基础。目标是完成一个可运行的前端应用，例如 **Task Manager**、个人作品集或小型数据展示页面，并能清楚解释：\n\n> 用户事件如何改变状态，状态如何驱动 DOM 更新，数据如何被持久化或异步加载。\n\n**CS61A 式要求**：不要只背 API，要理解 **抽象、状态表示、数据流和函数职责边界**。\n\n---\n\n## 2. 项目规格：Task Manager\n\n建议功能：\n\n- 添加、删除、标记完成任务\n- 按 **全部 / 未完成 / 已完成** 筛选\n- 使用 `localStorage` 持久化\n- 使用 `fetch` 加载模拟数据或 API\n- 使用 TypeScript 定义数据模型\n- 使用模块拆分 DOM、状态、存储、API\n- 使用 Git/GitHub 管理版本\n\n核心数据模型：\n\n```ts\ntype Task = {\n  id: string;\n  title: string;\n  done: boolean;\n  createdAt: number;\n};\n\ntype Filter = \"all\" | \"active\" | \"done\";\n```\n\n关键 gotchas：\n\n- `id` 不要用数组下标，否则删除后状态会混乱。\n- 标题必须 `trim()`，空任务不能提交。\n- 渲染任务标题优先用 `textContent`，避免 `innerHTML` 造成 XSS 风险。\n\n---\n\n## 3. JavaScript 基础：值、作用域与函数\n\n```js\nconst tasks = [];\nlet filter = \"all\";\n```\n\n- `const`：绑定不可重新赋值，但对象/数组内部仍可修改。\n- `let`：用于会变化的状态。\n- `var`：函数作用域，容易产生 bug，现代代码中通常避免。\n\n```js\ntasks.push({ id: \"1\", title: \"学习 DOM\", done: false });\n// tasks = [] // 错误：const 不能重新赋值\n```\n\n函数是一等公民，可以作为参数、返回值和对象属性：\n\n```js\nfunction toggleDone(task) {\n  return { ...task, done: !task.done };\n}\n\nconst updateTask = (tasks, id, updater) =>\n  tasks.map((task) => (task.id === id ? updater(task) : task));\n```\n\n数组方法：\n\n- `map`：逐个转换，返回新数组\n- `filter`：筛选元素\n- `find`：查找第一个匹配项\n- `reduce`：累计计算\n- `some` / `every`：判断条件\n\n注意：优先使用不可变更新，例如 `{ ...task }`，而不是直接修改旧对象。\n\n---\n\n## 4. HTML/CSS/DOM：结构、样式与交互\n\nHTML 应语义化：\n\n```html\n<form id=\"task-form\" aria-label=\"添加任务\">\n  <label for=\"task-input\">任务标题</label>\n  <input id=\"task-input\" placeholder=\"输入任务\" />\n  <button type=\"submit\">添加</button>\n</form>\n\n<ul id=\"task-list\" aria-live=\"polite\"></ul>\n```\n\nCSS 使用 Flex/Grid 和媒体查询：\n\n```css\n.container {\n  display: grid;\n  gap: 1rem;\n  max-width: 720px;\n  margin: auto;\n}\n\n@media (max-width: 600px) {\n  .container {\n    grid-template-columns: 1fr;\n    padding: 1rem;\n  }\n}\n```\n\nDOM 交互要围绕状态更新，而不是直接“拼页面”：\n\n```js\nform.addEventListener(\"submit\", (event) => {\n  event.preventDefault();\n\n  const input = document.querySelector(\"#task-input\");\n  const title = input.value.trim();\n\n  if (!title) return;\n\n  const task = {\n    id: crypto.randomUUID(),\n    title,\n    done: false,\n    createdAt: Date.now(),\n  };\n\n  tasks.push(task);\n  render();\n  input.value = \"\";\n});\n```\n\nGotchas：\n\n- 表单提交默认会刷新页面，必须 `event.preventDefault()`。\n- 输入框类型可能是 `Element`，TypeScript 中需要判断是否为 `HTMLInputElement`。\n- 大量任务时，频繁 `innerHTML +=` 会低效且危险；可用 `replaceChildren()` 重建列表。\n\n---\n\n## 5. 异步编程：Promise、async/await 与错误处理\n\n```ts\nasync function loadTasks(): Promise<Task[]> {\n  const response = await fetch(\"/api/tasks\");\n\n  if (!response.ok) {\n    throw new Error(`请求失败：HTTP ${response.status}`);\n  }\n\n  return response.json();\n}\n\ntry {\n  const tasks = await loadTasks();\n  render(tasks);\n} catch (error) {\n  showError(\"任务加载失败，请稍后重试\");\n}\n```\n\n重点：\n\n- `fetch` 返回 `Promise<Response>`。\n- `await` 只能在 `async` 函数或模块顶层中使用。\n- `async` 函数总是返回 Promise。\n- `response.ok` 为 `false` 时，`fetch` 不一定会 throw。\n- 网络失败、JSON 解析失败、HTTP 错误都应处理。\n\n---\n\n## 6. TypeScript：类型、接口与泛型\n\nTypeScript 是 JavaScript 的超集，最终编译为 JavaScript。类型系统的价值是提前发现错误，而不是运行时“魔法”。\n\n```ts\ninterface TodoState {\n  tasks: Task[];\n  filter: Filter;\n}\n```\n\n`type` 与 `interface`：\n\n- `type`：可表示联合类型、元组、函数类型。\n- `interface`：适合描述对象结构，可被扩展。\n- 初学者不要滥用 `any`，它会关闭类型检查。\n\n泛型示例：\n\n```ts\nfunction first<T>(items: T[]): T | undefined {\n  return items[0];\n}\n\nconst task = first(tasks);\n```\n\nTypeScript gotchas：\n\n- `const x = 1` 推断为字面量类型 `1`，不是宽泛的 `number`。\n- 数组方法可能返回 `undefined`，例如 `find()`。\n- DOM API 类型很具体，需根据元素类型收窄。\n\n---\n\n## 7. 模块化与工程结构\n\n推荐结构：\n\n```txt\ntask-manager/\n├─ index.html\n├─ src/\n│  ├─ main.ts\n│  ├─ types.ts\n│  ├─ render.ts\n│  ├─ storage.ts\n│  └─ api.ts\n├─ style.css\n├─ package.json\n└─ tsconfig.json\n```\n\n模块示例：\n\n```ts\n// storage.ts\nexport function saveTasks(tasks: Task[]): void {\n  localStorage.setItem(\"tasks\", JSON.stringify(tasks));\n}\n\nexport function loadTasks(): Task[] {\n  try {\n    return JSON.parse(localStorage.getItem(\"tasks\") || \"[]\");\n  } catch {\n    return [];\n  }\n}\n```\n\n```html\n<script type=\"module\" src=\"/src/main.js\"></script>\n```\n\n注意：浏览器原生模块路径通常需要 `.js` 后缀；构建工具如 Vite 会处理 `.ts` 到 `.js` 的转换。\n\n---\n\n## 8. Git/GitHub 工作流\n\n从第一天开始版本控制：\n\n```bash\ngit init\ngit add .\ngit commit -m \"Initial task manager app\"\ngit branch -M main\ngit remote add origin <repo-url>\ngit push -u origin main\n```\n\n建议：\n\n- 每次提交只完成一个清晰目标。\n- 提交信息使用动词开头，例如 `Add task form`、`Persist tasks`。\n- 忽略 `node_modules/`、`dist/`、环境变量文件。\n- 使用 Pull Request 或 GitHub Issues 记录功能与 bug。\n\n---\n\n## 9. 验收标准\n\n完成项目后，你应该能够：\n\n- 解释应用的状态模型和数据流。\n- 用 HTML/CSS 构建响应式、可访问页面。\n- 用 JavaScript 处理事件、数组、对象和函数。\n- 用 TypeScript 定义类型、接口、泛型。\n- 用模块组织代码，避免所有逻辑堆在 `main.ts`。\n- 正确处理异步请求失败。\n- 使用 Git/GitHub 管理项目历史。\n\n最终标准不是“代码能跑”，而是你能独立回答：\n\n> 这个状态存在哪里？哪个函数修改它？修改后页面如何更新？失败时用户看到什么？",
+      "content": "# TypeScript 定位：JavaScript 的静态类型层\n\n## 0. 修订要点\n\n原稿方向正确，但需要更精确地区分：**TypeScript 的类型检查发生在开发期/编译期，不进入运行时**；TypeScript 不是“更安全的 JavaScript 运行时”，而是 JavaScript 的**静态类型层 + 编译器 + 工程工具链**。\n\n---\n\n## 1. TypeScript 与 JavaScript 的关系\n\nTypeScript，简称 TS，是 JavaScript，简称 JS 的**超集**。更准确地说：\n\n> TypeScript ≈ JavaScript 语法 + 静态类型系统 + 编译器/编辑器工具链\n\n语法层面，大多数 JavaScript 代码都可以作为 TypeScript 代码理解；但 TypeScript 增加了类型标注、类型推断、接口、泛型等能力。\n\n```ts\nfunction add(a: number, b: number): number {\n  return a + b;\n}\n\nadd(1, 2);     // OK\nadd(1, \"2\");   // TS 报错：不能把 string 传给 number\n```\n\n编译后，类型标注会被擦除：\n\n```js\nfunction add(a, b) {\n  return a + b;\n}\n\nadd(1, \"2\"); // 运行时仍会得到 \"12\"\n```\n\n关键 gotcha：\n\n> TypeScript 不会自动插入运行时类型检查。\n\n除非你自己写校验逻辑，否则错误类型仍然可能进入运行时。\n\n---\n\n## 2. TypeScript 解决什么问题？\n\nJavaScript 是动态类型语言：\n\n```js\nlet x = 1;\nx = \"hello\";\nx = { name: \"Alice\" };\n```\n\n这在小程序中灵活，但在大型项目中容易造成隐患：\n\n```js\nfunction add(a, b) {\n  return a + b;\n}\n\nadd(1, \"2\"); // 得到 \"12\"，但可能期望 3\n```\n\nTypeScript 通过静态类型检查，在代码运行前发现许多问题：\n\n```ts\nfunction add(a: number, b: number): number {\n  return a + b;\n}\n\nadd(1, \"2\"); // 编译期报错\n```\n\n它主要提升：\n\n1. **错误提前暴露**：减少 `undefined is not a function`、字段拼写错误等问题。\n2. **编辑器体验**：自动补全、跳转定义、重命名重构。\n3. **团队协作**：类型像机器可检查的文档。\n4. **大型项目维护**：修改接口、函数签名时更容易发现影响范围。\n5. **业务建模**：用类型表达状态、约束和数据结构。\n\n---\n\n## 3. 类型、运行时、编译器：必须分清\n\n### 3.1 类型层\n\n类型描述数据的形状：\n\n```ts\ntype User = {\n  id: number;\n  name: string;\n  tags?: string[];\n};\n\nconst user: User = {\n  id: 1,\n  name: \"Alice\",\n};\n```\n\nTypeScript 使用**结构类型系统**：只要结构匹配，就可以赋值。\n\n```ts\nconst obj = { id: 1, name: \"Alice\", age: 20 };\n\nconst user: User = obj; // OK，即使 obj 多了 age\n```\n\n但对象字面量有额外检查：\n\n```ts\nconst user2: User = {\n  id: 1,\n  name: \"Alice\",\n  age: 20, // 直接赋值时常会报错：多余属性\n};\n```\n\n### 3.2 运行时\n\n运行时仍然是 JavaScript 环境：浏览器、Node.js、Deno、Bun 等。\n\n```ts\nlet x: string = \"hello\";\n```\n\n编译后：\n\n```js\nlet x = \"hello\";\n```\n\n`string` 不会出现在运行时。\n\n### 3.3 编译器\n\n`tsc` 负责：\n\n- 类型检查；\n- 将 TS 转成 JS；\n- 根据配置生成 `.d.ts`、`.js`；\n- 控制目标语法版本和模块系统。\n\n---\n\n## 4. 静态类型检查 vs 动态运行时行为\n\nJavaScript 中，变量类型由运行时的值决定：\n\n```js\nlet value = 1;\nvalue = \"abc\"; // OK\n```\n\nTypeScript 中，类型在编码期被检查：\n\n```ts\nlet value: number = 1;\nvalue = \"abc\"; // TS 报错\n```\n\n即使不写类型，TS 也会推断：\n\n```ts\nlet value = 1;\nvalue = \"abc\"; // 仍然报错，因为推断为 number\n```\n\n但 TS 不是万能的。外部数据必须运行时校验：\n\n```ts\nconst data = JSON.parse(input) as User;\n```\n\n`as User` 只是告诉编译器“相信我”，不会验证 `input`。\n\n更安全写法：\n\n```ts\nfunction isUser(value: unknown): value is User {\n  return (\n    typeof value === \"object\" &&\n    value !== null &&\n    typeof (value as User).id === \"number\" &&\n    typeof (value as User).name === \"string\"\n  );\n}\n\nconst parsed: unknown = JSON.parse(input);\n\nif (isUser(parsed)) {\n  parsed.name; // 这里才是 User\n}\n```\n\n核心 gotcha：\n\n- `any`：关闭类型检查，容易失去 TS 价值。\n- `unknown`：必须收窄后才能使用，更安全。\n- `as`：类型断言，不是运行时转换。\n- `strictNullChecks`：让 `null` / `undefined` 必须显式处理。\n\n---\n\n## 5. tsconfig 的作用\n\n`tsconfig.json` 是 TypeScript 项目的工程配置：\n\n```json\n{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"Bundler\",\n    \"strict\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"declaration\": true,\n    \"outDir\": \"dist\",\n    \"noEmitOnError\": true\n  },\n  \"include\": [\"src\"]\n}\n```\n\n常见配置：\n\n| 配置 | 含义 |\n|---|---|\n| `target` | 输出哪个版本的 JavaScript |\n| `module` | 模块系统，如 CommonJS、ESNext |\n| `moduleResolution` | 如何解析 import |\n| `strict` | 开启严格类型检查 |\n| `lib` | 声明可用全局 API，如 DOM、ES2020 |\n| `outDir` | 编译产物目录 |\n| `declaration` | 生成 `.d.ts` 类型声明 |\n| `noEmit` | 只检查，不输出 JS |\n| `include/exclude` | 控制纳入检查的文件 |\n\n现代项目通常应开启 `strict: true`，否则 TypeScript 可能退化为“带注释的 JavaScript”。\n\n---\n\n## 6. 推荐学习路径\n\n1. **基础类型**：`number`、`string`、`boolean`、数组、元组、对象、函数、联合类型、字面量类型。\n2. **工程配置**：`tsconfig`、模块、构建、类型检查、`.d.ts`。\n3. **泛型**：让函数、接口、类支持“类型参数化”。\n4. **类型建模**：用 `interface`、`type`、`readonly`、`optional`、`as const` 表达业务约束。\n5. **高级类型**：条件类型、映射类型、索引访问、类型守卫、工具类型。\n6. **框架实战**：React/Vue/Node.js/API 类型共享/表单与状态建模。\n\n最终目标不是“到处写类型标注”，而是用类型系统表达程序意图，让错误更早暴露，让代码更容易推理和维护。",
       "references": [],
       "quiz": [
         {
           "id": "q1",
           "type": "choice",
-          "question": "在 Task Manager 中，为什么任务 id 不应使用数组下标？",
+          "question": "TypeScript 编译后，函数参数和返回值的类型标注会怎样？",
           "options": [
-            "数组下标是位置，删除或筛选后会改变，可能让状态指向错误的任务",
-            "数组下标无法被 TypeScript 类型检查",
-            "数组下标只能用于数字标题",
-            "数组下标会导致 localStorage 无法保存 JSON"
+            "保留为运行时对象，并自动检查每个调用",
+            "被擦除为 JavaScript，运行时不会自动检查这些类型",
+            "只保留在浏览器控制台中，便于调试",
+            "转换成 if/throw 语句"
           ],
-          "answer": "A",
-          "explanation": "id 表示任务的身份，而不是它在数组中的位置。删除任务后，后续元素会前移；如果 id 来自下标，同一个 id 可能代表不同任务，状态更新、删除和持久化都会变得不可预测。"
+          "answer": "B",
+          "explanation": "TypeScript 的类型属于开发期/编译期层。tsc 会检查类型并输出 JavaScript，类型标注本身不会进入运行时。"
         },
         {
           "id": "q2",
           "type": "choice",
-          "question": "下面哪句话正确描述了 `const tasks: Task[] = []` 之后执行 `tasks.push(...)`？",
+          "question": "下面哪个说法最能解释 add(1, '2') 在 TypeScript 与 JavaScript 中的差异？",
           "options": [
-            "合法，因为 const 只禁止重新绑定 tasks，不禁止修改数组内容",
-            "非法，因为 push 会改变数组引用",
-            "合法，但 push 会清空数组",
-            "非法，必须改用 var"
+            "TypeScript 会在运行时自动把它改成 3",
+            "TypeScript 在编译期发现类型不匹配；若绕过检查，JavaScript 运行时会按 + 的规则得到字符串拼接",
+            "JavaScript 没有类型，所以 TS 永远无法检查它",
+            "TypeScript 会把 string 自动转换成 number"
           ],
-          "answer": "A",
-          "explanation": "`const` 限制的是变量绑定本身不能被重新赋值，例如 `tasks = []` 是非法的；但数组或对象内部仍然可以修改，例如 `push`、属性更新或对象内部字段变化。"
+          "answer": "B",
+          "explanation": "TypeScript 的静态类型检查发生在运行前。若类型检查被绕过或禁用，底层 JavaScript 仍然会执行原始运算规则。"
         },
         {
           "id": "q3",
           "type": "choice",
-          "question": "`fetch('/api/tasks')` 在服务器返回 404 时，通常会发生什么？",
+          "question": "const data = JSON.parse(input) as User; 中的 as User 做了什么？",
           "options": [
-            "Promise 自动 reject，只能由 catch 捕获",
-            "Promise 通常 resolve 为一个 Response，但 response.ok 为 false",
-            "浏览器会刷新页面",
-            "TypeScript 会在编译期阻止所有 404"
+            "运行时把 JSON 转成 User 实例",
+            "如果失败会抛出类型错误",
+            "自动补齐缺失字段",
+            "只改变编译期视角，不验证输入"
           ],
-          "answer": "B",
-          "explanation": "`fetch` 只在网络层失败时通常 reject；HTTP 404/500 这类响应通常仍会 resolve 为 `Response`。因此必须检查 `response.ok`，必要时主动 `throw new Error(...)`。"
+          "answer": "D",
+          "explanation": "as User 是类型断言，只告诉 TypeScript 编译器把某个值当作 User 处理。它不会检查字段是否存在，也不会转换运行时数据。"
         },
         {
           "id": "q4",
           "type": "choice",
-          "question": "为什么初学者不应滥用 TypeScript 的 `any`？",
+          "question": "在结构类型系统中，const obj = { id: 1, name: 'Alice', age: 20 }; const user: User = obj; 为什么通常能通过？",
           "options": [
-            "any 会关闭类型检查，容易把字段拼写错误和 undefined 推迟到运行期",
-            "any 会让代码运行更快",
-            "any 只能用于 DOM API",
-            "any 会自动生成测试"
+            "因为 obj 至少具备 User 所需的 id 和 name 字段",
+            "因为 TypeScript 会自动删除多余字段",
+            "因为对象字面量永远不允许多余字段",
+            "因为 age 会被自动改成 User 的一部分"
           ],
           "answer": "A",
-          "explanation": "`any` 会绕过 TypeScript 的类型保护，使接口错误、拼写错误和缺失字段无法在编译期被发现。应优先使用明确的 `type`、`interface` 和泛型表达数据模型。"
+          "explanation": "TypeScript 使用结构类型系统：只要值的结构满足目标类型所需字段，通常就可以赋值。通过变量赋值时，额外字段一般不会被拒绝。"
         },
         {
           "id": "q5",
           "type": "choice",
-          "question": "显示用户输入的任务标题时，为什么优先使用 `textContent` 而不是 `innerHTML`？",
+          "question": "把包含 age 的对象字面量直接赋给 User 时，为什么常常会触发多余属性检查？",
           "options": [
-            "`textContent` 更美观",
-            "`textContent` 可以避免把用户输入解释成 HTML 或脚本，降低 XSS 风险",
-            "`innerHTML` 不支持中文",
-            "`textContent` 会自动保存到 localStorage"
+            "因为直接赋值的对象字面量更容易暴露拼写错误或多余字段",
+            "因为结构类型永远禁止额外字段",
+            "因为运行时会删除 age",
+            "因为 TypeScript 会修改 User 接口"
           ],
-          "answer": "B",
-          "explanation": "用户输入是不可信数据。`innerHTML` 会解析 HTML，可能引入脚本或恶意标记；`textContent` 只设置文本内容，是更安全、更符合职责边界的 DOM 更新方式。"
+          "answer": "A",
+          "explanation": "对象字面量的多余属性检查是一种保护机制，用来发现字段拼写错误或误传字段。通过中间变量赋值时，额外字段通常仍可接受。"
         },
         {
           "id": "q6",
           "type": "choice",
-          "question": "在纯 reducer 中，为什么应返回新的 state 而不是直接修改原 state？",
+          "question": "unknown 与 any 的关键区别是什么？",
           "options": [
-            "新对象让数据流更可预测，便于渲染、测试和调试",
-            "JavaScript 不允许修改对象",
-            "只有数组能修改，对象不能修改",
-            "直接修改会让 TypeScript 自动报错"
+            "any 更安全，因为它允许所有操作",
+            "unknown 必须先收窄后才能使用；any 会关闭大部分类型检查",
+            "unknown 会在运行时存在，any 会被擦除",
+            "两者完全相同"
+          ],
+          "answer": "B",
+          "explanation": "unknown 表示值可能是任意类型，但使用前必须通过 typeof、Array.isArray、自定义类型守卫等方式收窄。any 会关闭类型检查，容易失去 TypeScript 的价值。"
+        },
+        {
+          "id": "q7",
+          "type": "choice",
+          "question": "tsconfig 中 strict: true 的主要意义是什么？",
+          "options": [
+            "让 TypeScript 在运行时校验所有值",
+            "只影响输出文件名",
+            "开启一组严格类型检查，让 null/undefined、函数参数、对象属性等错误更早暴露",
+            "禁用所有类型推断"
+          ],
+          "answer": "C",
+          "explanation": "strict: true 会启用多项严格类型检查，包括更严格的 null/undefined 处理、函数参数检查等，是现代 TypeScript 项目的推荐配置。"
+        },
+        {
+          "id": "q8",
+          "type": "choice",
+          "question": "noEmit: true 通常用于什么场景？",
+          "options": [
+            "只运行类型检查，不输出 JS 文件",
+            "把 TS 编译成 C++",
+            "关闭所有类型检查",
+            "自动生成运行时校验代码"
           ],
           "answer": "A",
-          "explanation": "状态更新应像数学函数一样：给定旧状态和动作，产生新状态。返回新对象可以避免隐藏副作用，让 UI 渲染、持久化和测试都围绕清晰的数据流展开。"
+          "explanation": "noEmit: true 表示 TypeScript 只进行类型检查，不生成编译产物。它常用于 CI、预提交检查和纯类型验证流程。"
         }
       ],
       "exercise": {
-        "id": "ex-1",
+        "id": "ex-ts-runtime-validation",
         "language": "typescript",
-        "entrypoint": "runTaskActions",
-        "description": "Implement a pure TypeScript reducer for a Task Manager. Given an initial state and a list of actions, return a new state. Requirements: trim titles, ignore empty titles, ignore duplicate ids, validate filters, and never mutate the input state. This mirrors the frontend data flow: event -> action -> state -> render.",
-        "starterCode": "export type Task = {\n  id: string;\n  title: string;\n  done: boolean;\n  createdAt: number;\n};\n\nexport type Filter = \"all\" | \"active\" | \"done\";\n\nexport type TaskManagerState = {\n  tasks: Task[];\n  filter: Filter;\n};\n\nexport type AddTaskAction = {\n  type: \"add\";\n  id: string;\n  title: string;\n  done?: boolean;\n  createdAt: number;\n};\n\nexport type ToggleTaskAction = {\n  type: \"toggle\";\n  id: string;\n};\n\nexport type DeleteTaskAction = {\n  type: \"delete\";\n  id: string;\n};\n\nexport type SetFilterAction = {\n  type: \"setFilter\";\n  filter: Filter;\n};\n\nexport type ClearDoneAction = {\n  type: \"clearDone\";\n};\n\nexport type TaskAction =\n  | AddTaskAction\n  | ToggleTaskAction\n  | DeleteTaskAction\n  | SetFilterAction\n  | ClearDoneAction;\n\nconst VALID_FILTERS = [\"all\", \"active\", \"done\"] as const;\n\nfunction isFilter(value: string): value is Filter {\n  // TODO: Step 1 - Validate that value is one of the allowed filters.\n  return (VALID_FILTERS as readonly string[]).includes(value);\n}\n\nfunction hasTask(tasks: Task[], id: string): boolean {\n  // TODO: Step 2 - Return true if any task has the given id.\n  return tasks.some((task) => task.id === id);\n}\n\nfunction normalizeTask(task: Task): Task | null {\n  // TODO: Step 3 - Trim task.title; if it becomes empty, return null.\n  const title = task.title.trim();\n  if (title === \"\") {\n    return null;\n  }\n\n  // TODO: Step 4 - Return a new task object with the trimmed title.\n  return { ...task, title };\n}\n\n/**\n * Run a sequence of Task Manager actions and return a new immutable state.\n *\n * This function models the core frontend data flow without touching the DOM:\n * user event -> action -> state update -> render. Implement it as a pure\n * reducer: do not mutate `state`, `state.tasks`, or any action object.\n *\n * Supported actions:\n * - add: insert a task if its id is non-empty, its title is non-empty after trim(),\n *   and the id is not already present.\n * - toggle: flip done for the matching task, or leave state unchanged.\n * - delete: remove the matching task, or leave state unchanged.\n * - setFilter: change the filter only when it is \"all\", \"active\", or \"done\".\n * - clearDone: remove every completed task.\n *\n * Examples:\n *  * >>> runTaskActions({ tasks: [{ id: \"t1\", title: \"Read\", done: false, createdAt: 1 }], filter: \"all\" }, [{ type: \"toggle\", id: \"t1\" }])\n * { tasks: [{ id: \"t1\", title: \"Read\", done: true, createdAt: 1 }], filter: \"all\" }\n * >>> runTaskActions({ tasks: [{ id: \"t1\", title: \"Read\", done: false, createdAt: 1 }, { id: \"t2\", title: \"Write\", done: true, createdAt: 2 }], filter: \"all\" }, [{ type: \"clearDone\" }])\n * { tasks: [{ id: \"t1\", title: \"Read\", done: false, createdAt: 1 }], filter: \"all\" }\n *  */\nexport function runTaskActions(state: TaskManagerState, actions: TaskAction[]): TaskManagerState {\n  // TODO: Step 5 - Create local nextTasks from state.tasks, normalizing each task.\n  let nextTasks = state.tasks\n    .map(normalizeTask)\n    .filter((task): task is Task => task !== null);\n\n  // TODO: Step 6 - Create local nextFilter; if the initial filter is invalid, use \"all\".\n  let nextFilter = isFilter(state.filter) ? state.filter : \"all\";\n\n  for (const action of actions) {\n    switch (action.type) {\n      case \"add\": {\n        const id = action.id.trim();\n        const title = action.title.trim();\n\n        // TODO: Step 7 - If id or title is empty, break.\n        // TODO: Step 8 - If id already exists, break.\n        // TODO: Step 9 - Append a new task object; do not mutate nextTasks in place.\n        // Hint: nextTasks = [...nextTasks, { id, title, done: Boolean(action.done), createdAt: action.createdAt }];\n        break;\n      }\n\n      case \"toggle\": {\n        // TODO: Step 10 - Use map to return a copied toggled task only when ids match.\n        break;\n      }\n\n      case \"delete\": {\n        // TODO: Step 11 - Use filter to remove the task with action.id.\n        break;\n      }\n\n      case \"setFilter\": {\n        // TODO: Step 12 - Validate action.filter before assigning nextFilter.\n        break;\n      }\n\n      case \"clearDone\": {\n        // TODO: Step 13 - Use filter to remove completed tasks.\n        break;\n      }\n    }\n  }\n\n  // TODO: Step 14 - Return a new state object.\n  return { tasks: nextTasks, filter: nextFilter };\n}",
+        "entrypoint": "parseRoster",
+        "description": "Implement parseRoster(input: string): ParseResult. The function parses a JSON string containing an array of user-like records, validates each record with runtime guards, normalizes strings, applies defaults, and returns both valid users and validation errors. This exercise reinforces that TypeScript's type system does not replace runtime validation.",
+        "starterCode": "type Role = \"student\" | \"mentor\" | \"admin\";\n\ntype User = {\n  id: number;\n  name: string;\n  email: string;\n  tags: string[];\n  role: Role;\n};\n\ntype ParseIssue = {\n  index: number;\n  path: string;\n  message: string;\n};\n\ntype ParseResult = {\n  users: User[];\n  errors: ParseIssue[];\n};\n\n/**\n * Parses a JSON string containing an array of user-like records and validates it.\n *\n * This exercise is about the boundary between TypeScript's static type system\n * and JavaScript's runtime data. `input` is only a string at runtime, so this\n * function must not trust `as User` blindly. It should parse the JSON, inspect\n * the resulting unknown value, and construct typed `User` objects only after\n * every required field has been checked.\n *\n * Validation rules:\n * 1. The whole input must be valid JSON.\n * 2. The decoded value must be an array.\n * 3. Each record must be a non-null object.\n * 4. `id` must be a positive integer.\n * 5. `name` and `email` must be strings that remain non-empty after trim.\n * 6. `tags` is optional; when present it must be an array of non-empty strings.\n *    Valid tags are trimmed, de-duplicated, and sorted lexicographically.\n * 7. `role` is optional; when present it must be \"student\", \"mentor\", or\n *    \"admin\". Missing role defaults to \"student\".\n * 8. A record with any validation error is not added to `users`.\n *\n * Examples:\n * >>> parseRoster(\"[]\")\n * { users: [], errors: [] }\n * >>> parseRoster('[{\"id\":1,\"name\":\" Alice \",\"email\":\"ALICE@EXAMPLE.com\",\"tags\":[\"js\",\"js\",\"ts\"],\"role\":\"mentor\"}]')\n * { users: [{ id: 1, name: \"Alice\", email: \"alice@example.com\", tags: [\"js\", \"ts\"], role: \"mentor\" }], errors: [] }\n * >>> parseRoster('[{\"id\":\"1\",\"name\":\"Alice\",\"email\":\"alice@example.com\"}]')\n * { users: [], errors: [{ index: 0, path: \"id\", message: \"id must be a positive integer\" }] }\n */\nexport function parseRoster(input: string): ParseResult {\n  const users: User[] = [];\n  const errors: ParseIssue[] = [];\n\n  // Step 1: Parse JSON inside a try/catch.\n  // TODO: If parsing fails, push { index: -1, path: \"$\", message: \"input must be valid JSON\" } and return.\n  let parsed: unknown;\n  try {\n    parsed = JSON.parse(input);\n  } catch {\n    // TODO: Return the JSON parse error.\n    return { users, errors };\n  }\n\n  // Step 2: Require the decoded value to be an array.\n  // TODO: If parsed is not an array, push { index: -1, path: \"$\", message: \"input must be a JSON array\" } and return.\n  if (!Array.isArray(parsed)) {\n    // TODO: Return the array-shape error.\n    return { users, errors };\n  }\n\n  // Step 3: Iterate through each record.\n  for (let index = 0; index < parsed.length; index++) {\n    const raw = parsed[index];\n    const recordErrors: ParseIssue[] = [];\n\n    // Step 4: Require each record to be a non-null object.\n    // TODO: Use isObject(raw). If false, push { index, path: \"$\", message: \"record must be an object\" } and continue.\n    if (!isObject(raw)) {\n      // TODO: Record the object-shape error and continue to the next item.\n      continue;\n    }\n\n    // Step 5: Validate id.\n    // TODO: If !isValidId(raw.id), push { index, path: \"id\", message: \"id must be a positive integer\" }.\n    if (!isValidId(raw.id)) {\n      // TODO: Record the id error.\n    }\n\n    // Step 6: Validate name.\n    // TODO: If typeof raw.name !== \"string\" or raw.name.trim() === \"\", push { index, path: \"name\", message: \"name must be a non-empty string\" }.\n    if (typeof raw.name !== \"string\" || raw.name.trim() === \"\") {\n      // TODO: Record the name error.\n    }\n\n    // Step 7: Validate email.\n    // TODO: If typeof raw.email !== \"string\" or raw.email.trim() === \"\", push { index, path: \"email\", message: \"email must be a non-empty string\" }.\n    if (typeof raw.email !== \"string\" || raw.email.trim() === \"\") {\n      // TODO: Record the email error.\n    }\n\n    // Step 8: Validate optional tags.\n    // TODO: If raw.tags is missing, use [].\n    // TODO: Otherwise, call normalizeTags(raw.tags).\n    // TODO: If normalizeTags returns undefined, push { index, path: \"tags\", message: \"tags must be an array of non-empty strings\" }.\n    let tags: string[] = [];\n    if (raw.tags !== undefined) {\n      // TODO: Normalize tags and handle invalid tags.\n    }\n\n    // Step 9: Validate optional role.\n    // TODO: If raw.role is missing, use \"student\".\n    // TODO: Otherwise, require isRole(raw.role); on failure push { index, path: \"role\", message: \"role must be one of: student, mentor, admin\" }.\n    let role: Role = \"student\";\n    if (raw.role !== undefined) {\n      // TODO: Validate and assign role.\n    }\n\n    // Step 10: Only push a User when the record has no validation errors.\n    // TODO: If recordErrors.length === 0, push { id: raw.id as number, name: ..., email: ..., tags, role }.\n    // TODO: Otherwise, append recordErrors to errors.\n    if (recordErrors.length === 0) {\n      // TODO: Build and push the normalized user.\n    } else {\n      // TODO: Append record errors.\n    }\n  }\n\n  return { users, errors };\n}\n\nfunction isObject(value: unknown): value is Record<string, unknown> {\n  // TODO: Step 1 - Return true only for non-null objects, not arrays.\n  return false;\n}\n\nfunction isValidId(value: unknown): value is number {\n  // TODO: Step 2 - Return true only when value is a number, is finite, is an integer, and is greater than 0.\n  return false;\n}\n\nfunction isRole(value: unknown): value is Role {\n  // TODO: Step 3 - Return true only for the three allowed role literals.\n  return false;\n}\n\nfunction normalizeTags(value: unknown): string[] | undefined {\n  // TODO: Step 4 - If value is not an array, return undefined.\n  // TODO: Step 5 - For each element, require typeof element === \"string\" and element.trim() !== \"\".\n  // TODO: Step 6 - Trim, de-duplicate, sort lexicographically, and return.\n  return undefined;\n}",
         "assertionMode": "return",
         "testCases": [
           {
-            "name": "add trim, toggle, delete, and set active filter",
+            "name": "empty roster",
             "input": [
-              {
-                "tasks": [
-                  {
-                    "id": "t1",
-                    "title": "Read",
-                    "done": false,
-                    "createdAt": 1
-                  },
-                  {
-                    "id": "t2",
-                    "title": "Write",
-                    "done": true,
-                    "createdAt": 2
-                  }
-                ],
-                "filter": "all"
-              },
-              [
-                {
-                  "type": "add",
-                  "id": "t3",
-                  "title": "   Test reducer   ",
-                  "createdAt": 3
-                },
-                {
-                  "type": "toggle",
-                  "id": "t1"
-                },
-                {
-                  "type": "delete",
-                  "id": "t2"
-                },
-                {
-                  "type": "setFilter",
-                  "filter": "active"
-                }
-              ]
+              "[]"
             ],
-            "expected": "{\"tasks\":[{\"id\":\"t1\",\"title\":\"Read\",\"done\":true,\"createdAt\":1},{\"id\":\"t3\",\"title\":\"Test reducer\",\"done\":false,\"createdAt\":3}],\"filter\":\"active\"}"
+            "expected": {
+              "users": [],
+              "errors": []
+            }
           },
           {
-            "name": "ignore empty add, duplicate id, invalid filter, and clear done",
+            "name": "normalize and deduplicate tags",
             "input": [
-              {
-                "tasks": [
-                  {
-                    "id": "t1",
-                    "title": "Keep",
-                    "done": false,
-                    "createdAt": 1
-                  },
-                  {
-                    "id": "t2",
-                    "title": "Remove",
-                    "done": true,
-                    "createdAt": 2
-                  }
-                ],
-                "filter": "done"
-              },
-              [
-                {
-                  "type": "add",
-                  "id": "t1",
-                  "title": "Duplicate ignored",
-                  "createdAt": 3
-                },
-                {
-                  "type": "add",
-                  "id": "e1",
-                  "title": "   ",
-                  "createdAt": 4
-                },
-                {
-                  "type": "setFilter",
-                  "filter": "completed"
-                },
-                {
-                  "type": "clearDone"
-                }
-              ]
+              "[{\"id\":1,\"name\":\" Alice \",\"email\":\"ALICE@EXAMPLE.com\",\"tags\":[\"js\",\"js\",\"ts\"],\"role\":\"mentor\"}]"
             ],
-            "expected": "{\"tasks\":[{\"id\":\"t1\",\"title\":\"Keep\",\"done\":false,\"createdAt\":1}],\"filter\":\"done\"}"
+            "expected": {
+              "users": [
+                {
+                  "id": 1,
+                  "name": "Alice",
+                  "email": "alice@example.com",
+                  "tags": [
+                    "js",
+                    "ts"
+                  ],
+                  "role": "mentor"
+                }
+              ],
+              "errors": []
+            }
           },
           {
-            "name": "missing ids are no-ops",
+            "name": "invalid records are reported",
             "input": [
-              {
-                "tasks": [
-                  {
-                    "id": "a",
-                    "title": "Alpha",
-                    "done": false,
-                    "createdAt": 10
-                  },
-                  {
-                    "id": "b",
-                    "title": "Beta",
-                    "done": false,
-                    "createdAt": 20
-                  }
-                ],
-                "filter": "all"
-              },
-              [
+              "[{\"id\":\"1\",\"email\":\"alice@example.com\"},{\"id\":0,\"name\":\"Bob\",\"email\":\"bob@example.com\"}]"
+            ],
+            "expected": {
+              "users": [],
+              "errors": [
                 {
-                  "type": "toggle",
-                  "id": "missing"
+                  "index": 0,
+                  "path": "id",
+                  "message": "id must be a positive integer"
                 },
                 {
-                  "type": "delete",
-                  "id": "missing"
+                  "index": 0,
+                  "path": "name",
+                  "message": "name must be a non-empty string"
                 },
                 {
-                  "type": "setFilter",
-                  "filter": "done"
+                  "index": 1,
+                  "path": "id",
+                  "message": "id must be a positive integer"
                 }
               ]
-            ],
-            "expected": "{\"tasks\":[{\"id\":\"a\",\"title\":\"Alpha\",\"done\":false,\"createdAt\":10},{\"id\":\"b\",\"title\":\"Beta\",\"done\":false,\"createdAt\":20}],\"filter\":\"done\"}"
+            }
           },
           {
-            "name": "clear done after multiple adds",
+            "name": "optional fields get defaults",
             "input": [
-              {
-                "tasks": [],
-                "filter": "all"
-              },
-              [
+              "[{\"id\":2,\"name\":\"Bob\",\"email\":\"bob@example.com\"}]"
+            ],
+            "expected": {
+              "users": [
                 {
-                  "type": "add",
-                  "id": "a",
-                  "title": "Buy milk",
-                  "done": false,
-                  "createdAt": 1
+                  "id": 2,
+                  "name": "Bob",
+                  "email": "bob@example.com",
+                  "tags": [],
+                  "role": "student"
+                }
+              ],
+              "errors": []
+            }
+          },
+          {
+            "name": "invalid tags and role",
+            "input": [
+              "[{\"id\":3,\"name\":\"Chen\",\"email\":\"chen@example.com\",\"tags\":[\"go\",123,\"go\"],\"role\":\"teacher\"}]"
+            ],
+            "expected": {
+              "users": [],
+              "errors": [
+                {
+                  "index": 0,
+                  "path": "tags",
+                  "message": "tags must be an array of non-empty strings"
                 },
                 {
-                  "type": "add",
-                  "id": "b",
-                  "title": "Pay bills",
-                  "done": true,
-                  "createdAt": 2
-                },
-                {
-                  "type": "add",
-                  "id": "c",
-                  "title": "  Call mentor  ",
-                  "done": false,
-                  "createdAt": 3
-                },
-                {
-                  "type": "clearDone"
+                  "index": 0,
+                  "path": "role",
+                  "message": "role must be one of: student, mentor, admin"
                 }
               ]
+            }
+          },
+          {
+            "name": "invalid JSON",
+            "input": [
+              "not json"
             ],
-            "expected": "{\"tasks\":[{\"id\":\"a\",\"title\":\"Buy milk\",\"done\":false,\"createdAt\":1},{\"id\":\"c\",\"title\":\"Call mentor\",\"done\":false,\"createdAt\":3}],\"filter\":\"all\"}"
+            "expected": {
+              "users": [],
+              "errors": [
+                {
+                  "index": -1,
+                  "path": "$",
+                  "message": "input must be valid JSON"
+                }
+              ]
+            }
+          },
+          {
+            "name": "decoded value is not an array",
+            "input": [
+              "{}"
+            ],
+            "expected": {
+              "users": [],
+              "errors": [
+                {
+                  "index": -1,
+                  "path": "$",
+                  "message": "input must be a JSON array"
+                }
+              ]
+            }
           }
         ],
         "hints": [
-          "Keep `nextTasks` and `nextFilter` as local variables; return a fresh state object at the end.",
-          "Use `map` for `toggle`, `filter` for `delete`/`clearDone`, and spread syntax for copied task objects.",
-          "Validate `filter` before assigning it; unknown filters should leave the current filter unchanged."
+          "JSON.parse returns data that should be treated as unknown until you prove its shape.",
+          "Use Array.isArray, typeof checks, and small type guards before constructing User objects.",
+          "Validate all fields for one record before deciding whether to push it into users.",
+          "Optional fields still need explicit handling: tags should default to [], and role should default to student."
         ]
       },
       "passCriteria": {
@@ -292,209 +285,347 @@
       }
     },
     {
-      "id": "unit-2-fullstack-app-with-node-react",
-      "title": "React + Node.js 简单全栈应用构建",
-      "description": "在 Unit 1 基础上学习 React、Node.js/Express、REST API、数据库基础与认证流程，完成一个简单但完整的全栈应用。结合项目实践补充基础数据结构与算法，如数组、哈希表、栈、队列、字符串和简单复杂度分析，为后续进阶打基础。",
+      "id": "ts-level-02",
+      "title": "入门级掌握：基础类型与类型标注",
+      "description": "适合编程基础较弱的学习者先建立类型思维。学习常见基础类型、变量标注、函数参数与返回值、对象字面量、数组、元组、联合类型等，配合少量练习。",
       "prerequisites": [
-        "完成 Unit 1 或具备 JavaScript/TypeScript 基础",
-        "了解 HTML/CSS/JavaScript 基本用法",
-        "能够使用 Git 进行基本提交",
-        "愿意通过项目练习代码"
+        "Unit ts-level-01",
+        "知道变量、函数、数组、对象的基本写法"
       ],
       "objectives": [
-        "掌握 React 组件、状态、表单、路由和基础数据流",
-        "能够使用 Node.js/Express 构建 REST API",
-        "理解数据库基础概念，并能完成简单 CRUD 操作",
-        "完成一个简单全栈项目，例如任务管理系统、博客系统或小型记账应用",
-        "掌握基础数据结构与算法概念，并能完成简单编程练习",
-        "能够将项目部署到基础云平台或静态托管平台，形成可展示作品"
+        "使用 string、number、boolean、null、undefined、any、unknown、never 等基础类型",
+        "为函数参数和返回值添加类型标注",
+        "区分数组类型与元组类型",
+        "使用联合类型表达“多种可能值”"
       ],
-      "content": "# React + Node.js 全栈应用构建：任务管理系统\n\n## 0. 修订重点\n\n原稿覆盖了主线，但需要加强：接口契约、错误处理、安全、数据库设计、异步数据流、部署细节与可测试性。本单元按 CS61A 风格强调：**抽象边界清晰、数据流可追踪、每个函数/组件/接口都有输入输出契约**。\n\n---\n\n## 1. 系统视角：从页面到数据流\n\n目标项目：一个可部署的任务管理系统。\n\n```text\nReact 表单\n  ↓ POST /api/tasks + Authorization: Bearer token\nExpress 路由\n  ↓ 校验输入、鉴权\n数据库\n  ↓ INSERT 返回新任务\nReact 更新本地状态\n```\n\n核心问题不是“页面能显示”，而是：\n\n- 数据从哪里来？\n- 谁可以修改数据？\n- 请求失败时 UI 如何反馈？\n- 数据库状态与前端状态是否一致？\n\n---\n\n## 2. React：组件、状态、表单与副作用\n\n组件是 UI 抽象；状态是组件内部会变化的数据。\n\n```jsx\nfunction TaskForm({ onAdd }) {\n  const [title, setTitle] = useState(\"\");\n\n  async function handleSubmit(e) {\n    e.preventDefault();\n    try {\n      await onAdd(title);\n      setTitle(\"\");\n    } catch (err) {\n      alert(\"添加失败，请稍后重试\");\n    }\n  }\n\n  return (\n    <form onSubmit={handleSubmit}>\n      <input\n        value={title}\n        onChange={(e) => setTitle(e.target.value)}\n        placeholder=\"任务标题\"\n      />\n      <button>添加</button>\n    </form>\n  );\n}\n```\n\nGotchas：\n\n- `<input value={...}>` 是受控组件，必须用 `onChange` 更新状态。\n- 列表渲染必须使用稳定 `key`，不要用数组下标作为唯一 key。\n- `setState` 是异步批处理的，不要依赖立即更新后的状态。\n- 如果通过 `useEffect` 请求 API，要处理依赖数组，避免无限请求。\n- 生产环境不要把敏感信息写入前端代码或浏览器 localStorage；JWT 更安全的方式通常是 `httpOnly` cookie。\n\n---\n\n## 3. Express REST API：契约、状态码与错误处理\n\nREST API 用资源、HTTP 方法和状态码表达操作：\n\n| 操作 | 方法 | 路径 |\n|---|---|---|\n| 查询任务 | GET | `/api/tasks` |\n| 创建任务 | POST | `/api/tasks` |\n| 查询单个任务 | GET | `/api/tasks/:id` |\n| 部分修改 | PATCH | `/api/tasks/:id` |\n| 删除 | DELETE | `/api/tasks/:id` |\n\n示例：\n\n```js\napp.post(\"/api/tasks\", requireAuth, async (req, res, next) => {\n  try {\n    const { title } = req.body;\n\n    if (typeof title !== \"string\" || title.trim() === \"\") {\n      return res.status(400).json({ error: \"title is required\" });\n    }\n\n    const result = await pool.query(\n      `INSERT INTO tasks (title, user_id)\n       VALUES ($1, $2)\n       RETURNING id, title, done, created_at`,\n      [title.trim(), req.user.id]\n    );\n\n    res.status(201).json(result.rows[0]);\n  } catch (err) {\n    next(err);\n  }\n});\n```\n\nGotchas：\n\n- `GET` 不应产生副作用；`POST` 创建资源；`PATCH` 部分更新。\n- 永远不要拼接用户输入生成 SQL，必须使用参数化查询。\n- 后端要校验输入，不能信任前端。\n- 统一错误处理中间件可以让 API 行为一致。\n- 跨域请求需要正确配置 CORS；如果发送 cookie，还要设置 `credentials`。\n\n---\n\n## 4. 数据库：表、主键、外键与 CRUD\n\n任务系统至少需要：\n\n```text\nusers\n- id: 主键\n- email: 唯一\n- password_hash: 哈希后的密码\n- created_at\n\ntasks\n- id: 主键\n- title\n- done\n- user_id: 外键，指向 users.id\n- created_at\n```\n\nCRUD 对应：\n\n```sql\nINSERT INTO tasks (title, user_id) VALUES ($1, $2);\nSELECT * FROM tasks WHERE user_id = $1;\nUPDATE tasks SET done = $1 WHERE id = $2 AND user_id = $3;\nDELETE FROM tasks WHERE id = $1 AND user_id = $2;\n```\n\nGotchas：\n\n- `user_id` 防止用户访问他人任务。\n- `done` 使用布尔值，不要用字符串 `\"true\"` / `\"false\"`。\n- 查询用户任务时，WHERE 条件必须同时检查 `id` 和 `user_id`。\n- 对 `user_id`、`email` 等常用查询字段建立索引。\n- 数据库结构变化应使用 migration，而不是手动改表。\n\n---\n\n## 5. 认证与授权：谁登录，谁能操作\n\n认证回答“你是谁”；授权回答“你能做什么”。\n\n密码必须使用 bcrypt/argon2 等慢哈希算法保存，不能明文保存，也不能使用普通 MD5/SHA。\n\nJWT 中间件示例：\n\n```js\nfunction requireAuth(req, res, next) {\n  const header = req.headers.authorization || \"\";\n  const token = header.replace(/^Bearer /, \"\");\n\n  try {\n    req.user = verifyToken(token); // 包含 user id\n    next();\n  } catch {\n    res.status(401).json({ error: \"Unauthorized\" });\n  }\n}\n```\n\nGotchas：\n\n- Token 应设置过期时间。\n- 不要把密码或敏感信息放入 JWT。\n- `localStorage` 存 token 易受 XSS 影响；生产环境优先考虑 `httpOnly` cookie。\n- 登录失败不要透露是“邮箱不存在”还是“密码错误”。\n\n---\n\n## 6. 数据结构与算法：选择合适抽象\n\n| 结构 | 用途 | 复杂度 |\n|---|---|---|\n| 数组 | 保存任务列表 | 按索引访问 O(1)，遍历 O(n) |\n| Map | 按 id 快速查找任务 | 平均 O(1) |\n| 栈 | 撤销、历史记录 | push/pop O(1) |\n| 队列 | 后台任务、消息处理 | enqueue/dequeue O(1) |\n| 排序 | 按时间/优先级排序 | 常见 O(n log n) |\n\n例子：\n\n```js\nconst doneTasks = tasks.filter((t) => t.done);          // O(n)\nconst sorted = [...tasks].sort((a, b) => a.id - b.id);  // O(n log n)\n```\n\nGotchas：`Array.prototype.sort()` 会修改原数组，通常应先复制。\n\n---\n\n## 7. 项目交付与部署\n\n推荐结构：\n\n```text\nmy-app\n├─ client/          # React/Vite\n├─ server/          # Express API\n├─ README.md\n└─ package.json\n```\n\n必须包含：\n\n1. 注册、登录、退出。\n2. 任务 CRUD。\n3. 后端数据库持久化。\n4. 基础错误处理与输入校验。\n5. API 文档，可用 README 或 OpenAPI。\n6. 部署链接，例如 Vercel/Netlify + Render/Railway/Fly.io。\n\n部署前检查：\n\n- 使用环境变量保存 `DATABASE_URL`、`JWT_SECRET`、`CLIENT_ORIGIN`。\n- 前端构建后只包含静态文件。\n- 后端提供 `/health` 健康检查。\n- 数据库迁移能自动运行。\n- README 写清本地运行、测试、部署和已知限制。\n\n最终目标：你不仅能“跑起来”一个全栈应用，还能解释每一步的数据流、安全边界、接口契约与复杂度。",
+      "content": "# 基础类型与类型标注：把“可能是什么”写清楚\n\nTypeScript 的类型是**编译期契约**：编译后会被擦除，不改变 JavaScript 运行时行为。它真正回答的问题是：这个表达式“可能”有哪些值？\n\n## 1. 基础类型\n\n```ts\nlet name: string = \"Ada\";\nlet age: number = 36;        // JS 的 number 包括 NaN、Infinity\nlet active: boolean = true;  // 只表示 true/false，不是“真值”\nlet empty: string | null = null;\nlet later: string | undefined = undefined;\n```\n\n- `null`：显式表示“没有值”。\n- `undefined`：变量未赋值、属性不存在、参数缺失等。\n- 开启 `strictNullChecks` / `strict` 后，`null`、`undefined` 不能直接赋给 `string` 等类型，除非写进联合类型。\n\n```ts\nlet title: string = null;            // strictNullChecks 下错误\nlet title2: string | null = null;    // 正确\n```\n\n- `any`：关闭类型检查。\n\n```ts\nlet data: any = 1;\ndata.noMethod(); // 编译通过，但运行可能 TypeError\n```\n\n- `unknown`：安全版 `any`。它可以接收任何值，但使用前必须收窄。\n\n```ts\nlet value: unknown = \"hello\";\n\nif (typeof value === \"string\") {\n  value.toUpperCase(); // OK：此处 value 是 string\n}\n```\n\n- `never`：表示“没有正常返回值”，常用于抛错、无限循环、穷尽检查。它不同于 `void`：`void` 可以正常结束并返回 `undefined`，`never` 不会正常结束。\n\n```ts\nfunction fail(): never {\n  throw new Error(\"失败\");\n}\n```\n\n## 2. 函数：标注边界，推断细节\n\n```ts\nfunction add(a: number, b: number): number {\n  return a + b;\n}\n\nfunction log(message: string): void {\n  console.log(message);\n}\n```\n\n参数和返回值是函数契约。TypeScript 会推断 `const x = 10` 为 `number`，但公开函数、回调、配置对象等“边界”建议显式标注，防止以后改坏接口。\n\n## 3. 对象、数组与元组\n\n```ts\ntype User = {\n  id: number;\n  name: string;\n  active?: boolean; // 可缺省；读取时类型为 boolean | undefined\n};\n\nconst user: User = { id: 1, name: \"Ada\" };\nconst active = user.active?.toString(); // 安全访问\n```\n\n可选属性表示键可以不存在；读取它时通常得到 `boolean | undefined`。\n\n数组表示“多个同类型元素”，长度通常可变：\n\n```ts\nlet scores: number[] = [90, 88];\nlet names: Array<string> = [\"Ada\"];\n```\n\n元组表示“每个位置的类型固定”：\n\n```ts\nlet point: [number, number] = [10, 20];\nconst [x, y] = point; // x: number, y: number\n```\n\nGotcha：元组不等于只读数组。若要禁止修改，使用 `readonly`：\n\n```ts\nlet fixed: readonly [number, number] = [10, 20];\n// fixed[0] = 30; // 错误\n// fixed.push(30); // 错误\n```\n\n带 rest 的元组可表达“至少两个数字”：\n\n```ts\ntype AtLeastTwo = [number, number, ...number[]];\n```\n\n## 4. 联合类型与类型收窄\n\n联合类型表示“这些类型之一”：\n\n```ts\ntype ID = string | number;\n\nfunction formatId(id: ID): string {\n  if (typeof id === \"number\") {\n    return `ID: ${id}`;\n  }\n  return `ID: ${id.toUpperCase()}`;\n}\n```\n\n收窄前，只能访问所有成员共有的操作；收窄后，TypeScript 会知道当前分支的具体类型。\n\n```ts\nfunction describe(value: string | number): string {\n  if (typeof value === \"string\") return value.toUpperCase();\n  return value.toFixed(2);\n}\n```\n\nGotcha：`typeof null === \"object\"`，所以检查 `null` 要写 `value === null`，不要只靠 `typeof`。\n\n## 5. `never` 的穷尽检查\n\n```ts\ntype Shape =\n  | { kind: \"circle\"; r: number }\n  | { kind: \"rect\"; w: number; h: number };\n\nfunction assertNever(x: never): never {\n  throw new Error(`未处理分支: ${JSON.stringify(x)}`);\n}\n\nfunction area(s: Shape): number {\n  switch (s.kind) {\n    case \"circle\": return Math.PI * s.r * s.r;\n    case \"rect\": return s.w * s.h;\n    default: return assertNever(s);\n  }\n}\n```\n\n如果以后新增 `Shape` 分支却忘了处理，`assertNever(s)` 会报错。这是用类型系统防止逻辑遗漏。\n\n## 6. 练习与参考解\n\n```ts\nfunction parseScore(score: string): number | null {\n  const n = Number(score);\n  return Number.isFinite(n) ? n : null;\n}\n```\n\n注意：`Number(\"\")` 和 `Number(\" \")` 都是 `0`；若空格不算有效输入，应先检查 `score.trim() !== \"\"`。\n\n```ts\nfunction firstTwo(nums: number[]): [number, number] {\n  const a = nums[0];\n  const b = nums[1];\n\n  if (a === undefined || b === undefined) {\n    throw new Error(\"至少需要两个数字\");\n  }\n\n  return [a, b];\n}\n```\n\n若开启 `noUncheckedIndexedAccess`，`nums[0]` 会是 `number | undefined`，这类检查更重要。\n\n核心问题：看到任何值，都问“它可能有哪些类型？我在使用前是否已经证明它是其中某一种？”",
       "references": [],
       "quiz": [
         {
           "id": "q1",
           "type": "choice",
-          "question": "在 React 受控表单中，`<input value={title} onChange={...}>` 的核心作用是什么？",
+          "question": "TypeScript 的类型标注主要发生在什么时候，编译后会发生什么？",
           "options": [
-            "A. 让输入框的显示值由 React state 驱动，状态变化通过 onChange 回流。",
-            "B. 绕过组件状态，直接让浏览器把值写入数据库。",
-            "C. 让按钮自动触发 submit，不再需要 form。",
-            "D. 禁用浏览器默认行为，因此不需要 e.preventDefault()。"
+            "编译期检查；编译后的 JavaScript 中类型标注会被擦除",
+            "运行时检查；类型标注会改变 JavaScript 的行为",
+            "只在测试阶段检查；生产代码会保留类型",
+            "只检查 any 类型；其他类型不检查"
           ],
           "answer": "A",
-          "explanation": "受控组件让 React state 成为 UI 的单一事实来源：`value` 决定显示内容，`onChange` 负责把用户输入写回 state。这样才能让表单、校验、提交和错误提示共享同一份可追踪的数据流。"
+          "explanation": "TypeScript 的类型是编译期契约：它限制源码中表达式的可能值，但编译成 JS 后类型标注消失，不会给运行时增加检查。"
         },
         {
           "id": "q2",
           "type": "choice",
-          "question": "使用 `useEffect` 请求任务列表时，哪种情况最容易造成无限请求？",
+          "question": "开启 strictNullChecks 后，下面哪句代码是正确的？",
           "options": [
-            "A. 依赖数组为 []，请求函数只读取稳定环境变量。",
-            "B. 依赖数组包含 userId，请求函数使用 userId 且 userId 不变化。",
-            "C. 依赖数组包含每次渲染都会重新创建的 fetchTasks 函数，而 fetchTasks 没有 memoize。",
-            "D. 在组件卸载时取消请求。"
+            "let title: string | null = null;",
+            "let title: string = null;",
+            "let title: string = undefined;",
+            "null 和 undefined 永远可以赋给任何类型"
           ],
-          "answer": "C",
-          "explanation": "`useEffect` 会在依赖变化后重新执行。如果依赖项是每次渲染都会新建的函数，那么每次渲染都会让 effect 重新运行；effect 再触发 state 更新，又会引发下一次渲染，从而形成循环。"
+          "answer": "A",
+          "explanation": "strictNullChecks 开启后，null 和 undefined 不再能直接赋给 string；必须显式写成联合类型，例如 string | null。"
         },
         {
           "id": "q3",
           "type": "choice",
-          "question": "创建任务成功时，Express 路由最合适的响应是什么？",
+          "question": "unknown 和 any 的核心区别是什么？",
           "options": [
-            "A. 200 + HTML 页面。",
-            "B. 201 + JSON，例如 `{ id, title, done, created_at }`。",
-            "C. 302 redirect 到首页。",
-            "D. 204 + 空 body。"
+            "unknown 可以接收任何值，但使用前必须收窄；any 会关闭类型检查",
+            "any 比 unknown 更安全，因为它允许所有操作",
+            "unknown 只能接收字符串；any 可以接收任意类型",
+            "两者完全相同，只是写法不同"
           ],
-          "answer": "B",
-          "explanation": "`POST` 创建资源成功后通常返回 `201 Created`。API 响应一般使用 JSON，并返回新创建资源的稳定字段，方便前端更新本地状态。"
+          "answer": "A",
+          "explanation": "unknown 是安全版 any：它可以接收任何值，但在访问方法或属性前必须通过类型收窄证明它的具体类型。"
         },
         {
           "id": "q4",
           "type": "choice",
-          "question": "为什么 Express 后端必须校验 `req.body` 并使用参数化 SQL？",
+          "question": "never 和 void 的区别是什么？",
           "options": [
-            "A. 因为前端校验永远正确。",
-            "B. 因为参数化查询会自动设置 201 状态码。",
-            "C. 因为后端不能信任客户端，且拼接 SQL 可能导致注入。",
-            "D. 因为数据库会拒绝所有字符串。"
+            "never 表示没有正常返回值；void 表示可以正常结束并返回 undefined",
+            "void 表示程序崩溃；never 表示函数返回 null",
+            "never 只能用于变量；void 只能用于函数参数",
+            "两者都表示函数没有返回值，完全等价"
           ],
-          "answer": "C",
-          "explanation": "前端校验只能改善用户体验，不能作为安全边界。后端必须重新校验输入；SQL 必须使用参数化查询，避免把用户输入拼进 SQL 字符串造成注入漏洞。"
+          "answer": "A",
+          "explanation": "void 函数可以正常结束，只是没有有意义返回值；never 表示函数不会正常结束，例如抛错或无限循环。"
         },
         {
           "id": "q5",
           "type": "choice",
-          "question": "认证 authentication 与授权 authorization 的区别是什么？",
+          "question": "对于 type User = { active?: boolean }，读取 user.active 的类型通常是什么？",
           "options": [
-            "A. 认证决定能访问哪些资源；授权决定密码哈希算法。",
-            "B. 认证回答“你是谁”；授权回答“你能做什么”。",
-            "C. 两者都只发生在浏览器。",
-            "D. 授权就是 JWT 字符串本身。"
+            "boolean | undefined",
+            "boolean",
+            "null",
+            "any"
           ],
-          "answer": "B",
-          "explanation": "认证确认请求者身份，例如验证 JWT 中包含哪个用户；授权检查该身份是否有权执行某个操作，例如只能修改 `ownerId === user.id` 的任务。"
+          "answer": "A",
+          "explanation": "可选属性表示键可以不存在，因此读取它时通常需要处理 undefined，类型为 boolean | undefined。"
         },
         {
           "id": "q6",
           "type": "choice",
-          "question": "为什么 `tasks` 表需要 `user_id` 外键，并且查询、修改、删除单个任务时要同时检查 `id` 和 `user_id`？",
+          "question": "使用 assertNever 做穷尽检查的主要价值是什么？",
           "options": [
-            "A. 为了让任务 id 可以重复。",
-            "B. 为了避免数据库迁移。",
-            "C. 为了让所有用户共享同一批任务。",
-            "D. 为了防止用户访问或修改他人任务。"
-          ],
-          "answer": "D",
-          "explanation": "`user_id` 是资源归属关系的核心。只检查 `id` 会让用户可能通过猜测或篡改 id 访问其他用户的数据；同时检查 `id` 和 `user_id` 才能实现对象级授权。"
-        },
-        {
-          "id": "q7",
-          "type": "choice",
-          "question": "为什么 `const sorted = [...tasks].sort((a, b) => a.id - b.id)` 比 `tasks.sort(...)` 更适合作为纯数据流处理？",
-          "options": [
-            "A. `sort()` 会修改原数组，先复制可以避免意外改变 UI 状态。",
-            "B. `sort()` 只能用于对象，不能用于数组。",
-            "C. 复制数组会把复杂度降到 O(1)。",
-            "D. 没有区别，因为 JavaScript 数组总是不可变。"
+            "让编译器在新联合分支出现时提醒你补上处理逻辑",
+            "让程序在运行时自动删除多余分支",
+            "把 unknown 自动转换成 any",
+            "让所有函数都不需要返回值"
           ],
           "answer": "A",
-          "explanation": "JavaScript 数组是可变的，`sort()` 会原地修改数组。先复制再排序可以保持原 state 不变，使数据流更容易推理，也更容易测试。"
-        },
-        {
-          "id": "q8",
-          "type": "choice",
-          "question": "部署全栈应用时，哪组信息最适合通过环境变量注入，而不是写死在代码或前端 localStorage？",
-          "options": [
-            "A. 任务标题和完成状态。",
-            "B. `DATABASE_URL`、`JWT_SECRET`、`CLIENT_ORIGIN`。",
-            "C. CSS 颜色和按钮文字。",
-            "D. 列表排序规则。"
-          ],
-          "answer": "B",
-          "explanation": "数据库连接串、JWT 密钥和允许的前端来源都属于部署环境配置或敏感信息。它们应通过环境变量注入，避免泄露到源码、构建产物或浏览器。"
+          "explanation": "当 Shape 新增一个分支但 area 没有处理时，default 分支中的 assertNever 会收到非 never 类型，从而触发编译错误。"
         }
       ],
       "exercise": {
         "id": "ex-1",
         "language": "typescript",
-        "entrypoint": "applyTaskCommand",
-        "description": "Implement a pure TypeScript function `applyTaskCommand(input: string): string` that simulates the server-side contract for a task manager. It should parse a JSON command, validate the action and payload, enforce ownership (`ownerId === user.id`), and return a JSON API response without mutating the input state. This mirrors Express route behavior before database persistence.",
-        "starterCode": "/**\n * Applies one JSON task command to immutable task state.\n *\n * This function is a pure model of an Express route: parse input, validate\n * the contract, enforce ownership, and return a JSON API response. Do not\n * mutate `command.state.tasks`; build new arrays/objects instead.\n *\n * Command shape:\n *   {\n *     action: \"list\" | \"create\" | \"update\" | \"toggle\" | \"delete\",\n *     user: { id: number },\n *     body?: { id?: number, title?: string, done?: boolean },\n *     state: { tasks: Task[], nextId: number, clock: string }\n *   }\n *\n * Response shape:\n *   { status: 200, body: ... }\n *   { status: 201, body: task }\n *   { status: 400, error: \"invalid json\" | \"invalid action\" | \"invalid title\" | \"invalid id\" }\n *   { status: 403, error: \"forbidden\" }\n *   { status: 404, error: \"task not found\" }\n *\n * Examples:\n * >>> applyTaskCommand(JSON.stringify({ action: \"list\", user: { id: 1 }, state: { tasks: [{ id: 1, ownerId: 1, title: \"A\", done: false, createdAt: \"t1\" }], nextId: 2, clock: \"t2\" } }))\n * \"{\\\"status\\\":200,\\\"body\\\":[{\\\"id\\\":1,\\\"ownerId\\\":1,\\\"title\\\":\\\"A\\\",\\\"done\\\":false,\\\"createdAt\\\":\\\"t1\\\"}]}\"\n * >>> applyTaskCommand(JSON.stringify({ action: \"create\", user: { id: 2 }, body: { title: \"  Write tests  \" }, state: { tasks: [], nextId: 4, clock: \"t0\" } }))\n * \"{\\\"status\\\":201,\\\"body\\\":{\\\"id\\\":4,\\\"ownerId\\\":2,\\\"title\\\":\\\"Write tests\\\",\\\"done\\\":false,\\\"createdAt\\\":\\\"t0\\\"}}\"\n *\n * TODO:\n *   // Step 1: Parse the JSON input safely and return { status: 400, error: \"invalid json\" } on failure.\n *   // Step 2: Validate `action`, `user.id`, and optional `body`.\n *   // Step 3: For task-specific actions, find the task by id and check `ownerId`.\n *   // Step 4: Build a new state using immutable updates.\n *   // Step 5: Return `JSON.stringify(response)` with the status/body/error contract above.\n */\nexport type TaskAction = \"list\" | \"create\" | \"update\" | \"toggle\" | \"delete\";\n\nexport interface User {\n  id: number;\n}\n\nexport interface Task {\n  id: number;\n  ownerId: number;\n  title: string;\n  done: boolean;\n  createdAt: string;\n}\n\nexport interface CommandState {\n  tasks: Task[];\n  nextId: number;\n  clock: string;\n}\n\nexport interface Command {\n  action: TaskAction;\n  user: User;\n  body?: {\n    id?: number;\n    title?: string;\n    done?: boolean;\n  };\n  state: CommandState;\n}\n\nexport interface ApiResponse {\n  status: number;\n  body?: unknown;\n  error?: string;\n}\n\nfunction jsonResponse(status: number, body?: unknown, error?: string): string {\n  const response: ApiResponse = error ? { status, error } : { status, body };\n  return JSON.stringify(response);\n}\n\nfunction isTaskForUser(task: Task | undefined, userId: number): boolean {\n  return task !== undefined && task.ownerId === userId;\n}\n\nfunction isPositiveInteger(value: unknown): boolean {\n  return Number.isInteger(value) && (value as number) > 0;\n}\n\nexport function applyTaskCommand(input: string): string {\n  // TODO: Step 1 - Parse `input` with `JSON.parse` inside a try/catch.\n  //         On failure, return a 400 JSON response with error \"invalid json\".\n\n  // TODO: Step 2 - Check that the parsed command has a supported action,\n  //         a valid user id, and a valid state object.\n  //         Return 400 for invalid action, invalid user, or invalid state.\n\n  // TODO: Step 3 - For actions that target a task (`update`, `toggle`, `delete`),\n  //         read `body.id`, validate it, find the task, and reject:\n  //           - missing/non-integer id with { status: 400, error: \"invalid id\" }\n  //           - task exists but ownerId !== user.id with { status: 403, error: \"forbidden\" }\n  //           - task does not exist with { status: 404, error: \"task not found\" }\n\n  // TODO: Step 4 - For `create` and `update`, validate title when present:\n  //         it must be a string, trim to non-empty, and have length <= 120.\n  //         Return { status: 400, error: \"invalid title\" } on failure.\n\n  // TODO: Step 5 - Apply the action using immutable updates:\n  //         - list: return the current user's tasks sorted by id ascending.\n  //         - create: append a new task with id = state.nextId and done = false.\n  //         - update: replace only the fields present in body.\n  //         - toggle: flip `done`.\n  //         - delete: remove the task.\n  //         Do not mutate `command.state.tasks` directly.\n\n  // TODO: Step 6 - Return the JSON response with the correct HTTP-like status:\n  //         200 for list/update/toggle/delete, 201 for create.\n\n  return jsonResponse(500, undefined, \"not implemented\");\n}",
+        "entrypoint": "parseShapeArea",
+        "description": "实现 `parseShapeArea(input: unknown): number | null`。输入可能是任意 JSON-like 值：先把未知值收窄并解析成合法 `Shape`，非法输入返回 `null`；合法输入再计算面积。重点练习 `unknown`、类型收窄、`null`、元组和 `never` 的穷尽检查。",
+        "starterCode": "/**\n * Parse a JSON-like shape description and return its area.\n *\n * This exercise practices TypeScript's type system as a compile-time contract:\n * - `unknown` can hold anything, but you must narrow it before reading fields.\n * - `null` means \"invalid input\"; do not throw for ordinary bad input.\n * - A tuple `[number, number]` can model a fixed-size point.\n * - `never` powers an exhaustive check: if a new shape is added, the compiler\n *   should complain unless you update `area`.\n *\n * Valid shapes:\n * 1. `{ kind: \"circle\", r: number }` with finite positive radius.\n * 2. `{ kind: \"rect\", w: number, h: number }` with finite positive width and height.\n * 3. `{ kind: \"point\", p: [number, number] }` with two finite coordinates.\n *\n * Examples:\n * >>> parseShapeArea({ kind: \"circle\", r: 2 })\n * 12.566370614359172\n * >>> parseShapeArea({ kind: \"rect\", w: 3, h: 4 })\n * 12\n * >>> parseShapeArea({ kind: \"rect\", w: 3 })\n * null\n * >>> parseShapeArea({ kind: \"triangle\", a: 1 })\n * null\n * >>> parseShapeArea({ kind: \"point\", p: [1, -2] })\n * 0\n */\nexport type Shape =\n  | { kind: \"circle\"; r: number }\n  | { kind: \"rect\"; w: number; h: number }\n  | { kind: \"point\"; p: readonly [number, number] };\n\nexport function parseShapeArea(input: unknown): number | null {\n  // Step 1: Parse the unknown input into a validated Shape, or null.\n  const shape = parseShape(input);\n\n  // Step 2: Invalid input should produce null, not an exception.\n  if (shape === null) {\n    return null;\n  }\n\n  // Step 3: Once parsed, the type system knows exactly which shape we have.\n  return area(shape);\n}\n\nfunction parseShape(input: unknown): Shape | null {\n  // Step 1: Only plain objects can be shape records.\n  if (!isPlainObject(input)) {\n    return null;\n  }\n\n  // Step 2: Narrow by the discriminant field `kind`.\n  const kind = input.kind;\n\n  if (kind === \"circle\") {\n    // TODO: Check that input.r is a finite positive number.\n    // TODO: Return { kind: \"circle\", r } if valid; otherwise return null.\n    return null;\n  }\n\n  if (kind === \"rect\") {\n    // TODO: Check that input.w and input.h are finite positive numbers.\n    // TODO: Return { kind: \"rect\", w, h } if valid; otherwise return null.\n    return null;\n  }\n\n  if (kind === \"point\") {\n    // TODO: Check that input.p is an array-like pair.\n    // TODO: Check that both coordinates are finite numbers.\n    // TODO: Return { kind: \"point\", p: [x, y] } if valid; otherwise return null.\n    return null;\n  }\n\n  // Step 3: Unknown shape kinds are invalid input.\n  return null;\n}\n\nfunction isPlainObject(value: unknown): value is Record<string, unknown> {\n  // TODO: Exclude primitives and null.\n  // TODO: Accept only Object records, not arrays, Dates, or class instances.\n  // TODO: Return a type guard: value is Record<string, unknown>.\n  return false;\n}\n\nfunction isFiniteNumber(value: unknown): value is number {\n  // TODO: Require the runtime type to be number.\n  // TODO: Reject NaN and ±Infinity with Number.isFinite.\n  return false;\n}\n\nfunction isPositiveFiniteNumber(value: unknown): value is number {\n  // TODO: Reuse the finite-number guard.\n  // TODO: Add the positivity requirement.\n  return false;\n}\n\nfunction area(shape: Shape): number {\n  switch (shape.kind) {\n    case \"circle\":\n      return Math.PI * shape.r * shape.r;\n\n    case \"rect\":\n      return shape.w * shape.h;\n\n    case \"point\":\n      return 0;\n\n    default:\n      // Step 4: This branch should be unreachable if Shape is exhaustive.\n      return assertNever(shape);\n  }\n}\n\nfunction assertNever(value: never): never {\n  throw new Error(`Unhandled shape: ${JSON.stringify(value)}`);\n}",
         "assertionMode": "return",
         "testCases": [
           {
-            "name": "test 1",
+            "name": "valid circle",
             "input": [
-              "{\"action\":\"list\",\"user\":{\"id\":1},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":2,\"title\":\"B\",\"done\":true,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
+              {
+                "kind": "circle",
+                "r": 2
+              }
             ],
-            "expected": "{\"status\":200,\"body\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"}]}"
+            "expected": 12.566370614359172
           },
           {
-            "name": "test 2",
+            "name": "valid rectangle",
             "input": [
-              "{\"action\":\"create\",\"user\":{\"id\":2},\"body\":{\"title\":\"  Write tests  \"},\"state\":{\"tasks\":[],\"nextId\":4,\"clock\":\"t0\"}}"
+              {
+                "kind": "rect",
+                "w": 3,
+                "h": 4
+              }
             ],
-            "expected": "{\"status\":201,\"body\":{\"id\":4,\"ownerId\":2,\"title\":\"Write tests\",\"done\":false,\"createdAt\":\"t0\"}}"
+            "expected": 12
           },
           {
-            "name": "test 3",
+            "name": "valid point",
             "input": [
-              "{\"action\":\"update\",\"user\":{\"id\":1},\"body\":{\"title\":\"Buy milk\",\"done\":true},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"Milk\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":1,\"title\":\"Eggs\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
+              {
+                "kind": "point",
+                "p": [
+                  1,
+                  -2
+                ]
+              }
             ],
-            "expected": "{\"status\":200,\"body\":{\"task\":{\"id\":1,\"ownerId\":1,\"title\":\"Buy milk\",\"done\":true,\"createdAt\":\"t1\"}}}"
+            "expected": 0
           },
           {
-            "name": "test 4",
+            "name": "missing rectangle height",
             "input": [
-              "{\"action\":\"toggle\",\"user\":{\"id\":1},\"body\":{\"id\":2},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":1,\"title\":\"B\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
+              {
+                "kind": "rect",
+                "w": 3
+              }
             ],
-            "expected": "{\"status\":200,\"body\":{\"task\":{\"id\":2,\"ownerId\":1,\"title\":\"B\",\"done\":true,\"createdAt\":\"t2\"}}}"
+            "expected": null
           },
           {
-            "name": "test 5",
+            "name": "non-positive radius",
             "input": [
-              "{\"action\":\"delete\",\"user\":{\"id\":1},\"body\":{\"id\":1},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":2,\"title\":\"B\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
+              {
+                "kind": "circle",
+                "r": 0
+              }
             ],
-            "expected": "{\"status\":200,\"body\":{\"ok\":true}}"
+            "expected": null
           },
           {
-            "name": "test 6",
+            "name": "stringified number is invalid",
             "input": [
-              "{\"action\":\"update\",\"user\":{\"id\":1},\"body\":{\"id\":2,\"title\":\"Steal task\"},\"state\":{\"tasks\":[{\"id\":1,\"ownerId\":1,\"title\":\"A\",\"done\":false,\"createdAt\":\"t1\"},{\"id\":2,\"ownerId\":2,\"title\":\"B\",\"done\":false,\"createdAt\":\"t2\"}],\"nextId\":3,\"clock\":\"t3\"}}"
+              {
+                "kind": "circle",
+                "r": "2"
+              }
             ],
-            "expected": "{\"status\":403,\"error\":\"forbidden\"}"
+            "expected": null
           },
           {
-            "name": "test 7",
+            "name": "non-object input",
             "input": [
-              "{\"action\":\"create\",\"user\":{\"id\":1},\"body\":{\"title\":\"\"},\"state\":{\"tasks\":[],\"nextId\":1,\"clock\":\"t0\"}}"
+              "not a shape"
             ],
-            "expected": "{\"status\":400,\"error\":\"invalid title\"}"
-          },
-          {
-            "name": "test 8",
-            "input": [
-              "not json"
-            ],
-            "expected": "{\"status\":400,\"error\":\"invalid json\"}"
-          },
-          {
-            "name": "test 9",
-            "input": [
-              "{\"action\":\"complete\",\"user\":{\"id\":1},\"body\":{},\"state\":{\"tasks\":[],\"nextId\":1,\"clock\":\"t0\"}}"
-            ],
-            "expected": "{\"status\":400,\"error\":\"invalid action\"}"
+            "expected": null
           }
         ],
         "hints": [
-          "Parse once, then treat the parsed command as read-only.",
-          "For every task-changing action, first locate the task and check `ownerId` before mutating.",
-          "Return new arrays and objects instead of modifying `state.tasks` directly."
+          "先把 unknown 收窄为 Record<string, unknown>，再读取字段。",
+          "半径、宽、高要做 Number.isFinite 检查；半径、宽、高还必须大于 0。",
+          "area 的 default 分支调用 assertNever，让 Shape 的穷尽性由编译器检查。"
         ]
       },
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-03",
+      "title": "初级掌握：对象建模、接口与类型别名",
+      "description": "从“给变量标类型”进阶到“给业务数据建模”。学习 interface、type alias、可选属性、只读属性、函数类型、对象结构，以及接口和类型别名的选择。",
+      "prerequisites": [
+        "Unit ts-level-02",
+        "理解对象和函数的基本使用"
+      ],
+      "objectives": [
+        "使用 interface 描述对象结构",
+        "使用 type alias 定义复杂类型",
+        "理解 optional property、readonly property 与属性索引签名",
+        "区分 interface 与 type 的常见使用场景"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-04",
+      "title": "初级到中级：函数类型、类型推断与收窄",
+      "description": "解释 TypeScript 如何减少显式标注，并让代码更安全。学习函数类型、回调类型、类型推断、类型守卫、typeof、in、字面量类型和条件收窄。",
+      "prerequisites": [
+        "Unit ts-level-03",
+        "理解函数作为参数传递的概念"
+      ],
+      "objectives": [
+        "为回调函数、事件处理函数、普通函数定义类型",
+        "理解 TypeScript 何时自动推断类型",
+        "使用 typeof、in、字面量联合类型进行类型收窄",
+        "避免过度使用 any，并理解 unknown 的安全处理方式"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-05",
+      "title": "中级掌握：泛型基础与可复用类型",
+      "description": "泛型是 TypeScript 掌握程度的分水岭。通过数组、Promise、函数、接口中的泛型例子，理解“类型参数”如何让类型更灵活、更可复用。",
+      "prerequisites": [
+        "Unit ts-level-04",
+        "理解函数参数和返回值类型"
+      ],
+      "objectives": [
+        "解释泛型的意义：用类型参数表达通用结构",
+        "为函数、接口、类或工具函数添加泛型参数",
+        "使用泛型约束 extends 限制类型范围",
+        "理解 Array<T>、Promise<T>、Record<K, V> 等常见泛型形式"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-06",
+      "title": "中级掌握：内置工具类型与类型转换",
+      "description": "学习 TypeScript 官方常用工具类型，理解它们如何帮助从已有类型派生新类型。重点掌握 Partial、Required、Readonly、Pick、Omit、Record、ReturnType、Parameters 等。",
+      "prerequisites": [
+        "Unit ts-level-05",
+        "熟悉 interface 和 type alias"
+      ],
+      "objectives": [
+        "使用 Partial、Required、Readonly 修改属性修饰",
+        "使用 Pick、Omit、Record 创建派生类型",
+        "使用 Parameters、ReturnType 从函数类型中提取类型",
+        "理解类型断言 as 的用途和风险"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-07",
+      "title": "中高级掌握：字面量类型、联合交叉与条件类型",
+      "description": "进入 TypeScript 类型系统核心能力。学习字面量联合、交叉类型、条件类型、infer、模板字面量类型等，用于构建更精确、更自动化的类型。",
+      "prerequisites": [
+        "Unit ts-level-06",
+        "理解泛型和工具类型"
+      ],
+      "objectives": [
+        "使用字面量类型提高接口字段的精确度",
+        "理解联合类型与交叉类型的区别",
+        "编写简单条件类型 A extends B ? X : Y",
+        "理解 infer 在条件类型中提取类型的作用"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-08",
+      "title": "高级掌握：工程配置、严格模式与类型安全实践",
+      "description": "学习 TypeScript 在真实项目中的工程化用法。理解 tsconfig、strict、noImplicitAny、strictNullChecks、module、target、lib 等配置，以及如何逐步迁移 JS 项目到 TS。",
+      "prerequisites": [
+        "Unit ts-level-07",
+        "了解 npm、package.json 或基本前端项目结构"
+      ],
+      "objectives": [
+        "解释 tsconfig.json 的常见配置项",
+        "理解 strict 模式为什么能提升类型安全",
+        "知道如何逐步从 any 迁移到更安全类型",
+        "理解声明文件 .d.ts、第三方库类型和 @types 包的作用"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-09",
+      "title": "高级掌握：类型系统设计：API、表单、状态与领域模型",
+      "description": "把类型知识用于真实业务建模。学习如何为接口请求响应、表单数据、状态管理、错误处理、领域模型设计类型，减少运行时错误。",
+      "prerequisites": [
+        "Unit ts-level-08",
+        "了解基本前后端交互或 API 概念"
+      ],
+      "objectives": [
+        "为 API 请求参数、响应数据和错误结构设计类型",
+        "为表单、列表、分页、用户状态等常见业务场景建模",
+        "区分 UI 类型、业务类型和底层数据类型的边界",
+        "使用类型减少重复并提升代码可维护性"
+      ],
+      "references": [],
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "ts-level-10",
+      "title": "精通方向：高级类型编程、库设计与持续学习路径",
+      "description": "了解 TypeScript 精通阶段需要学习的内容，而不是要求初学者立刻全部掌握。包括高级条件类型、递归类型、模板字面量类型、声明合并、装饰器、类型测试、库类型设计和源码阅读。",
+      "prerequisites": [
+        "Unit ts-level-09",
+        "有实际 TypeScript 项目练习经验"
+      ],
+      "objectives": [
+        "说明精通 TypeScript 需要掌握的类型系统高级主题",
+        "理解如何阅读和使用第三方库的类型定义",
+        "知道如何设计可复用、可维护的 TypeScript 工具函数和库类型",
+        "制定后续进阶路线：框架实战、源码阅读、复杂类型练习和工程规范"
+      ],
+      "references": [],
       "passCriteria": {
         "quizMinScore": 1,
         "exerciseMustPass": true
@@ -502,6 +633,6 @@
     }
   ],
   "currentIndex": 1,
-  "createdAt": "2026-06-12T03:43:58.376Z",
-  "updatedAt": "2026-06-12T03:55:17.784Z"
+  "createdAt": "2026-06-12T06:19:48.404Z",
+  "updatedAt": "2026-06-12T07:17:26.937Z"
 }

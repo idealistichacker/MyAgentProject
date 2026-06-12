@@ -15,6 +15,7 @@ export const learnerProfileSchema = z.object({
   programmingLevel: z.enum(['zero', 'basic', 'small-projects', 'comfortable']).default('basic'),
   dsaLevel: z.enum(['none', 'heard', 'some-practice', 'systematic']).default('none'),
   weeklyHours: z.enum(['<2', '2-5', '5-10', '10+']).default('2-5'),
+  totalWeeks: z.enum(['1-4', '5-8', '9-12', '12+']).default('5-8'),
   learningStyle: z.enum(['explain-first', 'example-first', 'practice-first', 'project-first']).default('example-first'),
   codePractice: z.enum(['yes', 'sometimes', 'no']).default('yes'),
   pace: z.enum(['fast', 'normal', 'steady']).default('normal'),

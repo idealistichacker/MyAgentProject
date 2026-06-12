@@ -1,5 +1,5 @@
 {
-  "currentUnitId": "unit-2-fullstack-app-with-node-react",
+  "currentUnitId": "ts-level-02",
   "completedUnitIds": [],
   "attempts": {
     "dsa-001": {
@@ -17,6 +17,10 @@
     "unit-2-fullstack-app-with-node-react": {
       "count": 1,
       "lastSubmittedAt": "2026-06-12T04:12:10.900Z"
+    },
+    "ts-level-01": {
+      "count": 5,
+      "lastSubmittedAt": "2026-06-12T07:16:51.598Z"
     }
   },
   "assessments": [
@@ -375,7 +379,489 @@
       "diagnosis": "所有测试都返回 `{status:500,error:\"not implemented\"}`，说明 `applyTaskCommand` 直接走到了最后的占位 `return`，没有完成 JSON 解析、action/user/state 校验、按 action 分支处理、所有权检查和不可变更新。概念上，这个练习不是写 Express 路由本身，而是把路由逻辑抽象成纯函数：输入字符串 → 响应字符串，不能修改 `command.state.tasks`，而要创建新数组/对象。测验全错也提示你对 HTTP-like 状态码（200/201/400/403/404）与验证优先级的理解还不稳定，例如 title/id/action 校验应在对应操作前完成。下一步可以先按 `list/create/update/toggle/delete` 画出状态转换表，再逐条实现分支并用测试验证。",
       "nextAction": "先补全 `applyTaskCommand` 的解析和校验骨架，再逐个实现五个 action 的不可变更新。",
       "createdAt": "2026-06-12T04:12:10.900Z"
+    },
+    {
+      "unitId": "ts-level-01",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 1,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty roster",
+          "passed": true
+        },
+        {
+          "name": "normalize and deduplicate tags",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n    errors: [],\n+   users: []\n-   users: [\n-     {\n-       email: 'alice@example.com',\n-       id: 1,\n-       name: 'Alice',\n-       role: 'mentor',\n-       tags: [\n-         'js',\n-         'ts'\n-       ]\n-     }\n-   ]\n  }\n",
+          "expected": "{\"users\":[{\"id\":1,\"name\":\"Alice\",\"email\":\"alice@example.com\",\"tags\":[\"js\",\"ts\"],\"role\":\"mentor\"}],\"errors\":[]}",
+          "actual": "{\"users\":[],\"errors\":[]}"
+        },
+        {
+          "name": "invalid records are reported",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n+   errors: [],\n-   errors: [\n-     {\n-       index: 0,\n-       message: 'id must be a positive integer',\n-       path: 'id'\n-     },\n-     {\n-       index: 0,\n-       message: 'name must be a non-empty string',\n-       path: 'name'\n-     },\n-     {\n-       index: 1,\n-       message: 'id must be a positive integer',\n-       path: 'id'\n-     }\n-   ],\n    users: []\n  }\n",
+          "expected": "{\"users\":[],\"errors\":[{\"index\":0,\"path\":\"id\",\"message\":\"id must be a positive integer\"},{\"index\":0,\"path\":\"name\",\"message\":\"name must be a non-empty string\"},{\"index\":1,\"path\":\"id\",\"message\":\"id must be a positive integer\"}]}",
+          "actual": "{\"users\":[],\"errors\":[]}"
+        },
+        {
+          "name": "optional fields get defaults",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n    errors: [],\n+   users: []\n-   users: [\n-     {\n-       email: 'bob@example.com',\n-       id: 2,\n-       name: 'Bob',\n-       role: 'student',\n-       tags: []\n-     }\n-   ]\n  }\n",
+          "expected": "{\"users\":[{\"id\":2,\"name\":\"Bob\",\"email\":\"bob@example.com\",\"tags\":[],\"role\":\"student\"}],\"errors\":[]}",
+          "actual": "{\"users\":[],\"errors\":[]}"
+        },
+        {
+          "name": "invalid tags and role",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n+   errors: [],\n-   errors: [\n-     {\n-       index: 0,\n-       message: 'tags must be an array of non-empty strings',\n-       path: 'tags'\n-     },\n-     {\n-       index: 0,\n-       message: 'role must be one of: student, mentor, admin',\n-       path: 'role'\n-     }\n-   ],\n    users: []\n  }\n",
+          "expected": "{\"users\":[],\"errors\":[{\"index\":0,\"path\":\"tags\",\"message\":\"tags must be an array of non-empty strings\"},{\"index\":0,\"path\":\"role\",\"message\":\"role must be one of: student, mentor, admin\"}]}",
+          "actual": "{\"users\":[],\"errors\":[]}"
+        },
+        {
+          "name": "invalid JSON",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n+   errors: [],\n-   errors: [\n-     {\n-       index: -1,\n-       message: 'input must be valid JSON',\n-       path: '$'\n-     }\n-   ],\n    users: []\n  }\n",
+          "expected": "{\"users\":[],\"errors\":[{\"index\":-1,\"path\":\"$\",\"message\":\"input must be valid JSON\"}]}",
+          "actual": "{\"users\":[],\"errors\":[]}"
+        },
+        {
+          "name": "decoded value is not an array",
+          "passed": false,
+          "message": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n+   errors: [],\n-   errors: [\n-     {\n-       index: -1,\n-       message: 'input must be a JSON array',\n-       path: '$'\n-     }\n-   ],\n    users: []\n  }\n",
+          "expected": "{\"users\":[],\"errors\":[{\"index\":-1,\"path\":\"$\",\"message\":\"input must be a JSON array\"}]}",
+          "actual": "{\"users\":[],\"errors\":[]}"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": false,
+          "answer": "1",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": false,
+          "answer": "1",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": false,
+          "answer": "1",
+          "expected": "D"
+        },
+        {
+          "id": "q4",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q5",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q6",
+          "passed": false,
+          "answer": "1",
+          "expected": "B"
+        },
+        {
+          "id": "q7",
+          "passed": false,
+          "answer": "1",
+          "expected": "C"
+        },
+        {
+          "id": "q8",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure",
+        "concept-gap"
+      ],
+      "diagnosis": "这次测试显示 parseRoster 的主流程已经搭好，但关键 TODO 都没有实现：parse 失败、非数组、字段校验、tags 归一化和 role 默认值都没有把错误推入 errors 或把有效用户加入 users。helper 函数 isObject/isValidId/isRole 都返回 false，normalizeTags 返回 undefined，因此几乎所有非空输入都被当作“没有错误但也没有用户”处理。概念上的误区是把 TypeScript 的静态类型当成运行时会替你验证输入；但 JSON.parse 后得到的是 unknown，必须用 typeof、Array.isArray 和类型守卫在运行时检查。测验也说明你对“类型只约束代码编写阶段，不保证外部数据形状”这一点还需要再巩固。",
+      "nextAction": "下一步先补齐每个 TODO 的分支行为：失败时 push 指定错误，所有字段都通过时再构造 User，并让 helper 函数返回真实判断。",
+      "createdAt": "2026-06-12T06:53:20.505Z"
+    },
+    {
+      "unitId": "ts-level-01",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 2,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty roster",
+          "passed": true
+        },
+        {
+          "name": "normalize and deduplicate tags",
+          "passed": true
+        },
+        {
+          "name": "invalid records are reported",
+          "passed": true
+        },
+        {
+          "name": "optional fields get defaults",
+          "passed": true
+        },
+        {
+          "name": "invalid tags and role",
+          "passed": true
+        },
+        {
+          "name": "invalid JSON",
+          "passed": true
+        },
+        {
+          "name": "decoded value is not an array",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": false,
+          "answer": "1",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": false,
+          "answer": "1",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": false,
+          "answer": "1",
+          "expected": "D"
+        },
+        {
+          "id": "q4",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q5",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q6",
+          "passed": false,
+          "answer": "1",
+          "expected": "B"
+        },
+        {
+          "id": "q7",
+          "passed": false,
+          "answer": "1",
+          "expected": "C"
+        },
+        {
+          "id": "q8",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [
+        "concept-gap"
+      ],
+      "diagnosis": "测试没有暴露代码逻辑错误，你的 roster 解析实现已经能处理空数组、标签归一化去重、默认字段、无效 JSON 和非数组输入。主要问题在概念测验：8 道题全部填成“1”，没有正确选择选项，说明对 TypeScript 的定位理解还不稳。TypeScript 不是运行时输入校验器，也不能让 JSON.parse 自动安全；它是在编码阶段用静态类型帮助发现拼写、结构、类型不匹配等问题，并提升代码可维护性。",
+      "nextAction": "请重做本单元概念测验，重点复盘 TypeScript 与 JavaScript 的关系、静态类型检查何时发生，以及为什么它不能替代运行时校验。",
+      "createdAt": "2026-06-12T06:55:38.223Z"
+    },
+    {
+      "unitId": "ts-level-01",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 2,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty roster",
+          "passed": true
+        },
+        {
+          "name": "normalize and deduplicate tags",
+          "passed": true
+        },
+        {
+          "name": "invalid records are reported",
+          "passed": true
+        },
+        {
+          "name": "optional fields get defaults",
+          "passed": true
+        },
+        {
+          "name": "invalid tags and role",
+          "passed": true
+        },
+        {
+          "name": "invalid JSON",
+          "passed": true
+        },
+        {
+          "name": "decoded value is not an array",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": false,
+          "answer": "2",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": false,
+          "answer": "2",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": false,
+          "answer": "4",
+          "expected": "D"
+        },
+        {
+          "id": "q4",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q5",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q6",
+          "passed": false,
+          "answer": "2",
+          "expected": "B"
+        },
+        {
+          "id": "q7",
+          "passed": false,
+          "answer": "3",
+          "expected": "C"
+        },
+        {
+          "id": "q8",
+          "passed": false,
+          "answer": "1",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [
+        "concept-gap"
+      ],
+      "diagnosis": "你的代码提交通过了全部 roster 测试，说明你在实践层面已经能处理 JSON 解析、运行时校验、默认值和去重排序。失败主要来自概念题：你可能把 TypeScript 的“编译期类型检查”和程序运行时的“数据校验”混在一起理解了。TypeScript 主要帮助在写代码阶段发现类型错误、表达数据结构约束，但它不能自动保证运行时输入一定合法。",
+      "nextAction": "建议先复习 TypeScript 的定位：它是静态类型系统，不是 JSON 校验器；然后重做本单元概念题。",
+      "createdAt": "2026-06-12T07:06:54.708Z"
+    },
+    {
+      "unitId": "ts-level-01",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 2,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty roster",
+          "passed": true
+        },
+        {
+          "name": "normalize and deduplicate tags",
+          "passed": true
+        },
+        {
+          "name": "invalid records are reported",
+          "passed": true
+        },
+        {
+          "name": "optional fields get defaults",
+          "passed": true
+        },
+        {
+          "name": "invalid tags and role",
+          "passed": true
+        },
+        {
+          "name": "invalid JSON",
+          "passed": true
+        },
+        {
+          "name": "decoded value is not an array",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": false,
+          "answer": "2)",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": false,
+          "answer": "",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": false,
+          "answer": "",
+          "expected": "D"
+        },
+        {
+          "id": "q4",
+          "passed": false,
+          "answer": "",
+          "expected": "A"
+        },
+        {
+          "id": "q5",
+          "passed": false,
+          "answer": "",
+          "expected": "A"
+        },
+        {
+          "id": "q6",
+          "passed": false,
+          "answer": "",
+          "expected": "B"
+        },
+        {
+          "id": "q7",
+          "passed": false,
+          "answer": "",
+          "expected": "C"
+        },
+        {
+          "id": "q8",
+          "passed": false,
+          "answer": "",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [
+        "concept-gap"
+      ],
+      "diagnosis": "测试全部通过，说明你的 roster 解析和校验实现已经比较扎实。测验全部未通过，主要问题不在代码逻辑，而在对 TypeScript 的定位理解：TypeScript 主要解决的是编译期类型检查和代码建模问题，不是替代 JSON 解析或运行时输入校验。外部数据即使有 TypeScript 类型标注，也仍然需要运行时验证；类型标注能帮你提前发现程序内部错误，但不能保证所有输入都合法。",
+      "nextAction": "请回看 TypeScript 与 JavaScript/运行时校验的区别，并用“编译期类型检查、接口建模、运行时仍需验证输入”这三个关键词重做测验。",
+      "createdAt": "2026-06-12T07:11:13.511Z"
+    },
+    {
+      "unitId": "ts-level-01",
+      "assessmentType": "code+quiz",
+      "passed": true,
+      "score": 5,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "empty roster",
+          "passed": true
+        },
+        {
+          "name": "normalize and deduplicate tags",
+          "passed": true
+        },
+        {
+          "name": "invalid records are reported",
+          "passed": true
+        },
+        {
+          "name": "optional fields get defaults",
+          "passed": true
+        },
+        {
+          "name": "invalid tags and role",
+          "passed": true
+        },
+        {
+          "name": "invalid JSON",
+          "passed": true
+        },
+        {
+          "name": "decoded value is not an array",
+          "passed": true
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "2",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "2",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "4",
+          "expected": "D"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q5",
+          "passed": true,
+          "answer": "1",
+          "expected": "A"
+        },
+        {
+          "id": "q6",
+          "passed": true,
+          "answer": "2",
+          "expected": "B"
+        },
+        {
+          "id": "q7",
+          "passed": true,
+          "answer": "3",
+          "expected": "C"
+        },
+        {
+          "id": "q8",
+          "passed": true,
+          "answer": "1",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [],
+      "diagnosis": "这次表现很好，所有测试和概念题都通过了。你的代码清晰地体现了 TypeScript 的核心价值：用类型约束数据形状，用运行时校验处理不可信输入。你能正确处理 JSON 解析失败、非数组输入、缺失可选字段默认值、非法标签/角色，以及标签去重和规范化。整体思路符合“先验证，再构造可信数据”的类型安全编程习惯。",
+      "nextAction": "下一步可以尝试把这些校验逻辑抽象成更通用的解析器，练习如何在大型项目中复用类型守卫和错误报告。",
+      "createdAt": "2026-06-12T07:16:51.598Z"
     }
   ],
-  "updatedAt": "2026-06-12T04:12:10.900Z"
+  "updatedAt": "2026-06-12T07:17:26.937Z"
 }

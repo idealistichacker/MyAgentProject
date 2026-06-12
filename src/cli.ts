@@ -75,6 +75,7 @@ program.command('diagnose')
   .option('--programming-level <level>', 'zero | basic | small-projects | comfortable')
   .option('--dsa-level <level>', 'none | heard | some-practice | systematic')
   .option('--weekly-hours <hours>', '<2 | 2-5 | 5-10 | 10+')
+  .option('--total-weeks <weeks>', '1-4 | 5-8 | 9-12 | 12+')
   .option('--learning-style <style>', 'explain-first | example-first | practice-first | project-first')
   .option('--code-practice <value>', 'yes | sometimes | no')
   .option('--pace <pace>', 'fast | normal | steady')
@@ -89,6 +90,7 @@ program.command('diagnose')
       programmingLevel: (options.programmingLevel ?? existing?.programmingLevel ?? 'basic') as LearnerProfile['programmingLevel'],
       dsaLevel: (options.dsaLevel ?? existing?.dsaLevel ?? 'none') as LearnerProfile['dsaLevel'],
       weeklyHours: (options.weeklyHours ?? existing?.weeklyHours ?? '2-5') as LearnerProfile['weeklyHours'],
+      totalWeeks: (options.totalWeeks ?? existing?.totalWeeks ?? '5-8') as LearnerProfile['totalWeeks'],
       learningStyle: (options.learningStyle ?? existing?.learningStyle ?? 'example-first') as LearnerProfile['learningStyle'],
       codePractice: (options.codePractice ?? existing?.codePractice ?? 'yes') as LearnerProfile['codePractice'],
       pace: (options.pace ?? existing?.pace ?? 'normal') as LearnerProfile['pace'],
@@ -97,7 +99,7 @@ program.command('diagnose')
       summary: existing?.summary ?? '',
     };
 
-    if (!options.target && !options.programmingLevel && !options.dsaLevel && !options.weeklyHours && !options.learningStyle && !options.codePractice && !options.pace && !options.goal) {
+    if (!options.target && !options.programmingLevel && !options.dsaLevel && !options.weeklyHours && !options.totalWeeks && !options.learningStyle && !options.codePractice && !options.pace && !options.goal) {
       await fillDiagnosisWithPrompts(rawProfile);
     }
 
@@ -299,6 +301,7 @@ async function fillDiagnosisWithPrompts(profile: LearnerProfile): Promise<void> 
   profile.programmingLevel = await prompt(rl, '编程语言水平？[zero/basic/small-projects/comfortable]', profile.programmingLevel) as LearnerProfile['programmingLevel'];
   profile.dsaLevel = await prompt(rl, '数据结构与算法水平？[none/heard/some-practice/systematic]', profile.dsaLevel) as LearnerProfile['dsaLevel'];
   profile.weeklyHours = await prompt(rl, '每周可投入时间？[<2/2-5/5-10/10+]', profile.weeklyHours) as LearnerProfile['weeklyHours'];
+  profile.totalWeeks = await prompt(rl, '预计总学习时长（周）？[1-4/5-8/9-12/12+]', profile.totalWeeks || '5-8') as LearnerProfile['totalWeeks'];
   profile.learningStyle = await prompt(rl, '学习偏好？[explain-first/example-first/practice-first/project-first]', profile.learningStyle) as LearnerProfile['learningStyle'];
   profile.codePractice = await prompt(rl, '是否愿意写代码练习？[yes/sometimes/no]', profile.codePractice) as LearnerProfile['codePractice'];
   profile.pace = await prompt(rl, '学习节奏？[fast/normal/steady]', profile.pace) as LearnerProfile['pace'];

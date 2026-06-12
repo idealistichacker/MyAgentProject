@@ -68,15 +68,30 @@ export async function generatePlan(
       toolManager.register(new WebSearchTool());
       toolManager.register(new TimeTool());
 
+      let weeks = 6.5;
+      if (learnerProfile.totalWeeks === '1-4') weeks = 2.5;
+      else if (learnerProfile.totalWeeks === '9-12') weeks = 10.5;
+      else if (learnerProfile.totalWeeks === '12+') weeks = 16;
+
+      let hoursPerWeek = 3.5;
+      if (learnerProfile.weeklyHours === '<2') hoursPerWeek = 1;
+      else if (learnerProfile.weeklyHours === '5-10') hoursPerWeek = 7.5;
+      else if (learnerProfile.weeklyHours === '10+') hoursPerWeek = 12;
+
+      // Estimate total units: say, 1 unit takes around 5 hours of dedicated study.
+      // Clamp between 2 and 10 to guarantee token safety and prompt alignment.
+      const calculatedCount = Math.round((weeks * hoursPerWeek) / 5);
+      const targetUnitCount = Math.min(10, Math.max(2, calculatedCount));
+
       const prompt = `
-You are FCAgent CurriculumPlanner. Generate a personalized learning curriculum array (JSON) with exactly 2 units based on the learner profile.
+You are FCAgent CurriculumPlanner. Generate a personalized learning curriculum array (JSON) with exactly ${targetUnitCount} units based on the learner profile.
 
 IMPORTANT RULES:
 1. First priority: Use the \`search_web\` tool to search for latest and highly-quality resources relating to the learner's goal.
 2. Second priority: Use your internal parametric knowledge to combine with search results.
 3. Once you have enough info, return the final JSON array.
 
-The JSON output MUST be a valid array of objects matching this schema:
+The JSON output MUST be a valid array of objects matching this schema (containing exactly ${targetUnitCount} elements):
 [{
   "id": "unique-unit-id",
   "title": "Unit Title",
@@ -445,13 +460,60 @@ export function gradeQuiz(
   answers: Record<string, string>
 ): AssessmentResult['quizResults'] {
   return quiz.map((question) => {
-    const actual = answers[question.id]?.trim();
+    const actual = answers[question.id]?.trim() || '';
     const expected = question.answer.trim();
-    const passed = actual?.toLowerCase() === expected.toLowerCase();
+
+    const normalize = (val: string): string => {
+      let cleaned = val.trim().toLowerCase();
+      if (cleaned.endsWith(')')) {
+        cleaned = cleaned.slice(0, -1).trim();
+      }
+      const mapping: Record<string, string> = {
+        a: '1',
+        b: '2',
+        c: '3',
+        d: '4',
+      };
+      if (mapping[cleaned]) {
+        return mapping[cleaned];
+      }
+      return cleaned;
+    };
+
+    const normActual = normalize(actual);
+    const normExpected = normalize(expected);
+
+    let passed = normActual === normExpected;
+
+    // Fallback: Index-based mapping if options are present
+    if (!passed && question.options && question.options.length > 0) {
+      const actualIdx = question.options.findIndex(
+        (opt) => opt.trim().toLowerCase() === actual.toLowerCase()
+      );
+      const expectedIdx = question.options.findIndex(
+        (opt) => opt.trim().toLowerCase() === expected.toLowerCase()
+      );
+
+      const numActual = parseInt(normActual, 10);
+      const numExpected = parseInt(normExpected, 10);
+
+      const realActualIdx = !isNaN(numActual) && numActual >= 1 && numActual <= question.options.length
+        ? numActual - 1
+        : actualIdx;
+
+      const realExpectedIdx = !isNaN(numExpected) && numExpected >= 1 && numExpected <= question.options.length
+        ? numExpected - 1
+        : expectedIdx;
+
+      if (realActualIdx !== -1 && realExpectedIdx !== -1) {
+        passed = realActualIdx === realExpectedIdx;
+      }
+    }
+
     return {
       id: question.id,
       passed,
-      answer: actual || '',
+      answer: actual,
       expected,
     };
   });
@@ -580,7 +642,7 @@ function buildFallbackDiagnosis(profile: LearnerProfile): string {
     steady: '稳扎稳打节奏',
   };
 
-  return `学习者目标：${profile.target}。当前 编程语言水平：${profile.programmingLevel}；DSA 水平：${profile.dsaLevel}。每周预计投入 ${profile.weeklyHours} 小时，偏好${styleMap[profile.learningStyle] ?? '混合'}学习，节奏为${paceMap[profile.pace] ?? '正常'}。`;
+  return `学习者目标：${profile.target}。当前 编程语言水平：${profile.programmingLevel}；DSA 水平：${profile.dsaLevel}。每周预计投入 ${profile.weeklyHours} 小时，计划总时长 ${profile.totalWeeks} 周，偏好${styleMap[profile.learningStyle] ?? '混合'}学习，节奏为${paceMap[profile.pace] ?? '正常'}。`;
 }
 
 function buildFallbackAssessmentDiagnosis(

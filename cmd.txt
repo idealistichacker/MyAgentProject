@@ -1,1 +1,0 @@
-npm run dev -- init --api-key "sk-bjvjofhymtgnnoqjwdrotnvyrlgtuzpbvwfzfmvyuhutfpiw" --base-url "https://api.siliconflow.cn/v1" --model "nex-agi/Nex-N2-Pro"
