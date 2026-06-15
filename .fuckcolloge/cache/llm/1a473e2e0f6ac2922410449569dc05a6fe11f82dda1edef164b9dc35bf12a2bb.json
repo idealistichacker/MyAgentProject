@@ -1,0 +1,108 @@
+{
+  "data": {
+    "id": "unit-4-scheme-interpreter-project",
+    "type": "project",
+    "title": "🏰 巅峰项目：Scheme 解释器——让代码在 Python 中活过来",
+    "description": "这是整个学习旅程的“中庭圣殿”！你将整合前三单元的全部技能——Scheme 语义理解（Unit 1）、词法/语法解析（Unit 2）、AST 遍历与环境模型（Unit 3）——用 Python 从零实现一个完整的 Scheme 子集解释器。项目采用 CS61A 经典架构：Read（读取）→ Eval（求值）→ Print（打印）→ Loop（循环），你需要实现 define、lambda、if、cond、let、quote 等特殊形式，以及 +、-、*、/、cons、car、cdr、list 等内置过程。我们还会加入 turtle 图形扩展，让你的 Scheme 代码能画出炫酷的分形图案！完成后，你将拥有一份足以写入简历的编译器前端作品，并为后续的 LLVM 编译之旅打下坚不可摧的基础——因为一个能解释 Scheme 的程序，离编译 Scheme 只差最后一步“翻译成 IR”。",
+    "prerequisites": [
+      "unit-1-scheme-secret-garden",
+      "unit-2-lexer-parser-twin-towers",
+      "unit-3-ast-walker-guide"
+    ],
+    "objectives": [
+      "实现完整的 Read-Eval-Print-Loop（REPL），能交互式执行 Scheme 代码",
+      "实现 define、lambda、if、cond、let、quote、begin、and/or 等核心特殊形式的求值逻辑",
+      "构建基于 Frame 链的嵌套环境模型，正确支持词法作用域与闭包",
+      "实现尾递归优化的 eval-apply 循环（trampoline 或 while 循环消除栈溢出）",
+      "扩展至少一个创意功能（如 turtle 图形、宏系统雏形、或惰性求值）"
+    ],
+    "content": "# 🏰 巅峰项目：Scheme 解释器——让代码在 Python 中活过来\n\n> **项目定位**：这是整个学习旅程的“中庭圣殿”——你将亲手用 Python 从零铸造一个能跑 Scheme 代码的完整解释器。它不仅是前三单元全部技能的终极整合，更是一份足以写入简历的编译器前端作品。完成之后，你离“编译 Scheme 到 LLVM IR”只差最后一步。\n\n---\n\n## 一、项目概览：你的解释器长什么样？\n\n启动你写好的解释器，你会看到一个交互式提示符：\n\n```\nscm> (+ 1 2)\n3\nscm> (define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))\nfact\nscm> (fact 5)\n120\nscm> (define (koch n) (turtle-forward 100) ...)   ; 🐢 画出科赫雪花！\n```\n\n这背后是一条经典的 **REPL 流水线**：\n\n```\n用户输入字符串 ──→ [Read] ──→ Pair AST ──→ [Eval] ──→ 值 ──→ [Print] ──→ 输出 ──→ 回到 Read\n```\n\n整个项目围绕四个核心模块展开：\n\n| 模块 | 文件 | 你的任务 |\n|------|------|----------|\n| **Reader（读取）** | `scheme_reader.py` | 已提供——将字符串解析为 `Pair` 链表 AST |\n| **Eval（求值）** | `scheme.py` | ⭐ 核心战场：实现 `scheme_eval` 与 `scheme_apply` |\n| **Special Forms（特殊形式）** | `scheme_forms.py` | ⭐ 实现 `define`、`lambda`、`if`、`cond`、`let`、`quote` 等 |\n| **Environment（环境模型）** | `scheme_classes.py` | ⭐ 构建 Frame 链，支撑词法作用域与闭包 |\n\n---\n\n## 二、分阶段作战计划\n\n### 🔰 Phase 0：理解骨架代码（第 1 天）\n\n**目标**：读懂已提供的 Reader 和基础数据结构，跑通第一个测试。\n\n**关键概念**：\n\n- **Pair 链表**：Scheme 的一切都是 `Pair('+', Pair(1, Pair(2, nil)))`。`nil` 是链表的终止符。\n- **自求值表达式**：数字 `42`、布尔 `#t`/`#f`、字符串 `\"hello\"`、`nil`——它们求值结果就是自身。\n- **符号**：`+`、`fact`、`x` 等——需要在环境中查找对应的绑定值。\n\n**验收标准**：\n\n```python\n>>> from scheme import read_line\n>>> expr = read_line('(+ 2 2)')\n>>> expr\nPair('+', Pair(2, Pair(2, nil)))\n```\n\n---\n\n### ⚔️ Phase 1：核心求值引擎——`scheme_eval` + `scheme_apply`（第 2–4 天）\n\n这是整个项目的心脏。你需要实现一个**互递归的 eval-apply 循环**：\n\n```\nscheme_eval(expr, env) → 值\n    ├── 原子：自求值？直接返回\n    ├── 符号：env.lookup(symbol)\n    └── 组合式（Pair）：\n          ├── 首元素是特殊形式关键字？→ 分派到 scheme_forms.SPECIAL_FORMS[first](rest, env)\n          └── 否则：procedure = scheme_eval(first, env)\n                    args = rest.map(lambda op: scheme_eval(op, env))\n                    return scheme_apply(procedure, args, env)\n\nscheme_apply(procedure, args, env) → 值\n    ├── 内置过程（PrimitiveProcedure）→ apply_primitive(procedure, args, env)\n    └── 用户定义过程（LambdaProcedure）→\n          new_frame = procedure.env.make_child_frame(procedure.formals, args)\n          return eval_all(procedure.body, new_frame)\n```\n\n**你必须亲手填的三个坑**：\n\n1. **`scheme_eval` 的组合式分支**（Problem 3）：区分特殊形式与普通调用，正确求值 operator 和 operands。\n2. **`scheme_apply` 的用户过程分支**（Problem 9）：创建新 Frame，绑定形参到实参，在扩展环境中求值过程体。\n3. **`eval_all`**：依次求值表达式列表，返回最后一个的值（`begin` 的语义基础）。\n\n> 🧠 **心智模型**：`scheme_eval` 负责“理解表达式”，`scheme_apply` 负责“执行过程”。二者互相调用，形成一个优雅的太极图。当你看到 `(fact 5)` 在 REPL 中正确输出 `120` 时，你会第一次感受到“我写的代码在运行我写的代码”那种元编程的颤栗。\n\n---\n\n### 🛡️ Phase 2：特殊形式——让 Scheme 真正“活”起来（第 5–7 天）\n\n有了 eval-apply 引擎，你只能做 `(+ 1 2)` 这种简单调用。要让语言完整，必须实现**特殊形式**——它们不遵循标准求值规则：\n\n| 特殊形式 | 核心语义 | 关键坑点 |\n|----------|----------|----------|\n| **`quote`** | `(quote x)` → 返回符号 `x` 本身，不求值 | 最短的特殊形式，但最容易忘记 |\n| **`define`** | 在当前帧绑定名字到值；支持 `(define (f x) body)` 语法糖 | 变量定义 vs 函数定义的两种形态 |\n| **`lambda`** | 创建 `LambdaProcedure` 对象，捕获**当前环境**作为闭包 | 闭包 = 定义时的环境，不是调用时的！ |\n| **`if`** | `(if pred conseq alt)` ——只求值两个分支之一 | 短路求值：不能两个分支都求值！ |\n| **`cond`** | 多分支条件，类似 Python `if/elif/else` | `else` 子句的处理 |\n| **`let`** | 创建局部绑定：`(let ((x 1) (y 2)) body)` | 本质是 lambda 的语法糖：`((lambda (x y) body) 1 2)` |\n| **`begin`** | 顺序执行多个表达式，返回最后一个 | 配合 `if`/`lambda` 使用 |\n| **`and`/`or`** | 短路逻辑，返回最后一个求值的表达式（而非布尔） | `(and 1 2 3)` → `3`，不是 `#t`！ |\n\n**实现位置**：`scheme_forms.py` 中的 `SPECIAL_FORMS` 字典。每个特殊形式对应一个 `do_xxx_form(expressions, env)` 函数。\n\n> 🎯 **调试心法**：特殊形式的 bug 往往不在它自身，而在它调用的 `scheme_eval`。当 `(define x (+ 1 2))` 不工作时，先检查 `scheme_eval` 是否正确处理了 `(+ 1 2)`。\n\n---\n\n### 🏗️ Phase 3：环境模型与闭包——词法作用域的圣杯（第 8–9 天）\n\nFrame 链是解释器的“记忆系统”：\n\n```\n全局 Frame                          ┌─ Frame: fact-body\n│  fact → LambdaProcedure ────────→ │    parent → 全局 Frame\n│  x → 10                           │    n → 5\n│  make-counter → LambdaProcedure   │\n└───────────────────────────────────┘\n```\n\n**你需要实现**：\n\n- **`Frame.define(name, value)`**：在当前帧绑定\n- **`Frame.lookup(name)`**：沿父帧链向上查找（词法作用域！）\n- **`make_child_frame(formals, args)`**：创建子帧，绑定形参到实参\n\n**闭包的经典测试**：\n\n```scheme\nscm> (define (make-counter start)\n       (lambda () (begin (set! start (+ start 1)) start)))\nscm> (define c1 (make-counter 0))\nscm> (c1)   ; → 1\nscm> (c1)   ; → 2   ← 闭包记住了 start！\n```\n\n当你看到 `c1` 和 `c2` 各自维护独立的计数器时，你就真正理解了词法作用域——这是从“会用函数”到“理解语言运行时”的分水岭。\n\n---\n\n### 🚀 Phase 4：尾递归优化——让栈永不溢出（第 10–11 天）\n\n普通递归在 Python 中会爆栈：\n\n```scheme\n(define (sum-to n acc)\n  (if (= n 0) acc (sum-to (- n 1) (+ acc n))))\n(sum-to 100000 0)  ; 💥 RecursionError!\n```\n\n**解决方案：Thunk-based Trampoline**\n\n核心思想：当检测到尾调用时，不立即递归进入 `scheme_eval`，而是返回一个 **`Unevaluated` 包装对象**（thunk），让外层的 `while` 循环来驱动求值：\n\n```python\ndef scheme_eval(expr, env, tail_context=False):\n    while True:\n        # ... 求值逻辑 ...\n        if tail_context and 是尾调用:\n            # 不递归！更新 expr 和 env，继续 while 循环\n            expr, env = new_expr, new_env\n            continue\n        else:\n            return scheme_apply(procedure, args, env)\n```\n\n**尾上下文的判定**（tail context）：\n- `if` 的 conseq/alt 分支\n- `cond` 的最后一个子句\n- `begin` 的最后一个表达式\n- `lambda` 的过程体\n- `and`/`or` 的最后一个子表达式\n\n> 💡 实现尾递归优化后，`(sum-to 100000 0)` 应该秒出结果。这是从“玩具解释器”到“工业级解释器”的关键一跃。\n\n---\n\n### 🎨 Phase 5：创意扩展——让你的 Scheme 画出分形！（第 12–14 天）\n\n**必做扩展（三选一）**：\n\n1. **🐢 Turtle 图形扩展**：添加 `turtle-forward`、`turtle-right`、`turtle-penup` 等内置过程，用 Scheme 写出科赫雪花、谢尔宾斯基三角形等分形图案。\n2. **📜 宏系统雏形**：实现 `define-macro`，让用户能在求值前对 AST 做任意变换。\n3. **😴 惰性求值**：实现 `delay` / `force`，支持无限流（infinite streams）。\n\n**Turtle 扩展示例**：\n\n```scheme\n(define (koch n len)\n  (if (= n 0)\n      (turtle-forward len)\n      (begin\n        (koch (- n 1) (/ len 3))\n        (turtle-left 60)\n        (koch (- n 1) (/ len 3))\n        (turtle-right 120)\n        (koch (- n 1) (/ len 3))\n        (turtle-left 60)\n        (koch (- n 1) (/ len 3)))))\n(koch 4 200)  ; 🖼️ 一幅精美的科赫雪花！\n```\n\n---\n\n## 三、文件结构与模块交互图\n\n```\nscheme.zip/\n├── scheme.py            # REPL 主循环 + scheme_eval + scheme_apply（你的主战场）\n├── scheme_reader.py     # 词法/语法解析器（已提供，但建议读懂）\n├── scheme_forms.py      # 特殊形式分发表 SPECIAL_FORMS（你要填 8+ 个函数）\n├── scheme_classes.py    # Frame、Pair、LambdaProcedure 等数据类\n├── scheme_builtins.py   # 内置过程（+、-、cons、car、cdr、list 等）\n├── scheme_tokens.py     # Tokenizer（已提供）\n├── buffer.py            # 输入缓冲管理\n├── ucb.py               # UC Berkeley 工具库\n├── tests.scm            # Scheme 测试用例\n├── questions.scm        # 你要用 Scheme 写的练习题\n└── turtle_extension/    # 🐢 可选：Turtle 图形模块\n```\n\n**数据流全景**：\n\n```\n输入字符串 \"((lambda (x) (* x x)) 5)\"\n    │\n    ▼ [scheme_reader.read_line]\nPair(Pair('lambda', Pair(Pair('x', nil), Pair(Pair('*', Pair('x', Pair('x', nil))), nil))),\n     Pair(5, nil))\n    │\n    ▼ [scheme_eval]\n    ├── 首元素是 Pair(lambda...) → 求值为 LambdaProcedure 对象\n    ├── 实参 5 → 自求值\n    └── [scheme_apply]\n        ├── 创建 Frame{ x: 5, parent: 全局 }\n        ├── [eval_all] 求值过程体\n        │   └── (* x x) → 25\n        └── 返回 25\n    │\n    ▼ [Print]\n25\n    │\n    ▼ [Loop] 等待下一个输入...\n```\n\n---\n\n## 四、里程碑与评分\n\n| 阶段 | 截止日 | 分值 | 验收标准 |\n|------|--------|------|----------|\n| Phase 0 + 1 | 第 4 天 | 1 pt | `scheme_eval` 和 `scheme_apply` 通过基础测试 |\n| Phase 2 | 第 7 天 | 1 pt | 所有特殊形式通过 `tests.scm` |\n| Phase 3 + 4 | 第 11 天 | 1 pt | 闭包测试 + 尾递归 `(sum-to 100000 0)` 不爆栈 |\n| Phase 5 | 第 14 天 | 0.5 pt (bonus) | 创意扩展可运行 + 提交 `contest.scm` |\n\n---\n\n## 五、终极心法\n\n> **“一个能解释 Scheme 的程序，离编译 Scheme 只差最后一步——把 `scheme_eval` 的输出从值换成 LLVM IR。”**\n\n当你完成这个项目，你拥有的不仅是一个解释器。你拥有的是：\n- 对**编程语言运行时**的肌肉记忆\n- 对**词法作用域与闭包**的直觉理解\n- 一份**任何面试官都会眼前一亮的项目经历**\n- 以及最重要的——**对自己能造出语言的绝对信心**\n\n现在，打开 `scheme.py`，找到第一个 `\"*** YOUR CODE HERE ***\"`，开始铸造你的圣殿吧。🛠️",
+    "references": [],
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "🏰 Luna 正在铸造她的 Scheme 解释器。她实现了 `lambda` 和 `define`，但当她测试闭包时遇到了麻烦：\n\n```scheme\nscm> (define (make-adder n) (lambda (x) (+ x n)))\nscm> (define add5 (make-adder 5))\nscm> (add5 3)\nError: 未定义的符号 'n'\n```\n\n她检查了 `scheme_apply` 和 `Frame` 类，它们看起来都正确。问题最可能出在哪里？",
+        "options": [
+          "A. `do_lambda_form` 没有将当前环境存入 `LambdaProcedure`，导致闭包丢失了 `n` 的绑定",
+          "B. `scheme_apply` 没有为 `add5` 创建新的帧",
+          "C. 内置过程 `+` 没有在全局环境中注册",
+          "D. `define` 特殊形式错误地把 `make-adder` 绑定成了普通过程"
+        ],
+        "answer": "A",
+        "explanation": "闭包的精髓在于：`lambda` 创建时必须捕获**定义时**的环境（即 `make-adder` 调用时的帧，其中 `n=5`）。如果 `do_lambda_form` 忘记保存 `env` 到 `LambdaProcedure` 对象，那么调用 `(add5 3)` 时，`x` 被绑定到 3，但 `n` 无处可寻，因为新帧的父环境是全局环境（或错误的环境），而不是那个包含 `n` 的帧。修复方法：在 `do_lambda_form` 中，将当前的 `env` 作为参数传给 `LambdaProcedure` 构造函数。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "eval_scheme",
+      "description": "🏰 圣殿试炼：实现 Mini Scheme 解释器核心\n\n欢迎来到中庭圣殿！你的任务是完成一个微型 Scheme 解释器的核心模块。骨架代码已经搭好了 REPL 流水线（Read → Eval → Print），但求值引擎和特殊形式还是空的。\n\n你需要按阶段点亮以下技能：\n\n**Phase 1：核心求值循环**\n- 完成 `scheme_eval` 函数：处理自求值（数字、布尔、`nil`）、符号查找、组合式分派。\n- 完成 `scheme_apply` 函数：处理内置过程调用和用户定义过程（`LambdaProcedure`）的帧创建与体求值。\n\n**Phase 2：特殊形式**\n- 实现 `do_define_form`：支持变量定义和函数定义语法糖 `(define (f x) body)`。\n- 实现 `do_lambda_form`：创建 `LambdaProcedure`，**务必捕获当前环境**（闭包的关键）。\n- 实现 `do_if_form`：短路求值，只执行条件为真的分支。\n- 实现 `do_quote_form`：返回未求值的表达式。\n\n**Phase 3：环境模型**\n- 完成 `Frame` 类的 `define` 和 `lookup` 方法，支持沿父帧链向上查找（词法作用域）。\n\n完成后，你的 `eval_scheme` 将能正确运行如下代码：\n```scheme\n(define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))\n(fact 5)  ; 应返回 120\n```\n\n以及闭包测试：\n```scheme\n(define (make-counter start) (lambda () (begin (set! start (+ start 1)) start)))\n(define c1 (make-counter 0))\n(c1)  ; 1\n(c1)  ; 2\n```\n\n**提示**：所有 TODO 都在代码中用 `*** YOUR CODE HERE ***` 标出。先通读骨架理解数据流，再逐个击破。",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "自求值数字",
+          "input": [
+            "42"
+          ],
+          "expected": 42
+        },
+        {
+          "name": "加法",
+          "input": [
+            "(+ 1 2)"
+          ],
+          "expected": 3
+        },
+        {
+          "name": "define 变量",
+          "input": [
+            "(begin (define x 10) x)"
+          ],
+          "expected": 10
+        },
+        {
+          "name": "lambda 与调用",
+          "input": [
+            "((lambda (x) (* x x)) 5)"
+          ],
+          "expected": 25
+        },
+        {
+          "name": "if 表达式",
+          "input": [
+            "(if (= 1 1) 100 200)"
+          ],
+          "expected": 100
+        },
+        {
+          "name": "闭包 make-adder",
+          "input": [
+            "(begin (define (make-adder n) (lambda (x) (+ x n))) (define add5 (make-adder 5)) (add5 3))"
+          ],
+          "expected": 8
+        },
+        {
+          "name": "递归阶乘",
+          "input": [
+            "(begin (define (fact n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 5))"
+          ],
+          "expected": 120
+        }
+      ],
+      "hints": [
+        "在 `scheme_eval` 中，组合式的首元素如果是 `Pair`（即 lambda 表达式），需要先求值它得到过程。",
+        "`do_define_form` 要处理两种语法：`(define var expr)` 和 `(define (name params...) body)`。后者等价于 `(define name (lambda (params...) body))`。",
+        "闭包测试失败时，检查 `LambdaProcedure` 是否存储了 `env`，以及 `scheme_apply` 是否用 `procedure.env` 作为新帧的父环境。",
+        "内置过程用 `PrimitiveProcedure` 包装，其 `apply` 方法直接调用 Python 函数。"
+      ],
+      "testCode": "import json\nimport sys\nfrom solution import eval_scheme\n\ntests = [\n    {\"name\": \"自求值数字\", \"expr\": \"42\", \"expected\": 42},\n    {\"name\": \"加法\", \"expr\": \"(+ 1 2)\", \"expected\": 3},\n    {\"name\": \"define 变量\", \"expr\": \"(begin (define x 10) x)\", \"expected\": 10},\n    {\"name\": \"lambda 与调用\", \"expr\": \"((lambda (x) (* x x)) 5)\", \"expected\": 25},\n    {\"name\": \"if 表达式\", \"expr\": \"(if (= 1 1) 100 200)\", \"expected\": 100},\n    {\"name\": \"闭包 make-adder\", \"expr\": \"(begin (define (make-adder n) (lambda (x) (+ x n))) (define add5 (make-adder 5)) (add5 3))\", \"expected\": 8},\n    {\"name\": \"递归阶乘\", \"expr\": \"(begin (define (fact n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 5))\", \"expected\": 120}\n]\n\nfor test in tests:\n    try:\n        result = eval_scheme(test[\"expr\"])\n        passed = result == test[\"expected\"]\n        print(json.dumps({\n            \"name\": test[\"name\"],\n            \"passed\": passed,\n            \"expected\": test[\"expected\"],\n            \"actual\": result\n        }))\n    except Exception as e:\n        print(json.dumps({\n            \"name\": test[\"name\"],\n            \"passed\": False,\n            \"message\": str(e),\n            \"expected\": test[\"expected\"],\n            \"actual\": None\n        }))\n",
+      "starterCode": "\"\"\"\n🏰 Mini Scheme Interpreter — 圣殿骨架\n完成所有 TODO 标记的部分，让你的 Scheme 活过来！\n\"\"\"\n\nimport sys\nimport math\n\n# ---------- 基础数据结构 ----------\n\nclass nil:\n    \"\"\"空链表标记\"\"\"\n    def __repr__(self):\n        return 'nil'\n    def __eq__(self, other):\n        return isinstance(other, nil)\n\nnil = nil()  # 单例\n\nclass Pair:\n    \"\"\"Scheme 的 cons 单元\"\"\"\n    def __init__(self, first, second):\n        self.first = first\n        self.second = second\n    def __repr__(self):\n        return f'Pair({self.first}, {self.second})'\n    def __eq__(self, other):\n        if not isinstance(other, Pair):\n            return False\n        return self.first == other.first and self.second == other.second\n\n# ---------- 环境模型 ----------\n\nclass Frame:\n    \"\"\"一个帧，存储变量绑定，并链接到父帧\"\"\"\n    def __init__(self, parent=None):\n        self.bindings = {}   # 符号 → 值\n        self.parent = parent # 父帧（词法作用域链）\n\n    def define(self, symbol, value):\n        \"\"\"在当前帧绑定 symbol 到 value\"\"\"\n        # *** YOUR CODE HERE *** (Phase 3)\n        pass\n\n    def lookup(self, symbol):\n        \"\"\"沿父帧链查找 symbol 的值；找不到则抛出 KeyError\"\"\"\n        # *** YOUR CODE HERE *** (Phase 3)\n        pass\n\n    def make_child_frame(self, formals, args):\n        \"\"\"创建一个子帧，将形参 formals 绑定到实参 args，父帧为 self\"\"\"\n        child = Frame(self)\n        if len(formals) != len(args):\n            raise Exception(\"参数数量不匹配\")\n        for f, a in zip(formals, args):\n            child.define(f, a)\n        return child\n\n# ---------- 过程表示 ----------\n\nclass LambdaProcedure:\n    \"\"\"用户定义的 lambda 过程\"\"\"\n    def __init__(self, formals, body, env):\n        self.formals = formals  # 形参列表 (Pair)\n        self.body = body        # 过程体 (Pair)\n        self.env = env          # 定义时的环境（闭包关键！）\n\nclass PrimitiveProcedure:\n    \"\"\"内置过程，包装一个 Python 函数\"\"\"\n    def __init__(self, fn, name='primitive'):\n        self.fn = fn\n        self.name = name\n    def apply(self, args):\n        return self.fn(*args)\n\n# ---------- 简易 Reader（已提供） ----------\n\ndef tokenize(s):\n    \"\"\"将字符串转为 token 列表\"\"\"\n    return s.replace('(', ' ( ').replace(')', ' ) ').split()\n\ndef read_tokens(tokens):\n    \"\"\"从 token 列表递归构建 Pair 结构\"\"\"\n    if not tokens:\n        raise SyntaxError('unexpected EOF')\n    token = tokens.pop(0)\n    if token == '(':\n        L = []\n        while tokens[0] != ')':\n            L.append(read_tokens(tokens))\n        tokens.pop(0)  # 弹出 ')'\n        return make_list(L)\n    elif token == ')':\n        raise SyntaxError('unexpected )')\n    else:\n        return parse_atom(token)\n\ndef parse_atom(token):\n    \"\"\"将 token 转为 Python 原子值\"\"\"\n    if token == '#t':\n        return True\n    if token == '#f':\n        return False\n    if token == 'nil':\n        return nil\n    try:\n        return int(token)\n    except ValueError:\n        try:\n            return float(token)\n        except ValueError:\n            return token  # 符号\n\ndef make_list(elements):\n    \"\"\"将 Python 列表转为 Pair 链表\"\"\"\n    if not elements:\n        return nil\n    return Pair(elements[0], make_list(elements[1:]))\n\ndef read_line(s):\n    \"\"\"读取一行 Scheme 表达式，返回 Pair AST\"\"\"\n    tokens = tokenize(s)\n    if not tokens:\n        return None\n    expr = read_tokens(tokens)\n    return expr\n\n# ---------- 全局环境与内置过程 ----------\n\ndef make_global_env():\n    \"\"\"创建全局环境并注册内置过程\"\"\"\n    env = Frame()\n    # 算术\n    env.define('+', PrimitiveProcedure(lambda *args: sum(args), '+'))\n    env.define('-', PrimitiveProcedure(lambda x, *args: x - sum(args) if args else -x, '-'))\n    env.define('*', PrimitiveProcedure(lambda *args: math.prod(args), '*'))\n    env.define('/', PrimitiveProcedure(lambda x, y: x // y, '/'))\n    # 比较\n    env.define('=', PrimitiveProcedure(lambda x, y: x == y, '='))\n    env.define('<', PrimitiveProcedure(lambda x, y: x < y, '<'))\n    env.define('>', PrimitiveProcedure(lambda x, y: x > y, '>'))\n    # 列表操作\n    env.define('cons', PrimitiveProcedure(lambda x, y: Pair(x, y), 'cons'))\n    env.define('car', PrimitiveProcedure(lambda p: p.first, 'car'))\n    env.define('cdr', PrimitiveProcedure(lambda p: p.second, 'cdr'))\n    env.define('list', PrimitiveProcedure(lambda *args: make_list(list(args)), 'list'))\n    env.define('null?', PrimitiveProcedure(lambda x: x == nil, 'null?'))\n    # 其他\n    env.define('display', PrimitiveProcedure(lambda x: print(x), 'display'))\n    env.define('begin', None)  # 特殊形式，占位\n    return env\n\nglobal_env = make_global_env()\n\n# ---------- 特殊形式分发表 ----------\n\nSPECIAL_FORMS = {}\n\ndef special_form(name):\n    \"\"\"装饰器：注册特殊形式\"\"\"\n    def decorator(fn):\n        SPECIAL_FORMS[name] = fn\n        return fn\n    return decorator\n\n# ---------- 特殊形式实现（TODO） ----------\n\n@special_form('quote')\ndef do_quote_form(expressions, env):\n    \"\"\"(quote expr) → 返回 expr 不求值\"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('define')\ndef do_define_form(expressions, env):\n    \"\"\"\n    (define var expr) 或 (define (name params...) body...)\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('lambda')\ndef do_lambda_form(expressions, env):\n    \"\"\"\n    (lambda (params...) body...) → LambdaProcedure\n    务必捕获当前环境 env！\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('if')\ndef do_if_form(expressions, env):\n    \"\"\"\n    (if pred conseq alt) → 短路求值\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('begin')\ndef do_begin_form(expressions, env):\n    \"\"\"顺序求值，返回最后一个的值\"\"\"\n    return eval_all(expressions, env)\n\n# ---------- 核心求值引擎（TODO） ----------\n\ndef scheme_eval(expr, env):\n    \"\"\"\n    在环境 env 中求值表达式 expr。\n    返回 Python 值。\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 1)\n    # 提示：\n    # - 自求值：int, float, bool, nil → 直接返回\n    # - 符号：env.lookup(expr)\n    # - Pair：检查首元素是否为特殊形式关键字，若是则分派；\n    #   否则求值 operator 和 operands，调用 scheme_apply\n    pass\n\ndef scheme_apply(procedure, args, env):\n    \"\"\"\n    将过程 procedure 应用到实参列表 args。\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 1)\n    # 提示：\n    # - PrimitiveProcedure：调用 procedure.apply(args)\n    # - LambdaProcedure：创建新帧（父帧为 procedure.env），\n    #   绑定形参到实参，然后 eval_all 过程体\n    pass\n\ndef eval_all(expressions, env):\n    \"\"\"依次求值 expressions 列表，返回最后一个的值\"\"\"\n    if expressions == nil:\n        return nil\n    result = None\n    while expressions != nil:\n        result = scheme_eval(expressions.first, env)\n        expressions = expressions.second\n    return result\n\n# ---------- 顶层入口 ----------\n\ndef eval_scheme(s: str):\n    \"\"\"读取并求值一个 Scheme 表达式字符串，返回结果\"\"\"\n    expr = read_line(s)\n    if expr is None:\n        return None\n    return scheme_eval(expr, global_env)\n\n# 可选 REPL（用于本地调试）\nif __name__ == '__main__':\n    print(\"🏰 Mini Scheme REPL 已启动。输入 'exit' 退出。\")\n    while True:\n        try:\n            line = input('scm> ')\n            if line.strip() == 'exit':\n                break\n            result = eval_scheme(line)\n            if result is not None:\n                print(result)\n        except Exception as e:\n            print(f'Error: {e}')"
+    },
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    }
+  },
+  "expiry": 1781606318689
+}

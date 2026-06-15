@@ -1,0 +1,160 @@
+{
+  "data": {
+    "id": "unit-5-llvm-ir-alchemy",
+    "type": "unit",
+    "title": "LLVM IR 炼金术：把 Scheme 的魂魄注入中间表示",
+    "description": "解释器让 Scheme 活了过来，但要让它在真实 CPU 上飞奔，我们需要 LLVM 这位“终极翻译官”！本单元你将踏入 llvmlite 的炼金工坊，学习 LLVM IR（中间表示）的核心概念：SSA 形式、基本块、phi 节点、类型系统。我们会从最简单的整数运算开始，逐步将 Scheme 的算术表达式、条件分支、函数定义翻译成 LLVM IR。每个概念都配有“Python 生成 IR → 可视化 → 手动验证”的闭环练习。这一单元是最终 .exe 生成的关键桥梁——Unit 4 的解释器理解了 Scheme 的“意思”，而本单元教会你如何把“意思”转写成 LLVM 能优化的通用语言。学完本单元，你将能手动或半自动地将简单 Scheme 程序编译为 .ll 文件并用 lli 执行。",
+    "prerequisites": [
+      "unit-4-scheme-interpreter-project",
+      "了解计算机内存与栈的基本概念"
+    ],
+    "objectives": [
+      "理解 LLVM IR 的 SSA（静态单赋值）形式、基本块与控制流图",
+      "使用 llvmlite 的 ir.IRBuilder 在 Python 中构建 LLVM 模块、函数与基本块",
+      "实现 Scheme 算术表达式（+、-、*、/）到 LLVM IR 指令的翻译",
+      "实现 Scheme 条件表达式（if）到 LLVM br 指令与 phi 节点的翻译",
+      "实现简单 Scheme 函数（lambda）到 LLVM define 的翻译，含参数传递与返回值"
+    ],
+    "references": [],
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    },
+    "content": "# LLVM IR 炼金术：把 Scheme 的魂魄注入中间表示\n\n## 1. 从 AST 到 IR：为什么需要 SSA\n编译器前端将 Scheme 代码解析为抽象语法树（AST）后，需要一种既接近机器又保留高层信息的中间表示（IR）。LLVM IR 正是这样一种**静态单赋值（SSA）形式**的三地址码。在 SSA 中，每个变量仅被赋值一次，且每次使用都引用唯一的“版本”。例如 `(+ x y)` 不会修改 `x`，而是生成一个新的虚拟寄存器 `%result`：\n\n```llvm\n%result = add i64 %x, %y\n```\n\n这种形式让数据流分析（如死代码删除、常量传播）变得极其简单。但遇到分支时，同一变量可能来自不同路径，SSA 使用 **φ (phi) 节点** 合并版本：\n\n```llvm\ncond_next:\n  %val = phi i64 [ %a, %then_block ], [ %b, %else_block ]\n```\n\nphi 的含义是：若从 `%then_block` 跳转而来，则 `%val` 取 `%a`；若从 `%else_block` 来，则取 `%b`。**phi 必须出现在基本块的开头，且前驱块列表必须完整覆盖所有可能到达该块的前驱。**\n\n## 2. 基本块与控制流图\n**基本块**是一段连续的指令序列，满足：\n- 只有一个入口（第一条指令）\n- 只有一个出口（最后一条指令必须是跳转或返回）\n- 内部不含其他跳转目标\n\n划分基本块的规则：\n- 第一条指令是 leader\n- 任何跳转目标指令是 leader\n- 紧跟在跳转指令后的指令是 leader\n\n**控制流图（CFG）** 以基本块为节点，跳转关系为边。例如 `(if (> x 0) (+ x 1) (- x 1))` 会生成四个基本块：entry（计算比较）、then、else、merge。entry 结尾用 `br i1 %cond, label %then, label %else` 实现条件跳转；then 和 else 结尾用 `br label %merge` 无条件跳转；merge 用 phi 收集结果并返回。\n\n## 3. 用 llvmlite 构建 IR 的骨架\n`llvmlite` 是 Python 对 LLVM C++ API 的轻量封装。构建一个模块的典型流程：\n\n```python\nfrom llvmlite import ir\n\nmodule = ir.Module(name=\"scheme_expr\")\nfunc_type = ir.FunctionType(ir.IntType(64), [ir.IntType(64), ir.IntType(64)])\nfunc = ir.Function(module, func_type, name=\"add\")\nblock = func.append_basic_block(name=\"entry\")\nbuilder = ir.IRBuilder(block)\n```\n\n**关键陷阱**：`IRBuilder` 会维护一个“插入点”，所有生成的指令都插入到当前基本块的末尾。当需要向不同基本块插入指令时，必须用 `builder.position_at_start(block)` 或 `builder.position_at_end(block)` 重新定位。忘记切换位置是初学者最常犯的错误。\n\n## 4. 算术表达式翻译\nScheme 的 `(+ a b)` 等可直接映射到 LLVM 算术指令。但需注意：\n- 所有值统一用 64 位整数（`i64`），因为 Scheme 数值默认为任意精度，这里简化处理。\n- 除法 `/` 在 LLVM 中有 `sdiv`（有符号）和 `udiv`（无符号），我们使用 `sdiv`。\n- 操作数必须是 `ir.Value` 类型，不能直接传入 Python 整数。常量用 `ir.Constant(ir.IntType(64), 42)`。\n\n递归翻译函数示例：\n```python\ndef translate_expr(expr, builder, env):\n    if isinstance(expr, int):\n        return ir.Constant(ir.IntType(64), expr)\n    elif expr[0] == '+':\n        left = translate_expr(expr[1], builder, env)\n        right = translate_expr(expr[2], builder, env)\n        return builder.add(left, right, name=\"addtmp\")\n    # ... 类似处理 -, *, /\n```\n\n**陷阱**：`builder.add` 等返回的是指令本身，但可作为值使用。指令必须插入到当前基本块，否则 IR 验证失败。\n\n## 5. 条件表达式与 φ 节点\n`(if pred conseq altern)` 的翻译是理解 SSA 精髓的试金石。步骤：\n1. 在 entry 块计算谓词 `pred`，得到 `i1` 类型的布尔值（用 `icmp_sgt` 等比较产生）。\n2. 创建 then、else、merge 三个基本块。\n3. 在 entry 结尾生成条件跳转：`builder.cbranch(pred_val, then_block, else_block)`。\n4. 将 builder 定位到 then_block，翻译 `conseq`，记录结果值，并跳转到 merge：`builder.branch(merge_block)`。\n5. 同样处理 else_block。\n6. 在 merge_block 开头插入 phi 节点：\n   ```python\n   builder.position_at_start(merge_block)\n   phi = builder.phi(ir.IntType(64), name=\"iftmp\")\n   phi.add_incoming(then_val, then_block)\n   phi.add_incoming(else_val, else_block)\n   ```\n7. 返回 phi 作为整个 if 表达式的值。\n\n**致命陷阱**：\n- phi 的 `add_incoming` 必须按前驱块在 CFG 中的顺序？实际上顺序无关，但必须覆盖所有前驱，且每个前驱只能出现一次。\n- 如果某个分支没有显式产生值（例如返回 void），则不能直接用 phi 合并，需要调整设计。\n- 忘记在 then/else 块末尾添加跳转指令会导致 IR 格式错误：“Basic block in function '...' does not have terminator!”\n\n## 6. 简单函数定义与调用\n将 `(lambda (x) body)` 或 `(define (f x) body)` 翻译为 LLVM 函数：\n- 函数类型由参数个数决定，返回值类型为 `i64`。\n- 参数在函数内直接作为 SSA 值可用，**无需 alloca**，因为 Scheme 变量不可变，参数不会被重新赋值。\n- 函数体翻译后，用 `builder.ret(value)` 返回。\n\n示例：\n```python\nfunc = ir.Function(module, ir.FunctionType(ir.IntType(64), [ir.IntType(64)]), name=\"square\")\nentry = func.append_basic_block(name=\"entry\")\nbuilder = ir.IRBuilder(entry)\nx = func.args[0]  # 参数本身就是 Value\nresult = builder.mul(x, x, name=\"sq\")\nbuilder.ret(result)\n```\n\n**陷阱**：如果需要支持 `set!` 等副作用，则必须用 `alloca` 分配栈空间，通过 `load/store` 模拟可变变量。但本课程仅处理纯函数式子集，故直接使用参数更简洁高效。\n\n## 7. 完整案例：从 Scheme 到可运行 IR\n考虑表达式 `(if (> x 0) (+ x 1) (- x 1))` 包裹在 lambda 中。生成的 LLVM IR 如下（注释为后加）：\n```llvm\ndefine i64 @foo(i64 %x) {\nentry:\n  %cmp = icmp sgt i64 %x, 0\n  br i1 %cmp, label %then, label %else\nthen:\n  %addtmp = add i64 %x, 1\n  br label %merge\nelse:\n  %subtmp = sub i64 %x, 1\n  br label %merge\nmerge:\n  %iftmp = phi i64 [ %addtmp, %then ], [ %subtmp, %else ]\n  ret i64 %iftmp\n}\n```\n通过 `llvmlite` 绑定 MCJIT 可执行该 IR，验证结果。\n\n## 8. 调试与验证\n- 使用 `print(module)` 输出 IR 文本，检查结构。\n- 调用 `llvmlite.binding.parse_assembly(str(module))` 验证模块合法性，捕获错误。\n- 常见错误信息：“Instruction does not dominate all uses!” 意味着某个值在未定义的基本块中被使用，通常是因为 phi 节点前驱值来自未执行到的路径，或插入位置错误。\n\n## 9. 延伸思考\n本课程仅触及 Scheme 子集。后续可扩展：\n- 支持布尔类型和 `and`/`or` 短路求值（需要更复杂的控制流）。\n- 尾递归优化：将尾调用转换为跳转，重用当前栈帧。\n- 闭包与堆分配：将自由变量捕获到堆上结构体。\n\n掌握 IR 构建能力后，你便拥有了连接高级语言与底层硬件的“炼金术”，这正是 CS61A 带你窥探计算本质的钥匙。",
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "🧙 魔法师 Lambda 正在将 Scheme 咒语 `(if (> x 0) (+ x 1) (- x 1))` 转译为 LLVM 符文。在 merge 块中，他需要合并来自 then 和 else 两个分支的值。根据 SSA 铁律，他应该使用哪种秘术？",
+        "options": [
+          "A. 用 alloca 分配栈空间，再通过 load/store 传递",
+          "B. 召唤 φ (phi) 节点，将两个版本的值合而为一",
+          "C. 使用 select 指令，像三元运算符一样直接挑选",
+          "D. 直接重用变量 x，因为 Scheme 变量不可变"
+        ],
+        "answer": "B",
+        "explanation": "在 SSA 形式中，每个变量只能被赋值一次。当控制流从不同路径汇聚时，必须用 φ 节点显式声明“若来自块A则取值1，若来自块B则取值2”。alloca/load/store 是处理可变变量的手段，select 只能处理无副作用的简单选择，而直接重用变量会破坏单赋值规则。"
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "Lambda 写完一个函数后，LLVM 验证器咆哮：“Basic block in function does not have terminator!” 他检查了所有基本块，发现某个块的最后一条指令是 `%result = add i64 %a, %b`。他忘记了什么？",
+        "options": [
+          "A. 每个基本块必须以跳转 (br) 或返回 (ret) 等终结指令收尾",
+          "B. 加法指令不能作为基本块的最后一条指令",
+          "C. 需要在该块开头插入 phi 节点",
+          "D. 函数参数必须用 alloca 存起来"
+        ],
+        "answer": "A",
+        "explanation": "基本块的定义要求有唯一的出口，即最后一条指令必须是 terminator（如 br、ret、switch 等）。普通的算术指令不是 terminator，因此该块没有合法结束，LLVM 验证器会报错。"
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "Lambda 在翻译 if 表达式时，先创建了 then_block，然后直接调用 `builder.add(...)` 想往 then_block 插入指令，但他忘记调用 `builder.position_at_start(then_block)`。结果会怎样？",
+        "options": [
+          "A. 指令仍然正确插入 then_block，因为 builder 会自动跟踪",
+          "B. 指令被插入到 builder 当前所在的基本块（很可能是 entry），导致 then_block 为空且控制流混乱",
+          "C. llvmlite 会抛出异常，禁止跨块插入",
+          "D. 生成的 IR 中 then_block 会包含重复的指令"
+        ],
+        "answer": "B",
+        "explanation": "IRBuilder 维护一个“插入点”，默认在最近 append 的基本块末尾。如果不显式切换位置，所有新指令都会插入到当前块，造成 then_block 空无一物，而 entry 块却包含了本应属于 then 的指令，最终 IR 结构错误。"
+      },
+      {
+        "id": "q4",
+        "type": "choice",
+        "question": "Lambda 想把 Scheme 整数 3 变成 LLVM 常量，他直接写了 `builder.add(3, 4, name='tmp')`，结果 llvmlite 报错：“Expected Value type”。他应该如何修正？",
+        "options": [
+          "A. 用 `ir.Constant(ir.IntType(64), 3)` 包装 Python 整数，使其成为 ir.Value",
+          "B. 改用 `builder.add(ir.IntType(64)(3), ir.IntType(64)(4))`",
+          "C. 先 `x = builder.alloca(ir.IntType(64))` 再 `builder.store(3, x)`",
+          "D. 直接传入字符串 `'3'` 和 `'4'`"
+        ],
+        "answer": "A",
+        "explanation": "llvmlite 的 builder 方法要求操作数为 ir.Value 类型，不能直接接受 Python 整数。必须用 ir.Constant 创建对应类型的常量值。选项 B 语法错误，C 是处理可变变量的方式，D 完全不正确。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "translate_expr",
+      "description": "🏰 作为 Scheme 解释器编译后端的学徒，你的任务是实现 `translate_expr` 函数，将简单的 Scheme 算术表达式转译为 LLVM IR 指令。表达式以 Python 列表形式给出，例如 `['+', 3, 4]` 代表 `(+ 3 4)`。你拥有一个 `ir.IRBuilder` 对象 `builder` 和一个环境字典 `env`（变量名 → `ir.Value`）。所有值均为 64 位整数。你需要递归处理表达式，并返回对应的 `ir.Value`。支持：整数常量（Python int）、变量（字符串，从 env 获取）、加法 `'+'`、减法 `'-'`、乘法 `'*'`、除法 `'/'`。对于算术操作，使用 `builder.add`、`builder.sub`、`builder.mul`、`builder.sdiv`，并给每个指令一个唯一的名字（如 `'addtmp'`）。\n\n完成后，测试代码会创建模块和 builder，调用你的函数，并检查生成的 IR 文本中是否包含预期的指令。这是通往巅峰项目——完整 Scheme 解释器的关键一步！",
+      "assertionMode": "stdout",
+      "testCases": [
+        {
+          "name": "integer constant",
+          "input": [
+            3
+          ],
+          "expected": "i64 3"
+        },
+        {
+          "name": "variable lookup",
+          "input": [
+            "x"
+          ],
+          "expected": "%x"
+        },
+        {
+          "name": "addition",
+          "input": [
+            [
+              "+",
+              3,
+              4
+            ]
+          ],
+          "expected": "add i64 3, 4"
+        },
+        {
+          "name": "subtraction",
+          "input": [
+            [
+              "-",
+              10,
+              [
+                "+",
+                2,
+                3
+              ]
+            ]
+          ],
+          "expected": "sub i64 10, %addtmp"
+        },
+        {
+          "name": "multiplication",
+          "input": [
+            [
+              "*",
+              6,
+              7
+            ]
+          ],
+          "expected": "mul i64 6, 7"
+        },
+        {
+          "name": "division",
+          "input": [
+            [
+              "/",
+              9,
+              3
+            ]
+          ],
+          "expected": "sdiv i64 9, 3"
+        }
+      ],
+      "hints": [
+        "使用 `isinstance(expr, int)` 检查整数常量。",
+        "使用 `isinstance(expr, str)` 检查变量，然后从 `env` 字典中取值。",
+        "对于列表，第一个元素是操作符，剩余是操作数。递归翻译操作数后，调用对应的 builder 方法。",
+        "给每个生成的指令一个名字，如 `builder.add(left, right, name='addtmp')`，这样 IR 文本中会出现 `%addtmp`。",
+        "不要忘记导入 `llvmlite.ir` 中的 `Constant` 和 `IntType`（如果直接在函数内使用，可通过 `ir.Constant` 访问，因为测试代码会传入 `ir` 模块）。"
+      ],
+      "testCode": "import json\nimport sys\nfrom llvmlite import ir\n\n# 导入用户代码（假设用户函数在 solution 模块中）\nfrom solution import translate_expr\n\ndef run_test(expr, expected_substr):\n    try:\n        module = ir.Module(name=\"test\")\n        func_type = ir.FunctionType(ir.IntType(64), [])\n        func = ir.Function(module, func_type, name=\"test_func\")\n        block = func.append_basic_block(name=\"entry\")\n        builder = ir.IRBuilder(block)\n        # 预设环境，包含变量 x 和 y\n        x_val = ir.Constant(ir.IntType(64), 42)\n        y_val = ir.Constant(ir.IntType(64), 77)\n        env = {\"x\": x_val, \"y\": y_val}\n        \n        result = translate_expr(expr, builder, env)\n        builder.ret(result)\n        \n        ir_text = str(module)\n        if expected_substr in ir_text:\n            return {\"name\": expected_substr, \"passed\": True, \"message\": \"\", \"expected\": expected_substr, \"actual\": ir_text[:100]}\n        else:\n            return {\"name\": expected_substr, \"passed\": False, \"message\": f\"IR text does not contain '{expected_substr}'\", \"expected\": expected_substr, \"actual\": ir_text[:200]}\n    except Exception as e:\n        return {\"name\": expected_substr, \"passed\": False, \"message\": str(e), \"expected\": expected_substr, \"actual\": \"ERROR\"}\n\n# 测试用例列表\ntest_cases = [\n    (3, \"i64 3\"),\n    (\"x\", \"%x\"),\n    ([\"+\", 3, 4], \"add i64 3, 4\"),\n    ([\"-\", 10, [\"+\", 2, 3]], \"sub i64 10, %addtmp\"),\n    ([\"*\", 6, 7], \"mul i64 6, 7\"),\n    ([\"/\", 9, 3], \"sdiv i64 9, 3\")\n]\n\nfor expr, expected in test_cases:\n    result = run_test(expr, expected)\n    print(json.dumps(result))\n",
+      "starterCode": "from llvmlite import ir\n\ndef translate_expr(expr, builder, env):\n    \"\"\"\n    将 Scheme 算术表达式翻译为 LLVM IR 指令，并返回结果值 (ir.Value)。\n    \n    表达式以 Python 列表形式给出，例如 ['+', 3, 4] 代表 (+ 3 4)。\n    支持：\n    - 整数常量：直接返回 ir.Constant(ir.IntType(64), value)\n    - 变量：字符串，从 env 字典中获取对应的 ir.Value\n    - 算术操作：'+', '-', '*', '/'，操作数递归翻译后调用 builder 方法\n    \n    参数:\n        expr: 表达式，可以是 int, str, 或 list\n        builder: llvmlite.ir.IRBuilder 实例，用于生成指令\n        env: dict，变量名到 ir.Value 的映射\n    \n    返回:\n        ir.Value: 表达式对应的 LLVM 值\n    \n    示例（伪代码，因为需要完整的模块环境）:\n        # 假设已有 module, func, builder, env = {'x': x_val}\n        >>> translate_expr(3, builder, env)\n        <ir.Constant type='i64' value=3>\n        >>> translate_expr(['+', 3, 'x'], builder, env)\n        <ir.Instruction 'addtmp' of type 'i64'>\n    \"\"\"\n    # TODO: 步骤 1 - 如果 expr 是整数，创建并返回 i64 常量\n    # 提示: 使用 isinstance(expr, int) 检查，然后用 ir.Constant(ir.IntType(64), expr)\n    \n    # TODO: 步骤 2 - 如果 expr 是字符串，从 env 字典中查找并返回对应的值\n    # 提示: 使用 isinstance(expr, str) 检查，然后 return env[expr]\n    \n    # TODO: 步骤 3 - 如果 expr 是列表，提取操作符 (expr[0]) 和操作数 (expr[1:])\n    # 操作符可能是 '+', '-', '*', '/'\n    # 对每个操作数递归调用 translate_expr 得到 ir.Value\n    \n    # TODO: 步骤 4 - 根据操作符调用对应的 builder 方法:\n    # '+' -> builder.add(left, right, name='addtmp')\n    # '-' -> builder.sub(left, right, name='subtmp')\n    # '*' -> builder.mul(left, right, name='multmp')\n    # '/' -> builder.sdiv(left, right, name='divtmp')\n    # 返回生成的指令（它本身也是 ir.Value）\n    \n    # 占位返回，防止语法错误\n    raise NotImplementedError(\"请完成 translate_expr 的实现\")"
+    }
+  },
+  "expiry": 1781599865279
+}

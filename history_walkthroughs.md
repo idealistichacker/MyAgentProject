@@ -52,3 +52,19 @@
   - **大纲规模动态算法**：在 `plan` 阶段根据 `总周数 * 每周小时数` 动态推算生成的单元数（支持 2 至 10 个单元），使大纲厚度具有自适应弹性。
   - **Quiz 答案归一化重构**：升级 `gradeQuiz` 判分算法，支持用户输入数字、右括号后缀、字母（A/B/C/D）和全文本比对。自动在内部建立索引级别的模糊匹配，彻底消除了判定偏差。
   - **Git 提交敏感信息防漏隔离**：在 `.gitignore` 中精准屏蔽 `.fuckcolloge/config.json`（包含大模型 API 秘钥），同时解除对讲义、代码、答题数据库文件夹的整体忽略，方便安全共享与分析。
+
+---
+
+## 📅 阶段五：联网搜索升级、弹性跳过机制与趣味强关联 Prompt 重构 (Phase 5: Search Selector, Skip/Review & Prompt Overhauls)
+* **核心目标**：
+  提供更强大的全网搜索引擎能力以支持新兴技术开发课件的精准生成；提供弹性的跳过与复习状态流控制以平滑学习难度；重构 LLM 交互提示词以注入有趣的人设灵魂并确保单元与项目强逻辑关联。
+* **主要工作与实现**：
+  - **Tavily 检索支持**：新增了对 `Tavily API` 的集成支持。用户可在 `fc init` 时自主选择 Wikipedia 或 Tavily 作为检索提供方，为高阶编程课件（如 Rust/Go）提供更前沿精确的互联网开发者文档检索。
+  - **全课件离线预生成 (`fc generate-all`)**：引入了一键并发预生成所有计划单元讲义和代码模版的功能，支持快速大纲预览以及弱网下的离线学习。
+  - **弹性跳过与复习面板 (`fc skip` / `fc review`)**：
+    - 开发了 `fc skip` 指令支持主动跳过难关，并在 `fc submit` 失败 5 次时提供黄色高亮引导熔断。
+    - 构建了 `fc review` 交互面板，供学习者随时查阅被跳过的单元账本并进行二次挑战。
+  - **强关联趣味提示词重构 (Prompts Overhaul)**：
+    - 对大纲设计者（`CurriculumPlanner`）、课件撰写者（`ContentGenerator` / `ContentCritic`）和精修人（`FinalPolisher`）进行全面 Prompt 重构，使其被赋予更具幽默感的 AI 导师灵魂。
+    - 修改了 `generateUnitContent` 的底层传参逻辑，向其传入包含 Project 目标的完整 `LearningPlan`。AI 在起草课件时将获得上帝视角，实现讲义内容、Scenario-based 选择题、项目主题 Starter Code 变量命名三位一体强关联到最终的大作业中。
+    - 升级了 `buildAssessment` 诊断助教，使其反馈信息更富有人情味，在成功时狂热庆祝，在失败时给予共情疏导和多阶段渐进式 Hints 调试启发。

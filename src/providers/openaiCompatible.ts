@@ -22,7 +22,8 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     let lastError: any = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const response = await fetch(`${endpoint}/chat/completions`, {
           method: 'POST',
@@ -31,7 +32,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(180000), // 180s timeout to allow slow models to generate large content
+          signal: AbortSignal.timeout(300000), // 300s timeout to allow slow models to generate large content
         });
 
         if (!response.ok) {
@@ -55,9 +56,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
         };
       } catch (err: any) {
         lastError = err;
-        console.warn(`⚠️ API attempt ${attempt} failed: ${err.message}. ${attempt < 3 ? 'Retrying in 1.5s...' : ''}`);
-        if (attempt < 3) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (attempt < maxAttempts) {
+          const delay = Math.pow(2, attempt - 1) * 3000; // 3s, 6s, 12s, 24s
+          console.warn(`⚠️ API attempt ${attempt} failed: ${err.message}. Retrying in ${delay / 1000}s...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          console.warn(`⚠️ API attempt ${attempt} failed: ${err.message}. Max attempts reached.`);
         }
       }
     }

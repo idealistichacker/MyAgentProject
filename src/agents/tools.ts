@@ -3,6 +3,8 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { searchCache } from '../utils/cache.js';
+import color from 'picocolors';
 
 const execAsync = promisify(exec);
 export interface Tool {
@@ -71,6 +73,16 @@ export class WebSearchTool implements Tool {
     const query = args.query;
     if (!query) return 'Error: Missing query parameter.';
 
+    // Check Cache
+    const cacheKey = `${this.provider}:${query}`;
+    const cachedResult = await searchCache.get<string>(cacheKey);
+    if (cachedResult) {
+      console.log(color.gray(`\n  [Cache HIT] WebSearchTool -> "${query}"`));
+      return cachedResult;
+    }
+
+    let finalResult = '';
+
     if (this.provider === 'tavily') {
       if (!this.apiKey) {
         return 'Error: Tavily API key is missing. Please configure it using `fc init`.';
@@ -94,40 +106,45 @@ export class WebSearchTool implements Tool {
         }
         const data = await response.json() as any;
         if (!data.results || data.results.length === 0) {
-          return 'No results found.';
+          finalResult = 'No results found.';
+        } else {
+          const output = data.results.map((r: any) => {
+            return `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}\n`;
+          }).join('\n');
+          finalResult = `Search results for "${query}":\n\n${output}`;
         }
-        const output = data.results.map((r: any) => {
-          return `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}\n`;
-        }).join('\n');
-        return `Search results for "${query}":\n\n${output}`;
       } catch (err: any) {
         return `Tavily Search error: ${err.message}`;
       }
+    } else {
+      // Default to Wikipedia
+      try {
+        const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          return `Search failed with status ${response.status}`;
+        }
+        const data = await response.json() as any;
+        const results = data.query?.search;
+        if (!results || results.length === 0) {
+          finalResult = 'No results found.';
+        } else {
+          // Convert search results to text
+          const output = results.slice(0, 5).map((r: any) => {
+            const snippet = r.snippet.replace(/<[^>]*>?/gm, ''); // Remove HTML tags
+            return `Title: ${r.title}\nSnippet: ${snippet}\n`;
+          }).join('\n');
+
+          finalResult = `Search results for "${query}":\n\n${output}`;
+        }
+      } catch (err: any) {
+        return `Search error: ${err.message}`;
+      }
     }
 
-    // Default to Wikipedia
-    try {
-      const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        return `Search failed with status ${response.status}`;
-      }
-      const data = await response.json() as any;
-      const results = data.query?.search;
-      if (!results || results.length === 0) {
-        return 'No results found.';
-      }
-
-      // Convert search results to text
-      const output = results.slice(0, 5).map((r: any) => {
-        const snippet = r.snippet.replace(/<[^>]*>?/gm, ''); // Remove HTML tags
-        return `Title: ${r.title}\nSnippet: ${snippet}\n`;
-      }).join('\n');
-
-      return `Search results for "${query}":\n\n${output}`;
-    } catch (err: any) {
-      return `Search error: ${err.message}`;
-    }
+    // Save to Cache
+    await searchCache.set(cacheKey, finalResult);
+    return finalResult;
   }
 }
 

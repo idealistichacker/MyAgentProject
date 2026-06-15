@@ -1,0 +1,140 @@
+{
+  "data": {
+    "id": "unit-3-ast-walker-guide",
+    "type": "unit",
+    "title": "AST 漫游指南：从嵌套列表到可求值的表达式森林",
+    "description": "Parser 吐出的 AST 还是一堆冰冷的 Python 列表——本单元我们要赋予它灵魂！你将学习如何遍历和操作抽象语法树：区分“自求值表达式”（数字、布尔值）与“复合表达式”（函数调用、特殊形式），设计 eval 函数的分发逻辑，并处理符号查找与作用域雏形。我们会借鉴 CS61A Scheme 项目的 Pair 链表思想，用 Python 对象优雅地表示 Scheme 的 cons cell。这一单元是「Scheme 解释器项目」的“心脏预演”——eval 和 apply 的舞蹈将从这里开始编排。学完本单元，你将拥有一个能对简单 AST 进行语义求值的微型引擎。",
+    "prerequisites": [
+      "unit-2-lexer-parser-twin-towers",
+      "Python 面向对象基础（类、继承、魔术方法）"
+    ],
+    "objectives": [
+      "掌握 AST 的递归遍历模式（tree walking）与访问者模式的基本思想",
+      "实现 Scheme 子集中各类表达式的分类与求值调度逻辑",
+      "构建基于 Python 字典的简单符号表（环境模型），支持变量绑定与查找",
+      "理解 cons cell / Pair 的数据结构，并用 Python 类实现 Scheme 列表的链式存储"
+    ],
+    "content": "# AST 漫游指南：从嵌套列表到可求值的表达式森林\n\n---\n\n## 开篇：当 Parser 吐出一堆“尸体”\n\n你刚写完词法分析和语法分析，满心期待地把 `(+ 1 (* 2 3))` 喂进去，Parser 兢兢业业地咀嚼一番，“噗”地吐出来——\n\n```python\n['+', 1, ['*', 2, 3]]\n```\n\n就这？一堆嵌套的 Python 列表？说好的“让代码活过来”呢？\n\n别急。**Parser 造的是骨架，而你要赋予它灵魂。** 这个灵魂的名字叫 **eval**——求值器。本单元，我们就来当一回“亡灵法师”，把这堆冰冷的列表变成能呼吸、能计算、能思考的微型引擎。\n\n---\n\n## 第一站：Cons Cell——Scheme 的“乐高积木”\n\n在 CS61A 的 Scheme 项目中，AST 并不是裸 Python 列表，而是用一种叫做 **Pair**（即 Lisp 世界的 **cons cell**）的结构串联起来的。为什么？因为 Scheme 的列表本质上就是一条**单向链表**。\n\n### 从 Python list 到 Pair 链\n\nPython 的 `[1, 2, 3]` 是一块连续内存。Scheme 的 `(1 2 3)` 长这样：\n\n```\nPair(1, Pair(2, Pair(3, nil)))\n```\n\n每个 `Pair` 有两个槽位：`first`（存数据）和 `rest`（指向下一个 Pair 或 `nil`）。`nil` 是链表的终点哨兵——它代表空列表 `()`。\n\n```python\nclass Pair:\n    def __init__(self, first, rest):\n        self.first = first      # car\n        self.rest = rest        # cdr\n\n    def __repr__(self):\n        return f\"Pair({self.first}, {self.rest})\"\n\nnil = object()  # 独一无二的空列表哨兵\n```\n\n> **关键直觉**：`Pair` 的 `first` 是“当前节点装的东西”，`rest` 是“剩下的整条尾巴”。`(a b c)` 就是 `Pair(a, (b c))`，而 `(b c)` 又是 `Pair(b, (c))`……递归结构跃然纸上。\n\n**陷阱**：合法的 Scheme 列表要求每个 `rest` 要么是 `Pair`，要么是 `nil`。若 `rest` 是其他类型（如数字），则构成“点对”（dotted pair），如 `(1 . 2)`，这在标准过程调用中会引发错误。\n\n---\n\n## 第二站：表达式分类——“你是谁？”\n\neval 函数拿到一个 AST 节点后，第一件事是**认人**。Scheme 表达式分三大类：\n\n| 类别 | 例子 | 求值策略 |\n|------|------|----------|\n| **自求值表达式** | `42`, `#t`, `\"hello\"` | 直接返回自身 |\n| **符号** | `x`, `+`, `my-func` | 去环境里查它绑定了什么 |\n| **组合表达式（列表）** | `(+ 1 2)`, `(define x 3)` | 分发：特殊形式 vs 普通调用 |\n\n### 自求值表达式：照镜子\n\n数字、布尔值、字符串——它们不求人，自己就是自己的值。\n\n```python\ndef is_self_evaluating(expr):\n    return (isinstance(expr, (int, float, bool, str)) or\n            expr is nil)\n```\n\n`42` 扔进 eval，`42` 吐出来。简单到令人发指，但这是递归基 case 的第一道防线。\n\n### 符号：需要“查户口”\n\n`+` 不是一个自带值的数字——它是个**名字**，名字的意义取决于**环境**（你把它绑定到了什么）。注意：字符串 `\"+\"` 不是符号，符号是不带引号的标识符。\n\n```python\ndef is_scheme_symbol(expr):\n    return isinstance(expr, str) and not expr.startswith('\"')\n```\n\n符号求值 = 环境查找。这是第三站的内容，先按下不表。\n\n---\n\n## 第三站：eval 的分发逻辑——“走哪条路？”\n\n这是整个解释器的**心跳**。`scheme_eval` 的核心结构如下：\n\n```python\ndef scheme_eval(expr, env):\n    if is_self_evaluating(expr):\n        return expr\n    if is_scheme_symbol(expr):\n        return env.lookup(expr)\n    if not isinstance(expr, Pair):\n        raise SchemeError(f\"无法求值: {expr}\")\n\n    first, rest = expr.first, expr.rest\n    if is_scheme_symbol(first) and first in SPECIAL_FORMS:\n        return SPECIAL_FORMS[first](rest, env)\n\n    # 普通函数调用\n    procedure = scheme_eval(first, env)\n    args = rest.map(lambda op: scheme_eval(op, env))\n    return scheme_apply(procedure, args, env)\n```\n\n### 这张“分叉图”值得刻进肌肉记忆：\n\n```\nexpr 进来\n  ├─ 是数字/布尔/字符串/nil？ → 直接返回（自求值）\n  ├─ 是符号？                 → env.lookup（查表）\n  └─ 是 Pair？\n       ├─ first 是特殊形式关键字？ → 走特殊形式专属逻辑\n       └─ 否则                    → 先求值 operator 和 operands，再 apply\n```\n\n> **这就是“树遍历解释器”的灵魂**：递归下降 + 按节点类型分发。每个节点知道自己该做什么，eval 只负责“问你是谁，然后叫对的人来处理”——这本质上是**访问者模式（Visitor Pattern）**在解释器中的朴素实现。`scheme_eval` 相当于 `accept`，特殊形式处理函数相当于 `Visitor` 的具体 `visit` 方法，而表达式类型就是被访问的元素。\n\n---\n\n## 第四站：环境模型——“名字住在哪里？”\n\n符号 `x` 的值是什么？取决于你在哪个**帧（Frame）**里问。\n\n### 最简单的帧：一个 Python 字典\n\n```python\nclass Frame:\n    def __init__(self, parent=None):\n        self.bindings = {}     # {\"x\": 10, \"y\": 20}\n        self.parent = parent   # 父帧，形成作用域链\n\n    def define(self, symbol, value):\n        self.bindings[symbol] = value\n\n    def lookup(self, symbol):\n        if symbol in self.bindings:\n            return self.bindings[symbol]\n        if self.parent is not None:\n            return self.parent.lookup(symbol)\n        raise SchemeError(f\"未定义的符号: {symbol}\")\n```\n\n### 作用域链：俄罗斯套娃\n\n```python\nglobal_frame = Frame()\nglobal_frame.define('x', 10)\n\nchild = Frame(parent=global_frame)\nchild.define('y', 20)\n\nchild.lookup('y')   # → 20（在当前帧找到）\nchild.lookup('x')   # → 10（沿 parent 链爬到全局帧）\nchild.lookup('z')   # → SchemeError!\n```\n\n**陷阱**：`define` 总是在**当前最内层帧**绑定，即使外层已有同名变量，也会造成**遮蔽**（shadowing）。而 `set!` 则沿作用域链向上查找并修改已有绑定，若找不到则报错。\n\n---\n\n## 第五站：eval 与 apply 的舞蹈\n\n这是 Scheme 解释器最优雅的双人舞：\n\n- **eval**：拿到表达式和环境，返回一个值。\n- **apply**：拿到一个过程（procedure）和参数列表，执行这个过程。\n\n```python\ndef scheme_apply(procedure, args, env):\n    if is_primitive(procedure):\n        return procedure.impl(args)\n    else:\n        new_env = Frame(parent=procedure.env)\n        for param, arg in zip(procedure.params, args):\n            new_env.define(param, arg)\n        return eval_all(procedure.body, new_env)\n```\n\n### 一个完整的求值轨迹\n\n对 `(+ 1 (* 2 3))` 求值：\n\n```\nscheme_eval(Pair('+', Pair(1, Pair(Pair('*', Pair(2, Pair(3, nil))), nil))), env)\n  ├─ first='+' 不是特殊形式 → 走分支 B\n  ├─ scheme_eval('+', env) → env.lookup('+') → <内置加法过程>\n  ├─ rest.map(scheme_eval, env):\n  │    ├─ scheme_eval(1, env) → 1（自求值）\n  │    └─ scheme_eval(Pair('*', Pair(2, Pair(3, nil))), env)\n  │         ├─ scheme_eval('*', env) → <内置乘法过程>\n  │         ├─ scheme_eval(2, env) → 2\n  │         ├─ scheme_eval(3, env) → 3\n  │         └─ scheme_apply(<乘法>, [2, 3], env) → 6\n  └─ scheme_apply(<加法>, [1, 6], env) → 7\n```\n\n**递归在 AST 的枝干上爬行，每到一个叶子就带回一个值，层层向上汇聚。** 这就是 tree walking 的魔力。\n\n---\n\n## 第六站：特殊形式——“规则破坏者”\n\n普通函数调用：**先求值所有操作数，再传入函数**。但特殊形式不守这规矩：\n\n| 特殊形式 | 为什么不先求值操作数 |\n|----------|---------------------|\n| `(if cond t f)` | 只应求值 cond 和其中一个分支，否则死循环/副作用 |\n| `(define x expr)` | `x` 是符号，不求值——我们要绑定这个名字本身 |\n| `(lambda (x) body)` | `(x)` 是形参列表，不求值——这是声明，不是调用 |\n| `(quote x)` | 原封不动返回 `x`，求值就错了 |\n| `(cond (p1 e1) (p2 e2))` | 短路求值：只执行第一个为真的分支 |\n| `(and a b)` / `(or a b)` | 短路求值，且 `and` 返回最后一个真值而非布尔 |\n\n每种特殊形式都有自己的求值规则，所以 eval 里用 `SPECIAL_FORMS` 字典做**显式分发**：\n\n```python\nSPECIAL_FORMS = {\n    'define':  eval_define,\n    'lambda':  eval_lambda,\n    'if':      eval_if,\n    'cond':    eval_cond,\n    'let':     eval_let,\n    'quote':   eval_quote,\n    'and':     eval_and,\n    'or':      eval_or,\n}\n```\n\n**陷阱**：`let` 本质上是 `lambda` 的语法糖。`(let ((x 1) (y 2)) body)` 等价于 `((lambda (x y) body) 1 2)`。因此 `let` 创建的新作用域会同时求值所有绑定表达式的值（在当前环境），然后才用这些值扩展新帧并执行体。这意味着 `let` 的绑定表达式不能相互引用，而 `let*` 可以顺序求值。\n\n---\n\n## 结语：微型引擎已点火\n\n你现在拥有的是一个**能对简单 AST 进行语义求值的微型引擎**。回顾你构建的：\n\n1. **Pair 链**——Scheme 列表的 Python 化身，递归结构的物质基础\n2. **表达式分类**——自求值、符号、组合表达式，eval 的第一层分发\n3. **scheme_eval 核心循环**——递归下降 + 特殊形式字典分发的树遍历解释器（访问者模式）\n4. **Frame 环境模型**——Python 字典 + parent 指针的作用域链\n5. **eval/apply 双人舞**——一个负责“这是什么”，一个负责“怎么执行”\n\n这套架构就是 CS61A Scheme 解释器项目的**心脏预演**。在巅峰项目中，你将把这颗心脏装入完整的 REPL 循环，接入 turtle 图形扩展，让你的 Scheme 代码画出分形图案——而这一切的起点，就是今天你亲手搭建的这个微型求值引擎。\n\n> **记住这种感觉**：你不再只是写代码的人——你正在写一个**能理解代码的程序**。从这一刻起，你就是语言的设计者。",
+    "references": [],
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "🧙 学徒巫师发现有些咒语成分不需要查魔法书就能直接施展。以下哪个属于自求值表达式？",
+        "options": [
+          "A. 42",
+          "B. x",
+          "C. (+ 1 2)",
+          "D. (define x 3)"
+        ],
+        "answer": "A",
+        "explanation": "数字是自求值表达式，直接返回自身。符号需要查环境，列表需要分发求值。"
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "🧙 学徒在使用 if 咒语时，如果错误地先求值了两个分支，可能会导致灾难（比如无限循环）。为什么 if 特殊形式不能先求值所有操作数？",
+        "options": [
+          "A. 因为 if 是特殊形式，操作数必须按顺序求值",
+          "B. 因为 if 只需要求值条件和一个分支，否则可能执行不该执行的分支",
+          "C. 因为 if 的操作数都是符号，不能求值",
+          "D. 因为 if 没有操作数"
+        ],
+        "answer": "B",
+        "explanation": "if 应该只求值条件，然后根据条件求值其中一个分支，避免副作用或死循环。"
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "🧙 学徒在嵌套魔法圈（帧）中查找变量 y，当前圈没有，但外层圈有。查找顺序是？",
+        "options": [
+          "A. 只查当前圈",
+          "B. 先查当前圈，再沿父圈链向上查找",
+          "C. 先查最外层圈",
+          "D. 随机查找"
+        ],
+        "answer": "B",
+        "explanation": "环境模型是沿着 parent 链向上查找，直到找到或报错。"
+      },
+      {
+        "id": "q4",
+        "type": "choice",
+        "question": "🧙 学徒需要将咒语列表 (1 2 3) 转换为 Pair 链。正确的 Pair 链是？",
+        "options": [
+          "A. Pair(1, 2, 3)",
+          "B. Pair(1, Pair(2, 3))",
+          "C. Pair(1, Pair(2, Pair(3, nil)))",
+          "D. Pair(1, Pair(2, Pair(3, 4)))"
+        ],
+        "answer": "C",
+        "explanation": "Scheme 列表是嵌套 Pair，最后一个 rest 是 nil，表示空列表。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "eval_simple",
+      "description": "实现一个简单的 Scheme 风格表达式求值器，支持数字、符号查找和四则运算。表达式用 Python 列表表示，模拟 Parser 输出的 AST。",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "self-evaluating number",
+          "input": [
+            42,
+            {}
+          ],
+          "expected": 42
+        },
+        {
+          "name": "symbol lookup",
+          "input": [
+            "x",
+            {
+              "x": 10
+            }
+          ],
+          "expected": 10
+        },
+        {
+          "name": "addition",
+          "input": [
+            [
+              "+",
+              1,
+              2
+            ],
+            {}
+          ],
+          "expected": 3
+        },
+        {
+          "name": "nested expression",
+          "input": [
+            [
+              "+",
+              1,
+              [
+                "*",
+                2,
+                3
+              ]
+            ],
+            {}
+          ],
+          "expected": 7
+        }
+      ],
+      "hints": [
+        "使用递归处理嵌套列表",
+        "操作符 '+', '-', '*', '/' 直接映射到 Python 运算，不需要从 env 查找"
+      ],
+      "testCode": "import json\nfrom solution import eval_simple\n\ntest_cases = [\n    {\"name\": \"self-evaluating number\", \"input\": [42, {}], \"expected\": 42},\n    {\"name\": \"symbol lookup\", \"input\": [\"x\", {\"x\": 10}], \"expected\": 10},\n    {\"name\": \"addition\", \"input\": [[\"+\", 1, 2], {}], \"expected\": 3},\n    {\"name\": \"nested expression\", \"input\": [[\"+\", 1, [\"*\", 2, 3]], {}], \"expected\": 7},\n    {\"name\": \"subtraction\", \"input\": [[\"-\", 10, 3], {}], \"expected\": 7},\n    {\"name\": \"division\", \"input\": [[\"/\", 8, 2], {}], \"expected\": 4.0},\n    {\"name\": \"complex nested\", \"input\": [[\"*\", [\"+\", 1, 2], [\"-\", 5, 3]], {}], \"expected\": 6}\n]\n\nfor tc in test_cases:\n    try:\n        actual = eval_simple(*tc[\"input\"])\n        passed = actual == tc[\"expected\"]\n        message = \"\" if passed else f\"Expected {tc['expected']}, got {actual}\"\n    except Exception as e:\n        passed = False\n        actual = str(e)\n        message = str(e)\n    print(json.dumps({\"name\": tc[\"name\"], \"passed\": passed, \"message\": message, \"expected\": tc[\"expected\"], \"actual\": actual}))",
+      "starterCode": "def eval_simple(expr, env):\n    \"\"\"\n    Evaluate a simple Scheme-like expression using Python lists as AST.\n    \n    Supports:\n    - integers (self-evaluating)\n    - strings (symbols, looked up in env dict)\n    - lists of the form [operator, operand1, operand2] where operator is a string\n      for '+', '-', '*', '/'. Operands can be integers, symbols, or nested lists.\n    \n    Examples:\n    >>> eval_simple(42, {})\n    42\n    >>> eval_simple('x', {'x': 10})\n    10\n    >>> eval_simple(['+', 1, 2], {})\n    3\n    >>> eval_simple(['+', 1, ['*', 2, 3]], {})\n    7\n    \"\"\"\n    # Step 1: 如果 expr 是整数，直接返回（自求值）\n    if isinstance(expr, int):\n        return expr\n    \n    # Step 2: 如果 expr 是字符串，从 env 字典中查找并返回\n    if isinstance(expr, str):\n        return env[expr]  # 假设符号一定存在，否则 KeyError\n    \n    # Step 3: 如果 expr 是列表（组合表达式）\n    if isinstance(expr, list):\n        # a. 提取操作符和操作数\n        op = expr[0]\n        operands = expr[1:]\n        \n        # b. 递归求值所有操作数\n        args = [eval_simple(e, env) for e in operands]\n        \n        # c. 根据操作符执行相应的 Python 运算\n        if op == '+':\n            return args[0] + args[1]\n        elif op == '-':\n            return args[0] - args[1]\n        elif op == '*':\n            return args[0] * args[1]\n        elif op == '/':\n            return args[0] / args[1]  # 浮点除法\n        else:\n            raise ValueError(f\"Unknown operator: {op}\")\n    \n    # Step 4: 未知类型，抛出异常\n    raise TypeError(f\"Cannot evaluate: {expr}\")"
+    },
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    }
+  },
+  "expiry": 1781602818653
+}

@@ -28,7 +28,8 @@ export async function diagnoseLearner(
 
   try {
     const prompt = `
-You are FCAgent DiagnoseAgent. Summarize the learner profile in Chinese in 3-5 sentences.
+You are FCAgent DiagnoseAgent, a super perceptive, slightly sassy, and highly encouraging AI mentor.
+Summarize the learner profile in Chinese in 3-5 sentences. Make it feel like a personalized, highly insightful psychological/academic diagnosis. Use a fun and empathetic tone (人情味) to welcome them to their learning journey!
 Return only the summary text, no JSON.
 
 Profile:
@@ -87,21 +88,22 @@ export async function generatePlan(
       const totalUnits = targetUnitCount >= 4 ? targetUnitCount + 1 : targetUnitCount;
 
       const prompt = `
-You are FCAgent CurriculumPlanner. Generate a personalized learning curriculum array (JSON) with exactly ${totalUnits} units based on the learner profile.
+You are FCAgent CurriculumPlanner, an elite, inspiring, and slightly playful AI mentor designing an Epic Learning Journey.
+Generate a personalized learning curriculum array (JSON) with exactly ${totalUnits} units based on the learner profile.
 
 IMPORTANT RULES:
-1. First priority: Use the \`search_web\` tool to search for latest and highly-quality resources relating to the learner's goal.
-2. Second priority: Use your internal parametric knowledge to combine with search results.
-3. Once you have enough info, return the final JSON array.
-4. ${targetUnitCount >= 4 ? 'Since the course is long enough, you MUST include exactly 1 unit of `type: "project"` (a large-scale coding project, like CS61A Ants or Scheme, that integrates prior concepts). It should be placed in the mid-to-late part of the curriculum as an incremental challenge. Mark its id with a "-project" suffix.' : 'Generate regular instructional units.'}
-5. Ensure the JSON is completely valid and free of formatting issues. VERY IMPORTANT: Any double quotes inside JSON string values (such as titles, descriptions, objectives) MUST be properly escaped as \\\" (backslash double quote) or replaced with Chinese quotes (“ ”) or single quotes. DO NOT write unescaped double quotes inside strings, as it breaks JSON parsing.
+1. NARRATIVE & COHESION: The curriculum MUST have a cohesive storyline or thematic progression. Early units must explicitly state how they build up to the final Project. The titles and descriptions should be highly engaging, fun, and human-like (e.g., "驯服你的第一只爬虫" instead of "爬虫基础").
+2. First priority: Use the \`search_web\` tool to search for latest and highly-quality resources relating to the learner's goal.
+3. Second priority: Use your internal parametric knowledge to combine with search results.
+4. ${targetUnitCount >= 4 ? 'Since the course is long enough, you MUST include exactly 1 unit of `type: "project"` (a large-scale coding project, like CS61A Ants or Scheme). It should be placed in the mid-to-late part of the curriculum. Mark its id with a "-project" suffix. All preceding units must explicitly state in their description how they serve as a puzzle piece for this specific project.' : 'Generate regular instructional units, but keep them tightly connected conceptually.'}
+5. Ensure the JSON is completely valid and free of formatting issues. VERY IMPORTANT: Any double quotes inside JSON string values MUST be properly escaped as \\" (backslash double quote) or replaced with Chinese quotes (“ ”) or single quotes.
 
 The JSON output MUST be a valid array of objects matching this schema (containing exactly ${totalUnits} elements):
 [{
   "id": "unique-unit-id",
   "type": "unit",
-  "title": "Unit Title",
-  "description": "Brief description",
+  "title": "Fun, Engaging Unit Title",
+  "description": "Brief description explaining the concept AND how it connects to the next unit or the final project.",
   "prerequisites": ["prereq1"],
   "objectives": ["obj1"]
 }]
@@ -248,12 +250,25 @@ export function placeholderFunc(): boolean {
   };
 }
 
+import { llmCache } from '../utils/cache.js';
+import color from 'picocolors';
+
 export async function generateUnitContent(
   unit: SeedUnit,
-  learnerProfile: LearnerProfile,
+  plan: LearningPlan,
   provider?: LLMProvider
 ): Promise<SeedUnit> {
   if (!provider) return ensureUnitFullyPopulated(unit);
+  const learnerProfile = plan.learnerProfile;
+  const projectUnit = plan.units.find(u => u.type === 'project');
+  const projectContext = projectUnit ? `The final project for this curriculum is: ${projectUnit.title} (${projectUnit.description}). Your content MUST build towards this.` : 'Ensure content connects to the overall curriculum goals.';
+
+  const cacheKey = `unit:${unit.id}:${unit.title}:${learnerProfile.target}:${learnerProfile.programmingLevel}`;
+  const cachedUnit = await llmCache.get<SeedUnit>(cacheKey);
+  if (cachedUnit) {
+    console.log(color.magenta(`\n⚡ [LLM Cache HIT] 恢复已生成的单元: ${unit.title}`));
+    return cachedUnit;
+  }
 
   try {
     // 1. Web Search
@@ -284,14 +299,17 @@ export async function generateUnitContent(
     const projectDraftInstruction = isProject ? 'Since this is a PROJECT unit, generate a detailed Project Specification (similar to CS61A Ants/Scheme) detailing the architecture, phases of development, and module interactions instead of a regular conceptual lesson.' : 'Generate a rich, detailed markdown content explanation including technical definitions, examples, and deep explanation.';
 
     const draftPrompt = `
-You are FCAgent ContentGenerator, an elite AI tutor designed to produce educational content at the rigor of UC Berkeley's CS61A.
-Your task is to write a comprehensive, high-quality, detailed technical course draft in Chinese about the following unit.
+You are FCAgent ContentGenerator, an elite, charismatic AI tutor with the rigor of UC Berkeley's CS61A but the humor and storytelling ability of a top-tier science communicator.
+Your task is to write a highly engaging, relatable, and human-like technical course draft in Chinese about the following unit.
 
 Unit Outline:
 - Title: ${unit.title}
 - Type: ${unit.type || 'unit'}
 - Description: ${unit.description}
 - Objectives: ${unit.objectives.join(', ')}
+
+Curriculum Context:
+${projectContext}
 
 Learner Profile:
 - Target: ${learnerProfile.target}
@@ -387,10 +405,12 @@ CS61A Pedagogical Rules for STARTER_CODE:
 
     const finalPrompt = `
 You are FCAgent FinalPolisher. Format the refined learning materials into the final required three-part output format.
-Ensure the final output reflects the premium quality of CS61A.
+Ensure the final output reflects the premium quality of CS61A, infused with an engaging, narrative-driven human touch.
 
 You must construct:
-1. A JSON block containing a quiz (choice questions with options, answers, and detailed explanations) and a programming exercise (starter code description, test cases with assertion mode). The exercise should be challenging and deeply educational, matching CS61A rigor.
+1. A JSON block containing a quiz and a programming exercise.
+   - The Quiz MUST be scenario-based and interesting (e.g., helping a character solve a problem), not just dry conceptual questions.
+   - The Exercise Starter Code MUST have thematic variable names and problem descriptions that tie directly into the Curriculum Context (${projectContext}). Make it feel like part of an epic quest.
    - Choose ANY programming language that best fits the learning objective (e.g. 'typescript', 'python', 'bash', 'rust', 'cpp', 'java', 'go', etc.).
    - You MUST also provide a \`testCode\` field in the exercise JSON. This code will be compiled/executed remotely along with the user's \`starterCode\`. The \`testCode\` must import/call the user's entrypoint, run the test cases, and print exactly one JSON line per test case in the format: \`{"name": "test name", "passed": true/false, "message": "optional error message", "expected": "...", "actual": "..."}\`.
    - For bash exercises, assertionMode should likely be 'stdout'. For others it can be 'return' or 'mutate-and-return'.
@@ -481,13 +501,16 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
       let starterCode = starterCodeMatch ? starterCodeMatch[1].trim() : '';
       starterCode = starterCode.replace(/```[a-zA-Z]*\n?/g, '').replace(/```\n?/g, '').trim();
 
-      return {
+      const finalUnit = {
         ...unit,
         content: content || unit.content || '',
         quiz: parsed.quiz || unit.quiz || [],
         exercise: parsed.exercise ? { ...parsed.exercise, starterCode } : unit.exercise,
         passCriteria: unit.passCriteria || { quizMinScore: 1, exerciseMustPass: true },
       };
+
+      await llmCache.set(cacheKey, finalUnit);
+      return finalUnit;
     } catch (parseErr) {
       console.warn('Response parsing failed. Raw response was:', responseContent);
       throw parseErr;
@@ -627,7 +650,7 @@ export async function buildAssessment(
       }
 
       const prompt = `
-You are FCAgent AssessmentReviewer, an elite teaching assistant mirroring the pedagogy of CS61A. The learner just completed a unit.
+You are FCAgent AssessmentReviewer, an elite, empathetic, and incredibly supportive teaching assistant. The learner just completed a unit.
 Unit: ${unit.title}
 Passed: ${passed}
 Attempt Count: ${attemptCount}
@@ -645,8 +668,8 @@ ${hintStrategy}
 Analyze their performance:
 1. If tests failed, look at the actual code and test errors, and provide hints strictly following the hint strategy above.
 2. If concepts failed, explain the misconception.
-3. Write a supportive, concise diagnosis (3-4 sentences in Chinese), integrating the hints appropriately.
-4. Write a short 1-sentence nextAction recommending what to do next.
+3. Write a supportive, highly personalized diagnosis (3-4 sentences in Chinese), integrating the hints appropriately. CRITICAL: Inject a lot of 'human touch' (人情味). If they failed, comfort them like a true mentor. If they succeeded, celebrate enthusiastically!
+4. Write a short 1-sentence nextAction recommending what to do next in a playful, encouraging tone.
 
 Return exactly valid JSON ONLY:
 { "diagnosis": "...", "nextAction": "..." }

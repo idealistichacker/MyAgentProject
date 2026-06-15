@@ -1,144 +1,138 @@
 {
   "learnerProfile": {
-    "target": "最终学习目标：**用 Rust 在 Linux 环境编写一个用户态模拟操作系统，实现包含内存管理、进程调度和简陋文件系统三大核心模块的完整玩具内核。**  \n\n接下来我会为你生成一条针对性的学习路径，准备好迎接秃头之旅吧～ 💖",
+    "target": "最终学习目标：**用 Python 实现一个 Scheme 子集编译器，借助 LLVM 生成可直接运行的 .exe 文件。**",
     "programmingLevel": "basic",
     "dsaLevel": "heard",
     "weeklyHours": "2-5",
     "totalWeeks": "5-8",
-    "learningStyle": "project-first",
+    "learningStyle": "example-first",
     "codePractice": "yes",
-    "pace": "normal",
+    "pace": "steady",
     "nearTermGoal": "无",
     "rawAnswers": {},
-    "summary": "该学习者具备基础编程经验，但对数据结构与算法仅有初步了解。他计划在5-8周内每周投入2-5小时，采用项目驱动的学习方式，用Rust在Linux环境构建一个包含内存管理、进程调度和简易文件系统的用户态模拟操作系统。学习风格偏好从实际项目切入，在构建中逐步融入系统编程知识，适合以分阶段实现内核模块为主线进行引导。由于时间有限且基础较浅，需要设计紧凑且循序渐进的学习路径，确保在短期内完成可运行的操作系统原型。",
+    "summary": "你是一位手握 Python 却心怀编译原理的“魔法学徒”——基础编程已入门，数据结构与算法还只是“江湖传说”，但居然想用 LLVM 把 Scheme 子集炼成 .exe，这胆识我先给满分！你偏爱从实例中摸爬滚打，每周 2-5 小时稳扎稳打，5-8 周内就要让编译器跑起来，简直是“时间管理大师”兼“项目驱动型冒险家”。别怕 DSA 底子薄，咱们就用代码当砖块，边砌编译器边补内功，我保证这段旅程既有挑战又有满满的成就感。欢迎入坑，你的自制编译器正在未来向你招手呢！",
     "createdAt": "2026-06-11T08:32:49.081Z"
   },
   "units": [
     {
-      "id": "rust-sys-foundations",
+      "id": "unit-1-scheme-secret-garden",
       "type": "unit",
-      "title": "Rust 系统编程基础与 Linux 环境搭建",
-      "description": "快速掌握 Rust 核心概念（所有权、借用、生命周期、智能指针）并配置 Linux 开发环境。重点学习 no_std 编程、unsafe Rust 基础以及如何在用户态模拟底层操作。参考 The Rust Book 第4-10章及 Philipp Oppermann 的 A Freestanding Rust Binary 教程。",
-      "prerequisites": [],
-      "objectives": [
-        "能在 Linux 下用 cargo 创建并编译 Rust 项目",
-        "理解所有权、借用、生命周期三大核心机制",
-        "掌握 Box、Rc、Arc、RefCell 等智能指针的使用场景",
-        "了解 unsafe Rust 的基本用法与 FFI 边界",
-        "能编写不依赖标准库的 freestanding Rust 程序"
+      "title": "Scheme 语法的秘密花园：S 表达式与函数式思维初探",
+      "description": "欢迎来到 Scheme 的魔法世界！本单元你将亲手写下人生第一段 Scheme 代码，从 (+ 1 2) 到 (define (fact n) ...)，逐步掌握 S 表达式、lambda、递归与词法作用域。我们会用 Python 的交互式 REPL 作为“翻译官”，让你直观感受 Scheme 的极简之美。这一单元是你最终「Scheme 解释器项目」的第一块基石——只有先会说 Scheme 这门语言，才能写出理解它的解释器。学完本单元，你将能阅读并编写中等复杂度的 Scheme 程序，为下一单元的“拆解魔法”（词法分析）做好充分准备。",
+      "prerequisites": [
+        "Python 基础语法（函数、列表、字典）"
       ],
-      "content": "# Rust 系统编程基础与 Linux 环境搭建\n\n## 一、Linux 开发环境与 Cargo 快速上手\n\n### 1.1 安装 Rust 工具链\n通过 `rustup` 一键安装：\n```bash\ncurl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh\n```\n安装后获得 `rustc`、`cargo` 和工具链管理器。验证：\n```bash\nrustc --version   # e.g. 1.84.0\ncargo --version\n```\n`rustup` 支持 stable/beta/nightly 三通道。编写 freestanding 程序时，若需自定义 `eh_personality` 等实验特性，可安装 nightly：\n```bash\nrustup toolchain install nightly\nrustup override set nightly   # 仅当前项目使用\n```\n但稳定版已支持 `#![no_std]` 和 `#[panic_handler]`，只需在 `Cargo.toml` 中设置 `panic = \"abort\"` 即可避免需要 `eh_personality`。\n\n### 1.2 Cargo 项目生命周期\n核心命令速查：\n\n| 命令 | 作用 |\n|------|------|\n| `cargo new <name>` | 创建项目（`Cargo.toml` + `src/main.rs`） |\n| `cargo build` | debug 编译，产物在 `target/debug/` |\n| `cargo build --release` | 优化编译，产物在 `target/release/` |\n| `cargo run` | 编译并运行 |\n| `cargo check` | 仅类型检查，极快，适合开发中验证 |\n| `cargo add <crate>` | 添加依赖（Rust ≥1.62 内置） |\n\n`Cargo.toml` 记录元数据与依赖，`Cargo.lock` 锁定精确版本。Cargo 自动解析依赖图并调用 `rustc`。\n\n---\n\n## 二、所有权、借用与生命周期 —— 内存安全三定律\n\n### 2.1 所有权（Ownership）\n三条铁律：\n1. 每个值有且仅有一个所有者。\n2. 所有者离开作用域，值被 `drop`。\n3. 所有权可转移（move），转移后原变量失效。\n\n```rust\nlet s1 = String::from(\"hello\");\nlet s2 = s1;          // s1 所有权移动至 s2\n// println!(\"{s1}\");  // 编译错误：s1 已失效\n```\n实现 `Copy` trait 的类型（如 `i32`、`bool`、`&T` 等）赋值时自动按位复制，不发生 move。`String`、`Vec` 等堆类型不实现 `Copy`，赋值即 move。\n\n**陷阱**：结构体部分移动（partial move）会导致整体不可用，除非仅移动 Copy 字段。例如：\n```rust\nlet p = (String::from(\"hi\"), 42);\nlet s = p.0;   // p.0 被移动\n// println!(\"{:?}\", p);  // 错误：p 整体部分移动后无效\n```\n\n### 2.2 借用（Borrowing）\n- `&T`：不可变借用，可同时存在多个。\n- `&mut T`：可变借用，同一时刻仅一个，且与不可变借用互斥。\n\n```rust\nlet mut v = vec![1,2,3];\nlet r1 = &v;\nlet r2 = &v;         // 允许多个不可变借用\n// let rm = &mut v;  // 错误：存在不可变借用\nprintln!(\"{r1} {r2}\");\nlet rm = &mut v;     // 合法：r1、r2 不再使用（NLL 非词法生命周期）\nrm.push(4);\n```\n**NLL（Non-Lexical Lifetimes）** 自 Rust 2018 起默认启用，编译器基于控制流图缩短借用范围，使更多代码通过检查。但核心规则不变：作用域内不能同时存在读写冲突。\n\n### 2.3 生命周期（Lifetime）\n生命周期标注是编译器验证引用有效范围的“契约”，不改变运行时行为。多数情况可自动推导（省略规则），但函数返回引用且涉及多个输入时需显式标注：\n```rust\nfn longest<'a>(x: &'a str, y: &'a str) -> &'a str {\n    if x.len() > y.len() { x } else { y }\n}\n```\n`'a` 表示返回引用的生命周期等于 `x` 和 `y` 中较短的那个。调用处编译器据此检查：\n```rust\nlet s1 = String::from(\"long\");\nlet result;\n{\n    let s2 = String::from(\"short\");\n    result = longest(&s1, &s2); // result 生命周期为 s2 的作用域\n}\n// println!(\"{result}\"); // 错误：s2 已释放\n```\n**省略规则**：每个输入引用获得独立生命周期，若只有一个输入引用则输出生命周期与之相同；方法中 `&self`/`&mut self` 的生命周期赋给输出。\n\n---\n\n## 三、智能指针 —— 超越引用的堆管理工具箱\n\n### 3.1 `Box<T>` —— 独占堆分配\n用于递归类型、转移大数据所有权、trait object：\n```rust\nenum List { Cons(i32, Box<List>), Nil }\nlet b = Box::new(5); // 堆上分配，自动释放\n```\n\n### 3.2 `Rc<T>` / `Arc<T>` —— 共享所有权\n- `Rc<T>`：单线程引用计数，非原子操作，开销低。\n- `Arc<T>`：原子引用计数，线程安全。\n\n```rust\nuse std::rc::Rc;\nlet a = Rc::new(String::from(\"shared\"));\nlet b = Rc::clone(&a);   // 计数 +1，不复制数据\nlet c = Rc::clone(&a);\nassert_eq!(Rc::strong_count(&a), 3);\n```\n`Rc<T>` 默认只提供不可变访问。若需可变性，可搭配 `RefCell`，或当引用计数为 1 时使用 `Rc::get_mut`。`Rc::make_mut` 提供写时克隆（clone-on-write）语义。\n\n**陷阱**：`Rc<RefCell<T>>` 可能产生循环引用导致内存泄漏，此时应使用 `Weak<T>` 打破循环。\n\n### 3.3 `RefCell<T>` —— 内部可变性\n将借用检查推迟到运行时：允许在持有不可变引用时修改内部值。违反规则（如同时两个 `borrow_mut()`）会触发 **panic**。\n```rust\nuse std::cell::RefCell;\nlet data = RefCell::new(42);\n*data.borrow_mut() += 1;   // 运行时可变借用\n```\n可用 `try_borrow()` / `try_borrow_mut()` 返回 `Result` 避免 panic。\n\n**经典组合** `Rc<RefCell<T>>`：单线程下多个所有者共享可变数据。\n\n| 智能指针 | 所有权 | 可变性 | 线程安全 | 检查时机 |\n|----------|--------|--------|----------|----------|\n| `Box<T>` | 独占 | 是 | 是 | 编译期 |\n| `Rc<T>` | 共享 | 否（需 RefCell） | 否 | 编译期 |\n| `Arc<T>` | 共享 | 否（需 Mutex） | 是 | 编译期 |\n| `RefCell<T>` | 不涉及 | 内部可变 | 否 | 运行时 |\n\n---\n\n## 四、unsafe Rust 与 FFI 边界\n\n五类 unsafe 超能力：\n1. 解引用裸指针\n2. 调用 unsafe 函数（含 FFI）\n3. 访问/修改可变静态变量\n4. 实现 unsafe trait\n5. 访问 union 字段\n\n```rust\nlet mut num = 5;\nlet r1 = &num as *const i32;\nlet r2 = &mut num as *mut i32;\nunsafe {\n    *r2 = 10;\n    println!(\"{}\", *r1);\n}\n```\n**FFI 示例**（调用 C 标准库）：\n```rust\nextern \"C\" { fn strlen(s: *const std::ffi::c_char) -> usize; }\nfn main() {\n    let s = std::ffi::CString::new(\"hello\").unwrap();\n    let len = unsafe { strlen(s.as_ptr()) };\n    println!(\"{len}\");\n}\n```\n**陷阱**：`CString` 拥有所有权，`as_ptr()` 返回的指针在 `CString` 被 drop 后失效，unsafe 块必须保证指针有效期内使用。暴露 Rust 函数给 C：\n```rust\n#[no_mangle]\npub extern \"C\" fn add(a: i32, b: i32) -> i32 { a + b }\n```\n**最佳实践**：将 unsafe 代码封装在安全抽象后，如 `Vec` 内部用 unsafe 操作裸指针，对外提供安全 API。\n\n---\n\n## 五、Freestanding Rust Binary —— 脱离标准库\n\n### 5.1 最小 no_std 程序\n```rust\n#![no_std]\n#![no_main]\n\nuse core::panic::PanicInfo;\n\n#[panic_handler]\nfn panic(_info: &PanicInfo) -> ! {\n    loop {}   // 裸机下最简单的处理\n}\n\n#[no_mangle]\npub extern \"C\" fn _start() -> ! {\n    // 内核入口\n    loop {}\n}\n```\n- `#![no_std]` 不链接 `std`，但可使用 `core`（提供 `Option`、`Result` 等）。\n- `#[panic_handler]` 必须定义，稳定版可用。\n- 若使用稳定版，需在 `Cargo.toml` 添加 `[profile.dev] panic = \"abort\"` 和 `[profile.release] panic = \"abort\"` 以避免需要 `eh_personality` 语言项。\n- `_start` 为 ELF 入口，`extern \"C\"` 确保 C ABI，`#[no_mangle]` 禁止名称修饰。\n\n### 5.2 编译与链接\n安装裸机目标：\n```bash\nrustup target add x86_64-unknown-none\ncargo build --target x86_64-unknown-none\n```\n自定义链接脚本（`linker.ld`）指定内存布局，在 `.cargo/config.toml` 中配置：\n```toml\n[target.'cfg(target_os = \"none\")']\nrustflags = [\"-C\", \"link-arg=-Tlinker.ld\"]\n```\n在用户态模拟 OS 时，可继续使用宿主目标（如 `x86_64-unknown-linux-gnu`）但禁用 `std`，便于用 GDB 调试。\n\n### 5.3 扩展：实现简易 println!\n通过 `core::fmt::Write` 可构建不依赖 `std` 的格式化输出。例如向 VGA 文本缓冲区写入：\n```rust\nuse core::fmt::Write;\nstruct VgaWriter { offset: usize }\nimpl Write for VgaWriter {\n    fn write_str(&mut self, s: &str) -> core::fmt::Result {\n        // 将 s 逐字节写入 0xb8000 + offset\n        Ok(())\n    }\n}\n// 宏封装\nmacro_rules! println {\n    ($($arg:tt)*) => { writeln!(VgaWriter { offset: 0 }, $($arg)*).unwrap(); }\n}\n```\n这展示了脱离标准库后仍能利用 Rust 强大的 trait 系统构建安全抽象。\n\n---\n\n**延伸阅读**：The Rust Book 第 4-10 章；Philipp Oppermann 的 *Writing an OS in Rust* 系列；Rust Nomicon 的 unsafe 与 FFI 章节。",
+      "objectives": [
+        "理解 S 表达式（S-expression）作为代码即数据的核心哲学",
+        "熟练使用 Scheme 子集编写递归函数、条件分支与变量绑定",
+        "掌握 lambda 匿名函数与高阶函数（map/filter/reduce）的 Scheme 写法",
+        "能手动将一段 Scheme 代码拆解为嵌套列表结构，为词法分析打下直觉基础"
+      ],
+      "content": "# Scheme 语法的秘密花园：S 表达式与函数式思维初探\n\n> “代码即数据，数据即代码”——这不是哲学口号，而是 Scheme 给你的超能力。\n\n## 0. 欢迎来到括号星球 🌍\n\n先别被密密麻麻的括号吓跑。看完这一节，你会爱上它们的——我保证。\n\n打开你的 Python REPL（没错，Python！），我们先用 Python 当“翻译官”，来一场 Scheme 速览：\n\n```python\n# 假装 Python 是 Scheme 解释器——你期末项目就会真的写出它！\n>>> from functools import reduce\n>>> # (+ 1 2) → Python 脑内翻译：1 + 2\n>>> 1 + 2\n3\n```\n\n**Scheme 的第一条法则：运算符在最前面。** 不是 `1 + 2`，而是 `(+ 1 2)`。这叫**前缀表达式**。为什么？因为 Scheme 里 `+` 不是“运算符”，它只是一个**普通函数名**——和 `fact`、`display` 没有任何地位区别。这为“代码即数据”埋下了最深的伏笔。\n\n---\n\n## 1. S 表达式：一棵披着括号外衣的树 🌳\n\n**S 表达式（S-expression）** 是 Scheme 唯一的语法。没有逗号、没有分号、没有缩进争议——只有原子和列表。\n\n| 类型 | 例子 | 含义 |\n|------|------|------|\n| 原子（Atom） | `42`, `#t`, `\"hello\"`, `x` | 不可再分的值或符号 |\n| 列表（List） | `(+ 1 2)`, `(define x 10)` | 括号包裹的若干 S 表达式 |\n\n**关键洞察**：`(+ 1 (* 2 3))` 既是一段**代码**（调用 `+`），也是一个**嵌套列表数据结构**：\n\n```\n(+ 1 (* 2 3))\n → Python 视角：['+', 1, ['*', 2, 3]]\n```\n\n这就是“代码即数据”的核心：**你的程序本身就是一棵 AST（抽象语法树），Scheme 把它赤裸裸地交到你手上。** 在 Python 里 `1 + 2 * 3` 需要解析器才能变成 AST；在 Scheme 里，你直接看到的就是 AST。\n\n> 🎯 **期末项目伏笔**：你的 Scheme 解释器的 `read` 阶段，就是把字符串 `\"(+ 1 2)\"` 解析成 Python 的 `Pair('+', Pair(1, Pair(2, nil)))`。今天你学会“看” S 表达式，就是在训练你解释器的“眼睛”。\n\n---\n\n## 2. 四则运算与 define：你的第一行 Scheme 🖊️\n\n```scheme\n(+ 1 2 3 4)        ; → 10（加法支持多参数！）\n(- 10 3 2)         ; → 5（从左到右连续减）\n(* 2 3 4)          ; → 24\n(/ 12 2 3)         ; → 2\n(= 5 5)            ; → #t（真）\n(< 3 5)            ; → #t\n```\n\n**变量绑定**用 `define`：\n\n```scheme\n(define x 10)           ; x = 10\n(define y (+ x 5))      ; y = 15\n```\n\n**函数定义**——两种写法，完全等价：\n\n```scheme\n; 方式一：define + lambda（显式版）\n(define fact\n  (lambda (n)\n    (if (= n 0)\n        1\n        (* n (fact (- n 1))))))\n\n; 方式二：语法糖（常用版）\n(define (fact n)\n  (if (= n 0)\n      1\n      (* n (fact (- n 1)))))\n```\n\n> 🧠 **心智模型**：方式二只是方式一的语法糖。你的解释器项目里，`(define (name args...) body)` 会被展开成 `(define name (lambda (args...) body))`。理解这一点，你就理解了 Scheme 的“去糖化”。\n\n---\n\n## 3. lambda：函数是一等公民 👑\n\n`lambda` 创建一个**匿名函数**——函数和 `42` 一样，是可以随手传递的值：\n\n```scheme\n(lambda (x) (* x x))           ; 一个求平方的函数\n((lambda (x) (* x x)) 5)       ; → 25（定义后立刻调用！）\n```\n\n**高阶函数三剑客**：\n\n```scheme\n(map (lambda (x) (* x x)) '(1 2 3 4))     ; → (1 4 9 16)\n(filter even? '(1 2 3 4 5 6))             ; → (2 4 6)\n(apply + '(1 2 3 4))                      ; → 10\n```\n\n> 🔥 **为什么这很酷？** Python 里你写 `map(lambda x: x*x, [1,2,3])` 觉得理所当然——但 Scheme 在 1975 年就已经这样做了。lambda 不是后来“加入”的特性，它是 Scheme 的**原生呼吸方式**。\n\n---\n\n## 4. 条件分支：if 与 cond 🌿\n\n```scheme\n; if 表达式：三部分——条件、真分支、假分支\n(if (> x 0)\n    \"positive\"\n    \"non-positive\")\n\n; cond：多分支（相当于 Python 的 if-elif-else）\n(cond ((< x 0) \"negative\")\n      ((= x 0) \"zero\")\n      (else    \"positive\"))\n```\n\n**关键区别**：Scheme 的 `if` 是**表达式**，不是语句——它**一定返回值**。这意味着你可以写 `(+ (if #t 1 2) 3)` 得到 `4`，这在 Python 中是不可能的。`cond` 同理，每个分支的最后一个表达式就是该分支的返回值。\n\n> ⚠️ **陷阱**：`cond` 如果没有 `else` 且所有条件都不满足，返回值是未定义的（CS61A 解释器可能报错）。**永远加上 `else` 分支**。\n\n---\n\n## 5. 递归：Scheme 的循环就是递归 🔄\n\nScheme 没有 `for`、`while`。**循环 = 递归**。\n\n```scheme\n; 计算列表长度\n(define (my-length lst)\n  (if (null? lst)\n      0\n      (+ 1 (my-length (cdr lst)))))\n\n; 列表求和\n(define (sum lst)\n  (if (null? lst)\n      0\n      (+ (car lst) (sum (cdr lst)))))\n```\n\n**尾递归优化**：Scheme 规范要求实现必须支持尾递归优化——递归深度可以无限，不会栈溢出。要让递归成为尾递归，需要把中间结果作为参数传递：\n\n```scheme\n(define (fact n)\n  (define (iter n acc)\n    (if (= n 0) acc (iter (- n 1) (* n acc))))\n  (iter n 1))\n```\n\n这里 `iter` 的递归调用是函数体最后一步，解释器可以复用栈帧，实现常数空间。\n\n---\n\n## 6. cons / car / cdr：列表的乐高积木 🧱\n\nScheme 的列表由 **cons 单元（pair）** 串联而成：\n\n```scheme\n(cons 1 2)              ; → (1 . 2)  —— 一个 pair\n(cons 1 (cons 2 '()))   ; → (1 2)    —— 一个 proper list\n(car '(1 2 3))          ; → 1        —— 取头部\n(cdr '(1 2 3))          ; → (2 3)    —— 取尾部\n```\n\n列表本质：`(1 2 3)` = `(cons 1 (cons 2 (cons 3 '())))`。`'()` 是空列表（nil）。\n\n> ⚠️ **陷阱**：`(1 . 2)` 不是 proper list，它的 `cdr` 不是 pair 也不是 `'()`，对它使用 `length` 或 `map` 会出错。**确保列表最后一个 cons 的 cdr 是 `'()`**。\n\n> 📐 **手拆练习**：把 `(define (square x) (* x x))` 拆成嵌套列表结构：\n> ```\n> (define (square x) (* x x))\n> → ['define', ['square', 'x'], ['*', 'x', 'x']]\n> ```\n> 这就是你解释器项目里 `scheme_read` 要干的事——把字符串变成 Pair 链。\n\n---\n\n## 7. quote 与词法作用域 🔒\n\n```scheme\n(quote (1 2 3))     ; → (1 2 3)，阻止求值\n'(1 2 3)            ; 同上，' 是 quote 的语法糖\n```\n\n`quote` 告诉 Scheme：“别求值这个表达式，把它当数据还给我。” 这是“代码即数据”的操作按钮。\n\n**词法作用域（Lexical Scoping）**：变量的可见性由**源代码的文本结构**决定，而非运行时调用栈。\n\n```scheme\n(define (make-adder x)\n  (lambda (y) (+ x y)))      ; x 被“捕获”进闭包\n\n(define add5 (make-adder 5))\n(add5 3)                      ; → 8\n```\n\n`x` 在 `lambda` 内部依然可见——因为它在 `make-adder` 的**词法作用域**内。这就是**闭包（closure）**。\n\n> ⚠️ **陷阱**：`'(1 2 3)` 创建的是**字面量列表**，修改它的元素（如 `set-car!`）行为是未定义的，可能导致不可预测的错误。在 CS61A 项目中，请把引用的列表当作只读数据。\n\n---\n\n## 8. 从 Scheme 到解释器：全景图 🗺️\n\n学完本单元，你已经能写出这样的 Scheme 程序：\n\n```scheme\n(define (primes-to n)\n  (define (range a b)\n    (if (> a b) '() (cons a (range (+ a 1) b))))\n  (define (filter pred lst)\n    (if (null? lst)\n        '()\n        (if (pred (car lst))\n            (cons (car lst) (filter pred (cdr lst)))\n            (filter pred (cdr lst)))))\n  (define (sieve lst)\n    (if (null? lst)\n        '()\n        (cons (car lst)\n              (sieve (filter (lambda (x) (not (= (modulo x (car lst)) 0)))\n                             (cdr lst))))))\n  (sieve (range 2 n)))\n```\n\n**但更重要的是**，你现在拥有了一种“X 光透视眼”——看到 `(+ 1 2)`，你脑中浮现的不再是“加法”，而是 `Pair('+', Pair(1, Pair(2, nil)))`。\n\n这就是下一单元的入场券：**词法分析（Lexing）与语法解析（Parsing）**——把字符串变成 AST。你已经知道 AST 长什么样了，剩下的只是写出那个转换器。\n\n> 🏰 **巅峰项目预告**：你的 Scheme 解释器将实现 REPL（Read → Eval → Print → Loop）。本单元教会你“说 Scheme”，下一单元教会你“拆 Scheme”，第三单元教会你“运行 Scheme”。三块基石垒在一起——你将亲手让代码在 Python 中活过来。\n\n---\n\n**括号不是枷锁，是翅膀。** 下一站：词法分析的拆解魔法。🪄",
       "references": [],
       "quiz": [
         {
           "id": "q1",
           "type": "choice",
-          "question": "In Rust, what happens when a `String` is assigned to another variable (e.g., `let s2 = s1;`)?",
+          "question": "🐉 小龙 Lispy 在魔法森林里发现了一本古老的 Scheme 咒语书。它看到一行咒语：`(+ 1 (* 2 3))`。Lispy 想知道，如果把这行咒语看成数据（而不是代码），它在 Python 里最像下面哪一个嵌套列表？",
           "options": [
-            "A deep copy of the string data is created, and both variables are independent.",
-            "The ownership is moved to `s2`; `s1` becomes invalid and cannot be used.",
-            "Both `s1` and `s2` point to the same heap data, and the reference count is incremented.",
-            "The compiler automatically clones `s1` because `String` implements the `Copy` trait."
+            "['+', 1, ['*', 2, 3]]",
+            "['+', '1', '*', '2', '3']",
+            "['+', [1, '*', 2, 3]]",
+            "['+', 1, 2, 3, '*']"
           ],
-          "answer": "B",
-          "explanation": "`String` does not implement the `Copy` trait. Assignment moves ownership, leaving the original variable uninitialized. Using `s1` afterwards results in a compile error."
+          "answer": "A",
+          "explanation": "Scheme 的 S 表达式 `(+ 1 (* 2 3))` 是一棵语法树：根是 `+`，第一个参数是原子 `1`，第二个参数是子列表 `(* 2 3)`。在 Python 中表示为 `['+', 1, ['*', 2, 3]]`。这正是你期末解释器 `read` 阶段要生成的 Pair 链的嵌套列表视角。"
         },
         {
           "id": "q2",
           "type": "choice",
-          "question": "Which of the following is true about Rust's borrowing rules with Non‑Lexical Lifetimes (NLL)?",
+          "question": "🧙‍♀️ 女巫 Alice 写了一个 Scheme 函数 `(define (square x) (* x x))`。她想知道这个定义在解释器内部会被“去糖化”成什么形式？",
           "options": [
-            "You can have multiple `&mut T` references to the same data as long as they are in different scopes.",
-            "A `&mut T` reference can coexist with `&T` references if the immutable references are no longer used after the mutable borrow occurs.",
-            "NLL allows a value to be moved while it is still borrowed, as long as the borrow is not used afterwards.",
-            "The borrowing rules are relaxed at runtime; violations cause a panic instead of a compile error."
+            "(define square (lambda (x) (* x x)))",
+            "(lambda (square x) (* x x))",
+            "(define (lambda (x) (* x x)) square)",
+            "(define square (* x x))"
           ],
-          "answer": "B",
-          "explanation": "NLL shortens borrow scopes based on actual usage. If all immutable references are no longer live at the point where a mutable borrow is taken, the code compiles. However, the fundamental rule still forbids simultaneous active read and write borrows."
+          "answer": "A",
+          "explanation": "`(define (name args...) body)` 只是语法糖，真正的含义是 `(define name (lambda (args...) body))`。你的解释器项目里需要实现这个去糖化步骤，把函数定义统一转换成 lambda 形式。"
         },
         {
           "id": "q3",
           "type": "choice",
-          "question": "Which standard library type provides *interior mutability* by enforcing borrowing rules at runtime instead of compile time?",
+          "question": "🤖 机器人 Robo 在解析 `'(1 . (2 . (3 . ())))` 时卡住了。它想知道这个点对表示法对应的列表是什么？",
           "options": [
-            "`Box<T>`",
-            "`Rc<T>`",
-            "`RefCell<T>`",
-            "`Arc<T>`"
+            "(1 2 3)",
+            "(1 . 2 . 3)",
+            "((1 2) 3)",
+            "(1 (2 3))"
           ],
-          "answer": "C",
-          "explanation": "`RefCell<T>` allows mutation of its inner value even when the `RefCell` itself is immutable. It tracks borrows dynamically and will panic if a mutable borrow conflicts with another borrow. `Box`, `Rc`, and `Arc` do not provide interior mutability on their own."
+          "answer": "A",
+          "explanation": "`(1 . (2 . (3 . ())))` 是 proper list `(1 2 3)` 的 cons 单元串联写法。每个 cons 的 car 是元素，cdr 是下一个 cons 或空列表。`(1 2 3)` 就是 `(cons 1 (cons 2 (cons 3 '())))`。"
         },
         {
           "id": "q4",
           "type": "choice",
-          "question": "When building a freestanding Rust binary (`#![no_std]`), which of the following is **mandatory**?",
+          "question": "🦊 狐狸 Fred 写了一个高阶函数：`(map (lambda (x) (* x x)) '(1 2 3))`。它想知道这个表达式返回什么？",
           "options": [
-            "Defining a `#[panic_handler]` function.",
-            "Using the nightly compiler.",
-            "Implementing the `eh_personality` language item.",
-            "Linking against the C standard library."
+            "(1 4 9)",
+            "((1) (4) (9))",
+            "(1 2 3)",
+            "一个错误，因为 lambda 不能直接传给 map"
           ],
           "answer": "A",
-          "explanation": "A `#[panic_handler]` is required for any `#![no_std]` binary to define what happens on panic. Nightly is not required (stable supports `#[panic_handler]` and `panic = \"abort\"`). `eh_personality` is not needed when panics abort. The C standard library is not required; you can target bare metal."
+          "explanation": "`map` 将函数应用于列表的每个元素，返回结果列表。`(lambda (x) (* x x))` 是平方函数，所以 `(map ... '(1 2 3))` 返回 `(1 4 9)`。在 Scheme 中，lambda 是一等公民，可以像普通值一样传递。"
         }
       ],
       "exercise": {
         "id": "ex-1",
-        "language": "rust",
-        "entrypoint": "longest_word",
-        "description": "Implement a function `longest_word` that takes a string slice and returns the longest word (contiguous sequence of non‑whitespace characters) as a string slice. If multiple words share the maximum length, return the first one. If the input is empty or contains only whitespace, return an empty string slice. The function must not allocate any new `String`; it must return a slice into the original string. Use proper lifetime annotations.",
-        "starterCode": "/// Returns the longest word (contiguous non‑whitespace characters) in `s`.\n///\n/// If multiple words have the same maximum length, the first one is returned.\n/// If the input is empty or contains only whitespace, an empty string slice is returned.\n///\n/// # Examples\n///\n/// /// let result = longest_word(\"hello world\");\n/// assert_eq!(result, \"hello\");\n///\n/// let result = longest_word(\"a bb ccc\");\n/// assert_eq!(result, \"ccc\");\n///\n/// let result = longest_word(\"   \");\n/// assert_eq!(result, \"\");\n/// ///\n/// # Lifetimes\n/// The returned reference is tied to the input `s`; no new allocation is performed.\npub fn longest_word<'a>(s: &'a str) -> &'a str {\n    // Step 1: Split the string by whitespace to obtain an iterator over word slices.\n    //         Use `s.split_whitespace()` which yields `&str` slices.\n    let mut longest: &str = \"\";\n\n    // Step 2: Iterate over each word slice.\n    //         For each word, compare its byte length with the current longest.\n    for word in s.split_whitespace() {\n        // Step 3: If the current word is longer, update `longest`.\n        if word.len() > longest.len() {\n            longest = word;\n        }\n    }\n\n    // Step 4: Return the longest word slice (or \"\" if no words were found).\n    longest\n}",
-        "testCode": "mod solution;\n\nfn main() {\n    let tests = vec![\n        (\"test 1\", \"hello world\", \"hello\"),\n        (\"test 2\", \"a bb ccc\", \"ccc\"),\n        (\"test 3\", \"   \", \"\"),\n        (\"test 4\", \"\", \"\"),\n        (\"test 5\", \"one two three\", \"three\"),\n        (\"test 6\", \"equal length words hi\", \"equal\"),\n    ];\n    for (name, input, expected) in tests {\n        let result = solution::longest_word(input);\n        let passed = result == expected;\n        let message = if passed {\n            \"\".to_string()\n        } else {\n            format!(\"expected '{}', got '{}'\", expected, result)\n        };\n        println!(\"{{\\\"name\\\": \\\"{}\\\", \\\"passed\\\": {}, \\\"message\\\": \\\"{}\\\", \\\"expected\\\": \\\"{}\\\", \\\"actual\\\": \\\"{}\\\"}}\",\n            name, passed, message, expected, result);\n    }\n}\n",
+        "language": "python",
+        "entrypoint": "eval_prefix",
+        "description": "🏰 圣殿前厅的试炼：前缀表达式求值器\n\n在进入 Scheme 解释器的核心之前，你需要先掌握如何对一棵“裸”的语法树进行求值。你的任务是实现一个函数 `eval_prefix(expr)`，它接收一个字符串形式的前缀算术表达式（完全括号化），返回其整数值。\n\n表达式只包含：\n- 整数（可能为负数）\n- 运算符：`+`、`-`、`*`、`/`（整数除法，向零取整）\n- 括号严格匹配，每个操作符后至少有一个操作数\n\n例如：\n- `'(+ 1 2)'` → `3`\n- `'(* (+ 2 3) 4)'` → `20`\n- `'(/ 10 3)'` → `3`\n\n这本质上是 Scheme 解释器 `eval` 阶段的一个微缩版——你将递归地解析列表结构并应用操作符。完成它，你就离让代码在 Python 中活过来更近了一步！",
+        "starterCode": "def eval_prefix(expr: str) -> int:\n    \"\"\"\n    Evaluate a fully parenthesized prefix arithmetic expression.\n\n    The expression contains only integers and the operators '+', '-', '*', '/'.\n    Division is integer division (truncating toward zero).\n    You may assume the input is syntactically valid.\n\n    Examples:\n    >>> eval_prefix(\"(+ 1 2)\")\n    3\n    >>> eval_prefix(\"(* (+ 2 3) 4)\")\n    20\n    >>> eval_prefix(\"(/ 10 3)\")\n    3\n    >>> eval_prefix(\"(+ -5 (* 2 3))\")\n    1\n    >>> eval_prefix(\"(+ 1 2 3 4)\")\n    10\n\n    :param expr: string of the prefix expression, e.g. \"(+ 1 2)\"\n    :return: integer result of evaluating the expression\n    \"\"\"\n    # Step 1: Tokenize the input string.\n    # Replace '(' with ' ( ' and ')' with ' ) ' so that split() works cleanly.\n    # TODO: tokenize expr into a list of strings (tokens)\n    tokens = []\n\n    # Step 2: Parse the flat token list into a nested list structure (AST).\n    # Use a recursive helper that consumes tokens from an iterator.\n    # TODO: implement parse_tokens(tokens_iter) that returns a list or an int atom\n    def parse_tokens(it):\n        # TODO: get next token\n        # if token is '(', start a new list and collect items until ')'\n        # if token is ')', should not happen at top level (or you can raise error)\n        # otherwise, it's an atom: try to convert to int, else keep as string (operator)\n        pass\n\n    # Step 3: Evaluate the parsed AST recursively.\n    # TODO: implement eval_ast(ast)\n    # If ast is an int, return it.\n    # If ast is a list, first element is the operator, rest are operands.\n    # Recursively evaluate operands, then apply the operator (use a loop or reduce).\n    def eval_ast(ast):\n        pass\n\n    # Step 4: Wire everything together.\n    # TODO: tokenize, parse, then evaluate and return the result.\n    return 0",
+        "testCode": "import json\nfrom solution import eval_prefix\n\ntest_cases = [\n    {\"name\": \"simple addition\", \"input\": \"(+ 1 2)\", \"expected\": 3},\n    {\"name\": \"nested expression\", \"input\": \"(* (+ 2 3) 4)\", \"expected\": 20},\n    {\"name\": \"division truncation\", \"input\": \"(/ 10 3)\", \"expected\": 3},\n    {\"name\": \"negative number\", \"input\": \"(+ -5 (* 2 3))\", \"expected\": 1},\n    {\"name\": \"multiple arguments\", \"input\": \"(+ 1 2 3 4)\", \"expected\": 10}\n]\n\nfor case in test_cases:\n    try:\n        actual = eval_prefix(case[\"input\"])\n        passed = actual == case[\"expected\"]\n        message = \"\" if passed else f\"Expected {case['expected']}, got {actual}\"\n    except Exception as e:\n        actual = None\n        passed = False\n        message = str(e)\n    print(json.dumps({\n        \"name\": case[\"name\"],\n        \"passed\": passed,\n        \"message\": message,\n        \"expected\": case[\"expected\"],\n        \"actual\": actual\n    }))\n",
         "assertionMode": "return",
         "testCases": [
           {
-            "name": "test 1",
+            "name": "simple addition",
             "input": [
-              "hello world"
+              "(+ 1 2)"
             ],
-            "expected": "hello"
+            "expected": 3
           },
           {
-            "name": "test 2",
+            "name": "nested expression",
             "input": [
-              "a bb ccc"
+              "(* (+ 2 3) 4)"
             ],
-            "expected": "ccc"
+            "expected": 20
           },
           {
-            "name": "test 3",
+            "name": "division truncation",
             "input": [
-              "   "
+              "(/ 10 3)"
             ],
-            "expected": ""
+            "expected": 3
           },
           {
-            "name": "test 4",
+            "name": "negative number",
             "input": [
-              ""
+              "(+ -5 (* 2 3))"
             ],
-            "expected": ""
+            "expected": 1
           },
           {
-            "name": "test 5",
+            "name": "multiple arguments",
             "input": [
-              "one two three"
+              "(+ 1 2 3 4)"
             ],
-            "expected": "three"
-          },
-          {
-            "name": "test 6",
-            "input": [
-              "equal length words hi"
-            ],
-            "expected": "equal"
+            "expected": 10
           }
         ],
         "hints": [
-          "Use `s.split_whitespace()` to obtain an iterator over non‑empty slices.",
-          "The returned reference must live as long as the input; annotate the function with `<'a>` and tie the output lifetime to the input.",
-          "Keep track of the longest slice seen so far by comparing `.len()` values."
+          "你可以先用 `replace` 把 '(' 替换成 ' ( ' ，把 ')' 替换成 ' ) '，然后用 `split()` 得到 token 列表。",
+          "递归解析：遇到 '(' 就开始一个新列表，遇到 ')' 就结束当前列表，遇到数字就转成 int。",
+          "求值时，取出列表的第一个元素作为操作符，其余元素递归求值后，用 `reduce` 或循环应用操作。"
         ]
       },
       "passCriteria": {
@@ -147,107 +141,621 @@
       }
     },
     {
-      "id": "os-arch-memory",
+      "id": "unit-2-lexer-parser-twin-towers",
       "type": "unit",
-      "title": "内存管理模块：虚拟内存与物理页分配器",
-      "description": "实现用户态模拟操作系统的内存管理子系统。从物理内存池（基于 Vec<u8> 模拟）出发，构建页式内存分配器（buddy system 或简易页表），实现虚拟地址到物理地址的映射模拟。参考 nikofil 的 Rust-OS Kernel buddy allocator 系列及 os.phil-opp.com 的 Paging 章节。",
+      "title": "词法分析与语法分析的魔法双塔：用 PLY 驯服 Scheme 文本",
+      "description": "编译器最神秘的前端大门即将打开！本单元你将使用 Python 的 PLY（Python Lex-Yacc）库，从零搭建 Scheme 子集的词法分析器（Lexer）和语法分析器（Parser）。我们会像拆乐高一样，把一段 Scheme 源代码先切成 token 流（括号、数字、符号、关键字），再组装成一棵嵌套的 Python 列表 AST。每个概念都配有可运行的迷你示例，让你在“调参”中理解正则文法与 LALR(1) 解析。这一单元直接为「Scheme 解释器项目」提供“阅读理解”能力——没有 parser，解释器就是聋子。学完本单元，你将拥有一个能吃掉 .scm 文件并吐出结构化 AST 的完整前端。",
       "prerequisites": [
-        "rust-sys-foundations"
+        "unit-1-scheme-secret-garden",
+        "Python 字符串处理与正则表达式基础"
       ],
       "objectives": [
-        "理解虚拟内存、物理内存、页表的基本概念",
-        "实现一个基于 buddy system 的物理页帧分配器",
-        "构建简易页表结构并实现地址映射（map/unmap）",
-        "实现内核堆分配器（基于分配的物理页）",
-        "编写单元测试验证内存分配与回收的正确性"
+        "理解编译器前端的两阶段流水线：词法分析 → 语法分析",
+        "使用 PLY 的 lex 模块定义 Scheme 子集的 token 规则（括号、标识符、数字、布尔值、关键字）",
+        "使用 PLY 的 yacc 模块编写 BNF 文法，将 token 流解析为嵌套列表 AST",
+        "能独立调试文法冲突（shift/reduce），并扩展语法以支持 quote、if、lambda 等特殊形式"
       ],
+      "content": "# 词法分析与语法分析的魔法双塔：用 PLY 驯服 Scheme 文本\n\n> *“编译器没有 parser，就像一个音乐家没有耳朵——它能发出声音，但永远听不懂乐谱。”*\n\n欢迎来到编译器前端的大门！如果把编译器想象成一座城堡，**词法分析器（Lexer）** 和 **语法分析器（Parser）** 就是入口的两座魔法塔——一座负责“识字”，一座负责“造句”。本单元，我们将用 Python 的 **PLY（Python Lex-Yacc）** 库，从零搭建一个 Scheme 子集的前端，让 `.scm` 文件进去，一棵嵌套列表 AST 出来。\n\n---\n\n## 1. 先看成品：10 秒感受“前端”在干什么\n\n```scheme\n(define (square x) (* x x))\n```\n\n经过双塔流水线后，变成：\n\n```python\n['define', ['square', 'x'], ['*', 'x', 'x']]\n```\n\n**这就是编译器的“阅读理解”结果。** 没有这一步，解释器看到的只是一串字符。而有了 AST，解释器就可以递归遍历求值——这正是巅峰项目 **Scheme 解释器 REPL 中 “R”（Read）环节** 的核心能力。\n\n---\n\n## 2. 第一座塔：词法分析（Lexing）——把字符串切成 Token 流\n\n### 2.1 直觉类比\n\n大脑读“我喜欢编程”会自动切分成 `[\"我\",\"喜欢\",\"编程\"]`。词法分析器干的就是这件事——把源代码字符串切成有意义的 **词法单元（Token）**。\n\n对于 `(define (square x) (* x x))`，词法分析器应输出：\n\n```\nLPAREN  →  (\nIDENTIFIER → define\nLPAREN  →  (\nIDENTIFIER → square\nIDENTIFIER → x\nRPAREN  →  )\nLPAREN  →  (\nIDENTIFIER → *\nIDENTIFIER → x\nIDENTIFIER → x\nRPAREN  →  )\nRPAREN  →  )\n```\n\n### 2.2 用 PLY 的 `lex` 模块实现\n\nPLY 的约定：**你定义什么 Token，就写什么 `t_` 开头的规则。** 下面是核心骨架：\n\n```python\nimport ply.lex as lex\n\ntokens = (\n    'LPAREN', 'RPAREN',      # ( )\n    'QUOTE',                  # '\n    'NUMBER',                 # 42, -3, 3.14\n    'BOOLEAN',                # #t, #f\n    'IDENTIFIER',             # square, x, +\n)\n\nt_LPAREN  = r'\\('\nt_RPAREN  = r'\\)'\nt_QUOTE   = r'\\''\n\ndef t_NUMBER(t):\n    r'-?\\d+\\.?\\d*'            # 整数或小数\n    t.value = float(t.value) if '.' in t.value else int(t.value)\n    return t\n\ndef t_BOOLEAN(t):\n    r'#t|#f'\n    t.value = True if t.value == '#t' else False\n    return t\n\ndef t_IDENTIFIER(t):\n    r'[a-zA-Z+\\-*/<=>!?][a-zA-Z0-9+\\-*/<=>!?]*'\n    return t\n\nt_ignore  = ' \\t'\nt_ignore_COMMENT = r';.*'     # 行注释\n\ndef t_newline(t):\n    r'\\n+'\n    t.lexer.lineno += len(t.value)\n\ndef t_error(t):\n    print(f\"⚠️ 非法字符 '{t.value[0]}' 在第 {t.lexer.lineno} 行\")\n    t.lexer.skip(1)\n\nlexer = lex.lex()\n```\n\n### 2.3 立刻试试\n\n```python\ncode = \"(define (square x) (* x x))\"\nlexer.input(code)\nwhile True:\n    tok = lexer.token()\n    if not tok: break\n    print(f\"{tok.type:12} → {tok.value}\")\n```\n\n输出与预期一致。\n\n> 🧙 **魔法要点**：PLY 按 `t_` 函数的**定义顺序**匹配——先定义的规则优先级更高。这就是为什么 `t_BOOLEAN` 要放在 `t_IDENTIFIER` 前面（否则 `#t` 会被误认为标识符）。同时，`t_ignore` 中的字符会被自动跳过，不会产生 Token。\n\n### 2.4 关键陷阱：负数与减号\n\nScheme 中 `-` 既是标识符（减法函数），也是数字前缀（如 `-3`）。词法分析器如何区分？**最长匹配原则**：`t_NUMBER` 的正则 `-?\\d+\\.?\\d*` 会优先匹配 `-3` 为一个 NUMBER token；单独的 `-` 因不满足 `\\d+` 而不会被匹配，最终落入 `t_IDENTIFIER`。因此，**必须将 `t_NUMBER` 定义在 `t_IDENTIFIER` 之前**，否则 `-3` 会被切成 `-` 和 `3` 两个 token。\n\n---\n\n## 3. 第二座塔：语法分析（Parsing）——把 Token 流组装成 AST\n\n### 3.1 从 Token 到树：LALR(1) 解析\n\n词法分析给了我们一串“单词”，语法分析器的任务是把它们按**文法规则**组装成一棵树。PLY 的 `yacc` 模块使用 **LALR(1)** 算法——工业界最主流的自底向上解析算法，Yacc/Bison 都用它。\n\n### 3.2 用 BNF 描述 Scheme 语法\n\nScheme 一切皆 S-表达式。一个 S-表达式要么是原子，要么是 `(操作符 操作数...)` 的列表。BNF 如下：\n\n```\nexpression : atom\n           | '(' expression_list ')'\n\natom       : NUMBER | BOOLEAN | IDENTIFIER\n\nexpression_list : expression\n                | expression_list expression\n```\n\n### 3.3 用 PLY 的 `yacc` 实现\n\n```python\nimport ply.yacc as yacc\nfrom scheme_lexer import tokens\n\ndef p_expression_atom(p):\n    '''expression : NUMBER\n                  | BOOLEAN\n                  | IDENTIFIER'''\n    p[0] = p[1]\n\ndef p_expression_list(p):\n    '''expression : LPAREN expression_list RPAREN'''\n    p[0] = p[2]                    # 扔掉括号，返回内部列表\n\ndef p_expression_list_first(p):\n    '''expression_list : expression'''\n    p[0] = [p[1]]\n\ndef p_expression_list_rest(p):\n    '''expression_list : expression_list expression'''\n    p[0] = p[1] + [p[2]]\n\ndef p_error(p):\n    if p:\n        print(f\"❌ 语法错误：意外 Token '{p.value}'\")\n    else:\n        print(\"❌ 语法错误：输入不完整\")\n\nparser = yacc.yacc()\n```\n\n### 3.4 见证奇迹\n\n```python\nresult = parser.parse(\"(define (square x) (* x x))\")\nprint(result)   # ['define', ['square', 'x'], ['*', 'x', 'x']]\n```\n\n**完美！** 这正是 REPL 中 `Read` 阶段的输出。\n\n---\n\n## 4. 扩展语法：支持 `quote`、空列表、点对\n\n### 4.1 引号语法 `'x` ≡ `(quote x)`\n\n添加一条产生式即可：\n\n```python\ndef p_expression_quote(p):\n    '''expression : QUOTE expression'''\n    p[0] = ['quote', p[2]]\n```\n\n现在 `'apple` → `['quote', 'apple']`，`'(1 2)` → `['quote', [1, 2]]`。\n\n### 4.2 支持空列表 `()`\n\n当前文法要求列表至少有一个元素。要支持 `()`，需增加一条空产生式：\n\n```python\ndef p_expression_list_empty(p):\n    '''expression_list : '''\n    p[0] = []                     # 空列表\n```\n\n**注意**：空产生式必须放在 `expression_list` 的其他产生式**之后**，否则会导致解析器在遇到 `)` 时不知道该归约成空列表还是等待更多 token。PLY 会报告 shift/reduce 冲突，但通过定义顺序（空产生式在后）可让解析器优先选择移进，从而正确解析 `()`。\n\n### 4.3 点对（dotted pair）`(1 . 2)`\n\nScheme 的点对是构建非列表结构的关键。添加一条规则：\n\n```python\ndef p_expression_dotted(p):\n    '''expression : LPAREN expression_list DOT expression RPAREN'''\n    p[0] = p[2] + ['.', p[4]]     # 用 Python 列表模拟，如 [1, '.', 2]\n```\n\n同时需在词法分析器中添加 `DOT` token：`t_DOT = r'\\.'`（注意转义）。这样 `(1 . 2)` 会被解析为 `[1, '.', 2]`，解释器可据此构造 cons 对。\n\n---\n\n## 5. 调试必杀技：shift/reduce 冲突\n\n当你扩展语法时，PLY 可能会报：\n\n```\nWARNING: 1 shift/reduce conflict\n```\n\n这意味着解析器在某个状态下**不知道该“移进”下一个 Token 还是“归约”当前规则**。例如，加入空列表产生式时，解析器在遇到 `)` 时面临选择：移进 `)` 以完成列表，还是归约空 `expression_list`？通过将空产生式放在最后，PLY 默认选择移进，从而正确解析 `()`。\n\n**调试三步法：**\n\n1. **生成调试文件**：`parser = yacc.yacc(debug=True)`，会生成 `parser.out`，里面详细列出了每个状态和冲突。\n2. **设置优先级**：用 `precedence` 元组声明运算符优先级和结合性（Scheme 中极少用，但若添加中缀运算符则必需）。\n3. **重构文法**：如果冲突复杂，把歧义规则拆成更明确的产生式。\n\n> 💡 对于 Scheme 子集，由于 S-表达式天然无歧义，你基本不会遇到冲突——这是 Lisp 家族语言的巨大优势。\n\n---\n\n## 6. 完整流水线：从文件到 AST（支持多表达式）\n\nScheme 源文件通常包含多个表达式。修改顶层文法：\n\n```python\ndef p_program(p):\n    '''program : expression_list'''\n    p[0] = p[1]\n\ndef p_expression_list_multi(p):\n    '''expression_list : expression_list expression\n                       | expression'''\n    # 与之前相同，但允许顶层多个表达式\n```\n\n然后构建解析器时指定起始符号：`parser = yacc.yacc(start='program')`。现在 `parser.parse(\"(define a 1) (define b 2)\")` 会返回 `[['define', 'a', 1], ['define', 'b', 2]]`。\n\n---\n\n## 7. 单元小结 & 通向巅峰项目的桥梁\n\n| 概念 | 一句话 |\n|------|--------|\n| **词法分析（Lexing）** | 正则 + 有限状态机，把字符串切成 Token |\n| **语法分析（Parsing）** | BNF 文法 + LALR(1)，把 Token 组装成 AST |\n| **PLY `lex`** | `t_` 前缀定义 Token，按顺序匹配，支持动作函数 |\n| **PLY `yacc`** | `p_` 前缀定义产生式，`p[0]` 是归约结果 |\n| **shift/reduce 冲突** | 解析器不知道该移进还是归约，用优先级或重构文法解决 |\n\n**下一步**：带着这个 AST 生成器，你将进入 **Unit 3（AST 遍历与环境模型）**，学习如何递归遍历这棵嵌套列表树，实现 `define`、`lambda`、`if` 的求值逻辑。最终在巅峰项目中，三者合一——**Lexer + Parser + Evaluator = 一个完整的 Scheme 解释器**。\n\n> 🏰 *“双塔已立，圣殿之门即将开启。”*",
       "references": [],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "🧙‍♀️ 学徒 Elena 正在修复古老的 Scheme 解析魔法塔。她发现词法分析器总是把 `-3` 错误地切成两个 Token：`-`（减号）和 `3`（数字），导致后续语法分析崩溃。她定义了 `t_NUMBER` 和 `t_IDENTIFIER` 两条规则，但顺序错了。根据 PLY 的匹配规则，她应该如何调整这两条规则的**定义顺序**，才能让 `-3` 被正确识别为一个 NUMBER Token？",
+          "options": [
+            "A. 把 `t_IDENTIFIER` 放在 `t_NUMBER` 前面",
+            "B. 把 `t_NUMBER` 放在 `t_IDENTIFIER` 前面",
+            "C. 顺序无所谓，PLY 会自动选择最长匹配",
+            "D. 必须额外写一条专门处理负数的规则"
+          ],
+          "answer": "B",
+          "explanation": "PLY 按照 `t_` 函数的**定义顺序**进行匹配，先定义的规则优先级更高。`t_NUMBER` 的正则表达式 `-?\\d+\\.?\\d*` 可以完整匹配 `-3`，而 `t_IDENTIFIER` 只能匹配单独的 `-`。如果把 `t_NUMBER` 放在前面，`-3` 就会被优先识别为一个 NUMBER Token；反之，`-` 会先被 `t_IDENTIFIER` 抢走，剩下的 `3` 再被识别为另一个 NUMBER，导致错误。这正是课程中强调的“关键陷阱”。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-1",
+        "language": "python",
+        "entrypoint": "tokenize",
+        "description": "🏰 魔法塔的 Lexer 核心水晶出现了裂痕！Elena 需要你帮她重铸一块新的水晶——实现一个 Scheme 词法分析器函数 `tokenize(code)`。它必须能把 Scheme 源代码字符串转换成 Token 列表，每个 Token 是一个 `(类型, 值)` 的元组。支持的类型：`LPAREN`、`RPAREN`、`QUOTE`（单引号 `'`）、`NUMBER`（整数或浮点数）、`BOOLEAN`（`#t` 为 `True`，`#f` 为 `False`）、`IDENTIFIER`（变量名或操作符，如 `+`、`square`）。忽略空格、制表符和以分号 `;` 开头的行注释。这是巅峰项目解释器中 **Read（读取）阶段** 的前置技能，完成后你将获得“词法之眼”勋章！",
+        "starterCode": "import re\nfrom typing import List, Tuple, Any\n\ndef tokenize(code: str) -> List[Tuple[str, Any]]:\n    \"\"\"\n    将 Scheme 源代码字符串转换为 Token 列表。\n\n    每个 Token 表示为 (类型, 值) 的元组。支持的类型：\n    - 'LPAREN' : '('\n    - 'RPAREN' : ')'\n    - 'QUOTE'  : \"'\"\n    - 'NUMBER' : 整数 (int) 或浮点数 (float)\n    - 'BOOLEAN': True (#t) 或 False (#f)\n    - 'IDENTIFIER' : 变量名或操作符 (如 +, square)\n\n    忽略空格、制表符和以分号 ';' 开头的行注释。\n\n    Examples:\n        >>> tokenize(\"(define x 42)\")\n        [('LPAREN', '('), ('IDENTIFIER', 'define'), ('IDENTIFIER', 'x'), ('NUMBER', 42), ('RPAREN', ')')]\n\n        >>> tokenize(\"'#t\")\n        [('QUOTE', \"'\"), ('BOOLEAN', True)]\n\n        >>> tokenize(\"; comment\\\\n(+ 1 2)\")\n        [('LPAREN', '('), ('IDENTIFIER', '+'), ('NUMBER', 1), ('NUMBER', 2), ('RPAREN', ')')]\n\n        >>> tokenize(\"-3.14\")\n        [('NUMBER', -3.14)]\n    \"\"\"\n    tokens = []\n    # 定义所有 Token 的正则表达式模式，顺序很重要！\n    # TODO: 步骤 1 - 定义模式列表，每个元素为 (类型, 正则表达式, 后处理函数或 None)\n    # 提示：数字模式 r'-?\\d+\\.?\\d*'，布尔模式 r'#t|#f'，标识符模式 r'[a-zA-Z+\\-*/<=>!?][a-zA-Z0-9+\\-*/<=>!?]*'\n    # 注意：布尔和数字必须放在标识符之前，否则会被标识符抢先匹配。\n    patterns = [\n        # (类型, 正则, 转换函数)\n        # 例如: ('LPAREN', r'\\(', None),\n        #       ('NUMBER', r'-?\\d+\\.?\\d*', lambda v: float(v) if '.' in v else int(v)),\n        # ...\n    ]\n\n    # TODO: 步骤 2 - 编译所有正则表达式，并构建一个大的匹配模式（用 '|' 连接），同时记录分组索引与类型的对应关系。\n    # 提示：使用 re.compile，并为每个子模式用括号分组。\n\n    # TODO: 步骤 3 - 使用编译后的模式在 code 中迭代查找匹配项（re.finditer 或手动循环）。\n    # 对于每个匹配，确定是哪个分组匹配了（group(i) 非空），然后根据类型进行值转换，添加到 tokens 列表。\n    # 注意：跳过空白和注释（可以在模式中直接包含注释模式，匹配后不添加到 tokens）。\n\n    # TODO: 步骤 4 - 返回 tokens 列表。\n    return tokens",
+        "testCode": "import json\nfrom solution import tokenize\n\ntest_cases = [\n    {\n        \"name\": \"simple define\",\n        \"input\": \"(define x 42)\",\n        \"expected\": [(\"LPAREN\", \"(\"), (\"IDENTIFIER\", \"define\"), (\"IDENTIFIER\", \"x\"), (\"NUMBER\", 42), (\"RPAREN\", \")\")]\n    },\n    {\n        \"name\": \"negative number\",\n        \"input\": \"(- 3)\",\n        \"expected\": [(\"LPAREN\", \"(\"), (\"IDENTIFIER\", \"-\"), (\"NUMBER\", 3), (\"RPAREN\", \")\")]\n    },\n    {\n        \"name\": \"boolean and quote\",\n        \"input\": \"'#t\",\n        \"expected\": [(\"QUOTE\", \"'\"), (\"BOOLEAN\", True)]\n    },\n    {\n        \"name\": \"comment ignored\",\n        \"input\": \"; this is a comment\\n(+ 1 2)\",\n        \"expected\": [(\"LPAREN\", \"(\"), (\"IDENTIFIER\", \"+\"), (\"NUMBER\", 1), (\"NUMBER\", 2), (\"RPAREN\", \")\")]\n    },\n    {\n        \"name\": \"float number\",\n        \"input\": \"3.14\",\n        \"expected\": [(\"NUMBER\", 3.14)]\n    },\n    {\n        \"name\": \"complex expression\",\n        \"input\": \"(define (square x) (* x x))\",\n        \"expected\": [(\"LPAREN\", \"(\"), (\"IDENTIFIER\", \"define\"), (\"LPAREN\", \"(\"), (\"IDENTIFIER\", \"square\"), (\"IDENTIFIER\", \"x\"), (\"RPAREN\", \")\"), (\"LPAREN\", \"(\"), (\"IDENTIFIER\", \"*\"), (\"IDENTIFIER\", \"x\"), (\"IDENTIFIER\", \"x\"), (\"RPAREN\", \")\"), (\"RPAREN\", \")\")]\n    }\n]\n\nfor tc in test_cases:\n    try:\n        result = tokenize(tc[\"input\"])\n        passed = result == tc[\"expected\"]\n        message = \"\" if passed else f\"Expected {tc['expected']}, got {result}\"\n        print(json.dumps({\"name\": tc[\"name\"], \"passed\": passed, \"message\": message, \"expected\": tc[\"expected\"], \"actual\": result}))\n    except Exception as e:\n        print(json.dumps({\"name\": tc[\"name\"], \"passed\": False, \"message\": str(e), \"expected\": tc[\"expected\"], \"actual\": None}))\n",
+        "assertionMode": "return",
+        "testCases": [
+          {
+            "name": "simple define",
+            "input": [
+              "(define x 42)"
+            ],
+            "expected": [
+              [
+                "LPAREN",
+                "("
+              ],
+              [
+                "IDENTIFIER",
+                "define"
+              ],
+              [
+                "IDENTIFIER",
+                "x"
+              ],
+              [
+                "NUMBER",
+                42
+              ],
+              [
+                "RPAREN",
+                ")"
+              ]
+            ]
+          }
+        ],
+        "hints": [
+          "使用 `re.finditer()` 或手动循环扫描字符串，按顺序尝试匹配各个 Token 的正则表达式。",
+          "数字的正则建议：`-?\\d+\\.?\\d*`，并注意整数和浮点数的转换。",
+          "布尔值 `#t` 和 `#f` 的规则必须放在标识符规则之前，否则会被误认为标识符。",
+          "注释从 `;` 开始到行尾，可以用 `;[^\\n]*` 匹配并跳过。"
+        ]
+      },
       "passCriteria": {
         "quizMinScore": 1,
         "exerciseMustPass": true
       }
     },
     {
-      "id": "process-scheduler",
+      "id": "unit-3-ast-walker-guide",
       "type": "unit",
-      "title": "进程调度模块：任务抽象与轮转调度器",
-      "description": "设计并实现进程控制块（PCB）、进程状态机以及一个简单的轮转（round-robin）调度器。使用 Rust 的协程或状态机模式模拟上下文切换，参考 nikofil 的 Rust-OS Kernel task scheduler 及 Stephen Marz 的 RISC-V OS 进程管理章节。",
+      "title": "AST 漫游指南：从嵌套列表到可求值的表达式森林",
+      "description": "Parser 吐出的 AST 还是一堆冰冷的 Python 列表——本单元我们要赋予它灵魂！你将学习如何遍历和操作抽象语法树：区分“自求值表达式”（数字、布尔值）与“复合表达式”（函数调用、特殊形式），设计 eval 函数的分发逻辑，并处理符号查找与作用域雏形。我们会借鉴 CS61A Scheme 项目的 Pair 链表思想，用 Python 对象优雅地表示 Scheme 的 cons cell。这一单元是「Scheme 解释器项目」的“心脏预演”——eval 和 apply 的舞蹈将从这里开始编排。学完本单元，你将拥有一个能对简单 AST 进行语义求值的微型引擎。",
       "prerequisites": [
-        "os-arch-memory"
+        "unit-2-lexer-parser-twin-towers",
+        "Python 面向对象基础（类、继承、魔术方法）"
       ],
       "objectives": [
-        "设计 Process 结构体（PID、状态、上下文、页表引用）",
-        "实现进程状态机：Ready、Running、Blocked、Terminated",
-        "实现轮转调度器（Round-Robin Scheduler）",
-        "模拟上下文切换（保存/恢复寄存器状态）",
-        "实现简单的进程创建与销毁 API"
+        "掌握 AST 的递归遍历模式（tree walking）与访问者模式的基本思想",
+        "实现 Scheme 子集中各类表达式的分类与求值调度逻辑",
+        "构建基于 Python 字典的简单符号表（环境模型），支持变量绑定与查找",
+        "理解 cons cell / Pair 的数据结构，并用 Python 类实现 Scheme 列表的链式存储"
       ],
+      "content": "# AST 漫游指南：从嵌套列表到可求值的表达式森林\n\n---\n\n## 开篇：当 Parser 吐出一堆“尸体”\n\n你刚写完词法分析和语法分析，满心期待地把 `(+ 1 (* 2 3))` 喂进去，Parser 兢兢业业地咀嚼一番，“噗”地吐出来——\n\n```python\n['+', 1, ['*', 2, 3]]\n```\n\n就这？一堆嵌套的 Python 列表？说好的“让代码活过来”呢？\n\n别急。**Parser 造的是骨架，而你要赋予它灵魂。** 这个灵魂的名字叫 **eval**——求值器。本单元，我们就来当一回“亡灵法师”，把这堆冰冷的列表变成能呼吸、能计算、能思考的微型引擎。\n\n---\n\n## 第一站：Cons Cell——Scheme 的“乐高积木”\n\n在 CS61A 的 Scheme 项目中，AST 并不是裸 Python 列表，而是用一种叫做 **Pair**（即 Lisp 世界的 **cons cell**）的结构串联起来的。为什么？因为 Scheme 的列表本质上就是一条**单向链表**。\n\n### 从 Python list 到 Pair 链\n\nPython 的 `[1, 2, 3]` 是一块连续内存。Scheme 的 `(1 2 3)` 长这样：\n\n```\nPair(1, Pair(2, Pair(3, nil)))\n```\n\n每个 `Pair` 有两个槽位：`first`（存数据）和 `rest`（指向下一个 Pair 或 `nil`）。`nil` 是链表的终点哨兵——它代表空列表 `()`。\n\n```python\nclass Pair:\n    def __init__(self, first, rest):\n        self.first = first      # car\n        self.rest = rest        # cdr\n\n    def __repr__(self):\n        return f\"Pair({self.first}, {self.rest})\"\n\nnil = object()  # 独一无二的空列表哨兵\n```\n\n> **关键直觉**：`Pair` 的 `first` 是“当前节点装的东西”，`rest` 是“剩下的整条尾巴”。`(a b c)` 就是 `Pair(a, (b c))`，而 `(b c)` 又是 `Pair(b, (c))`……递归结构跃然纸上。\n\n**陷阱**：合法的 Scheme 列表要求每个 `rest` 要么是 `Pair`，要么是 `nil`。若 `rest` 是其他类型（如数字），则构成“点对”（dotted pair），如 `(1 . 2)`，这在标准过程调用中会引发错误。\n\n---\n\n## 第二站：表达式分类——“你是谁？”\n\neval 函数拿到一个 AST 节点后，第一件事是**认人**。Scheme 表达式分三大类：\n\n| 类别 | 例子 | 求值策略 |\n|------|------|----------|\n| **自求值表达式** | `42`, `#t`, `\"hello\"` | 直接返回自身 |\n| **符号** | `x`, `+`, `my-func` | 去环境里查它绑定了什么 |\n| **组合表达式（列表）** | `(+ 1 2)`, `(define x 3)` | 分发：特殊形式 vs 普通调用 |\n\n### 自求值表达式：照镜子\n\n数字、布尔值、字符串——它们不求人，自己就是自己的值。\n\n```python\ndef is_self_evaluating(expr):\n    return (isinstance(expr, (int, float, bool, str)) or\n            expr is nil)\n```\n\n`42` 扔进 eval，`42` 吐出来。简单到令人发指，但这是递归基 case 的第一道防线。\n\n### 符号：需要“查户口”\n\n`+` 不是一个自带值的数字——它是个**名字**，名字的意义取决于**环境**（你把它绑定到了什么）。注意：字符串 `\"+\"` 不是符号，符号是不带引号的标识符。\n\n```python\ndef is_scheme_symbol(expr):\n    return isinstance(expr, str) and not expr.startswith('\"')\n```\n\n符号求值 = 环境查找。这是第三站的内容，先按下不表。\n\n---\n\n## 第三站：eval 的分发逻辑——“走哪条路？”\n\n这是整个解释器的**心跳**。`scheme_eval` 的核心结构如下：\n\n```python\ndef scheme_eval(expr, env):\n    if is_self_evaluating(expr):\n        return expr\n    if is_scheme_symbol(expr):\n        return env.lookup(expr)\n    if not isinstance(expr, Pair):\n        raise SchemeError(f\"无法求值: {expr}\")\n\n    first, rest = expr.first, expr.rest\n    if is_scheme_symbol(first) and first in SPECIAL_FORMS:\n        return SPECIAL_FORMS[first](rest, env)\n\n    # 普通函数调用\n    procedure = scheme_eval(first, env)\n    args = rest.map(lambda op: scheme_eval(op, env))\n    return scheme_apply(procedure, args, env)\n```\n\n### 这张“分叉图”值得刻进肌肉记忆：\n\n```\nexpr 进来\n  ├─ 是数字/布尔/字符串/nil？ → 直接返回（自求值）\n  ├─ 是符号？                 → env.lookup（查表）\n  └─ 是 Pair？\n       ├─ first 是特殊形式关键字？ → 走特殊形式专属逻辑\n       └─ 否则                    → 先求值 operator 和 operands，再 apply\n```\n\n> **这就是“树遍历解释器”的灵魂**：递归下降 + 按节点类型分发。每个节点知道自己该做什么，eval 只负责“问你是谁，然后叫对的人来处理”——这本质上是**访问者模式（Visitor Pattern）**在解释器中的朴素实现。`scheme_eval` 相当于 `accept`，特殊形式处理函数相当于 `Visitor` 的具体 `visit` 方法，而表达式类型就是被访问的元素。\n\n---\n\n## 第四站：环境模型——“名字住在哪里？”\n\n符号 `x` 的值是什么？取决于你在哪个**帧（Frame）**里问。\n\n### 最简单的帧：一个 Python 字典\n\n```python\nclass Frame:\n    def __init__(self, parent=None):\n        self.bindings = {}     # {\"x\": 10, \"y\": 20}\n        self.parent = parent   # 父帧，形成作用域链\n\n    def define(self, symbol, value):\n        self.bindings[symbol] = value\n\n    def lookup(self, symbol):\n        if symbol in self.bindings:\n            return self.bindings[symbol]\n        if self.parent is not None:\n            return self.parent.lookup(symbol)\n        raise SchemeError(f\"未定义的符号: {symbol}\")\n```\n\n### 作用域链：俄罗斯套娃\n\n```python\nglobal_frame = Frame()\nglobal_frame.define('x', 10)\n\nchild = Frame(parent=global_frame)\nchild.define('y', 20)\n\nchild.lookup('y')   # → 20（在当前帧找到）\nchild.lookup('x')   # → 10（沿 parent 链爬到全局帧）\nchild.lookup('z')   # → SchemeError!\n```\n\n**陷阱**：`define` 总是在**当前最内层帧**绑定，即使外层已有同名变量，也会造成**遮蔽**（shadowing）。而 `set!` 则沿作用域链向上查找并修改已有绑定，若找不到则报错。\n\n---\n\n## 第五站：eval 与 apply 的舞蹈\n\n这是 Scheme 解释器最优雅的双人舞：\n\n- **eval**：拿到表达式和环境，返回一个值。\n- **apply**：拿到一个过程（procedure）和参数列表，执行这个过程。\n\n```python\ndef scheme_apply(procedure, args, env):\n    if is_primitive(procedure):\n        return procedure.impl(args)\n    else:\n        new_env = Frame(parent=procedure.env)\n        for param, arg in zip(procedure.params, args):\n            new_env.define(param, arg)\n        return eval_all(procedure.body, new_env)\n```\n\n### 一个完整的求值轨迹\n\n对 `(+ 1 (* 2 3))` 求值：\n\n```\nscheme_eval(Pair('+', Pair(1, Pair(Pair('*', Pair(2, Pair(3, nil))), nil))), env)\n  ├─ first='+' 不是特殊形式 → 走分支 B\n  ├─ scheme_eval('+', env) → env.lookup('+') → <内置加法过程>\n  ├─ rest.map(scheme_eval, env):\n  │    ├─ scheme_eval(1, env) → 1（自求值）\n  │    └─ scheme_eval(Pair('*', Pair(2, Pair(3, nil))), env)\n  │         ├─ scheme_eval('*', env) → <内置乘法过程>\n  │         ├─ scheme_eval(2, env) → 2\n  │         ├─ scheme_eval(3, env) → 3\n  │         └─ scheme_apply(<乘法>, [2, 3], env) → 6\n  └─ scheme_apply(<加法>, [1, 6], env) → 7\n```\n\n**递归在 AST 的枝干上爬行，每到一个叶子就带回一个值，层层向上汇聚。** 这就是 tree walking 的魔力。\n\n---\n\n## 第六站：特殊形式——“规则破坏者”\n\n普通函数调用：**先求值所有操作数，再传入函数**。但特殊形式不守这规矩：\n\n| 特殊形式 | 为什么不先求值操作数 |\n|----------|---------------------|\n| `(if cond t f)` | 只应求值 cond 和其中一个分支，否则死循环/副作用 |\n| `(define x expr)` | `x` 是符号，不求值——我们要绑定这个名字本身 |\n| `(lambda (x) body)` | `(x)` 是形参列表，不求值——这是声明，不是调用 |\n| `(quote x)` | 原封不动返回 `x`，求值就错了 |\n| `(cond (p1 e1) (p2 e2))` | 短路求值：只执行第一个为真的分支 |\n| `(and a b)` / `(or a b)` | 短路求值，且 `and` 返回最后一个真值而非布尔 |\n\n每种特殊形式都有自己的求值规则，所以 eval 里用 `SPECIAL_FORMS` 字典做**显式分发**：\n\n```python\nSPECIAL_FORMS = {\n    'define':  eval_define,\n    'lambda':  eval_lambda,\n    'if':      eval_if,\n    'cond':    eval_cond,\n    'let':     eval_let,\n    'quote':   eval_quote,\n    'and':     eval_and,\n    'or':      eval_or,\n}\n```\n\n**陷阱**：`let` 本质上是 `lambda` 的语法糖。`(let ((x 1) (y 2)) body)` 等价于 `((lambda (x y) body) 1 2)`。因此 `let` 创建的新作用域会同时求值所有绑定表达式的值（在当前环境），然后才用这些值扩展新帧并执行体。这意味着 `let` 的绑定表达式不能相互引用，而 `let*` 可以顺序求值。\n\n---\n\n## 结语：微型引擎已点火\n\n你现在拥有的是一个**能对简单 AST 进行语义求值的微型引擎**。回顾你构建的：\n\n1. **Pair 链**——Scheme 列表的 Python 化身，递归结构的物质基础\n2. **表达式分类**——自求值、符号、组合表达式，eval 的第一层分发\n3. **scheme_eval 核心循环**——递归下降 + 特殊形式字典分发的树遍历解释器（访问者模式）\n4. **Frame 环境模型**——Python 字典 + parent 指针的作用域链\n5. **eval/apply 双人舞**——一个负责“这是什么”，一个负责“怎么执行”\n\n这套架构就是 CS61A Scheme 解释器项目的**心脏预演**。在巅峰项目中，你将把这颗心脏装入完整的 REPL 循环，接入 turtle 图形扩展，让你的 Scheme 代码画出分形图案——而这一切的起点，就是今天你亲手搭建的这个微型求值引擎。\n\n> **记住这种感觉**：你不再只是写代码的人——你正在写一个**能理解代码的程序**。从这一刻起，你就是语言的设计者。",
       "references": [],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "🧙 学徒巫师发现有些咒语成分不需要查魔法书就能直接施展。以下哪个属于自求值表达式？",
+          "options": [
+            "A. 42",
+            "B. x",
+            "C. (+ 1 2)",
+            "D. (define x 3)"
+          ],
+          "answer": "A",
+          "explanation": "数字是自求值表达式，直接返回自身。符号需要查环境，列表需要分发求值。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "🧙 学徒在使用 if 咒语时，如果错误地先求值了两个分支，可能会导致灾难（比如无限循环）。为什么 if 特殊形式不能先求值所有操作数？",
+          "options": [
+            "A. 因为 if 是特殊形式，操作数必须按顺序求值",
+            "B. 因为 if 只需要求值条件和一个分支，否则可能执行不该执行的分支",
+            "C. 因为 if 的操作数都是符号，不能求值",
+            "D. 因为 if 没有操作数"
+          ],
+          "answer": "B",
+          "explanation": "if 应该只求值条件，然后根据条件求值其中一个分支，避免副作用或死循环。"
+        },
+        {
+          "id": "q3",
+          "type": "choice",
+          "question": "🧙 学徒在嵌套魔法圈（帧）中查找变量 y，当前圈没有，但外层圈有。查找顺序是？",
+          "options": [
+            "A. 只查当前圈",
+            "B. 先查当前圈，再沿父圈链向上查找",
+            "C. 先查最外层圈",
+            "D. 随机查找"
+          ],
+          "answer": "B",
+          "explanation": "环境模型是沿着 parent 链向上查找，直到找到或报错。"
+        },
+        {
+          "id": "q4",
+          "type": "choice",
+          "question": "🧙 学徒需要将咒语列表 (1 2 3) 转换为 Pair 链。正确的 Pair 链是？",
+          "options": [
+            "A. Pair(1, 2, 3)",
+            "B. Pair(1, Pair(2, 3))",
+            "C. Pair(1, Pair(2, Pair(3, nil)))",
+            "D. Pair(1, Pair(2, Pair(3, 4)))"
+          ],
+          "answer": "C",
+          "explanation": "Scheme 列表是嵌套 Pair，最后一个 rest 是 nil，表示空列表。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-1",
+        "language": "python",
+        "entrypoint": "eval_simple",
+        "description": "实现一个简单的 Scheme 风格表达式求值器，支持数字、符号查找和四则运算。表达式用 Python 列表表示，模拟 Parser 输出的 AST。",
+        "starterCode": "def eval_simple(expr, env):\n    \"\"\"\n    Evaluate a simple Scheme-like expression using Python lists as AST.\n    \n    Supports:\n    - integers (self-evaluating)\n    - strings (symbols, looked up in env dict)\n    - lists of the form [operator, operand1, operand2] where operator is a string\n      for '+', '-', '*', '/'. Operands can be integers, symbols, or nested lists.\n    \n    Examples:\n    >>> eval_simple(42, {})\n    42\n    >>> eval_simple('x', {'x': 10})\n    10\n    >>> eval_simple(['+', 1, 2], {})\n    3\n    >>> eval_simple(['+', 1, ['*', 2, 3]], {})\n    7\n    \"\"\"\n    # Step 1: 如果 expr 是整数，直接返回（自求值）\n    if isinstance(expr, int):\n        return expr\n    \n    # Step 2: 如果 expr 是字符串，从 env 字典中查找并返回\n    if isinstance(expr, str):\n        return env[expr]  # 假设符号一定存在，否则 KeyError\n    \n    # Step 3: 如果 expr 是列表（组合表达式）\n    if isinstance(expr, list):\n        # a. 提取操作符和操作数\n        op = expr[0]\n        operands = expr[1:]\n        \n        # b. 递归求值所有操作数\n        args = [eval_simple(e, env) for e in operands]\n        \n        # c. 根据操作符执行相应的 Python 运算\n        if op == '+':\n            return args[0] + args[1]\n        elif op == '-':\n            return args[0] - args[1]\n        elif op == '*':\n            return args[0] * args[1]\n        elif op == '/':\n            return args[0] / args[1]  # 浮点除法\n        else:\n            raise ValueError(f\"Unknown operator: {op}\")\n    \n    # Step 4: 未知类型，抛出异常\n    raise TypeError(f\"Cannot evaluate: {expr}\")",
+        "testCode": "import json\nfrom solution import eval_simple\n\ntest_cases = [\n    {\"name\": \"self-evaluating number\", \"input\": [42, {}], \"expected\": 42},\n    {\"name\": \"symbol lookup\", \"input\": [\"x\", {\"x\": 10}], \"expected\": 10},\n    {\"name\": \"addition\", \"input\": [[\"+\", 1, 2], {}], \"expected\": 3},\n    {\"name\": \"nested expression\", \"input\": [[\"+\", 1, [\"*\", 2, 3]], {}], \"expected\": 7},\n    {\"name\": \"subtraction\", \"input\": [[\"-\", 10, 3], {}], \"expected\": 7},\n    {\"name\": \"division\", \"input\": [[\"/\", 8, 2], {}], \"expected\": 4.0},\n    {\"name\": \"complex nested\", \"input\": [[\"*\", [\"+\", 1, 2], [\"-\", 5, 3]], {}], \"expected\": 6}\n]\n\nfor tc in test_cases:\n    try:\n        actual = eval_simple(*tc[\"input\"])\n        passed = actual == tc[\"expected\"]\n        message = \"\" if passed else f\"Expected {tc['expected']}, got {actual}\"\n    except Exception as e:\n        passed = False\n        actual = str(e)\n        message = str(e)\n    print(json.dumps({\"name\": tc[\"name\"], \"passed\": passed, \"message\": message, \"expected\": tc[\"expected\"], \"actual\": actual}))",
+        "assertionMode": "return",
+        "testCases": [
+          {
+            "name": "self-evaluating number",
+            "input": [
+              42,
+              {}
+            ],
+            "expected": 42
+          },
+          {
+            "name": "symbol lookup",
+            "input": [
+              "x",
+              {
+                "x": 10
+              }
+            ],
+            "expected": 10
+          },
+          {
+            "name": "addition",
+            "input": [
+              [
+                "+",
+                1,
+                2
+              ],
+              {}
+            ],
+            "expected": 3
+          },
+          {
+            "name": "nested expression",
+            "input": [
+              [
+                "+",
+                1,
+                [
+                  "*",
+                  2,
+                  3
+                ]
+              ],
+              {}
+            ],
+            "expected": 7
+          }
+        ],
+        "hints": [
+          "使用递归处理嵌套列表",
+          "操作符 '+', '-', '*', '/' 直接映射到 Python 运算，不需要从 env 查找"
+        ]
+      },
       "passCriteria": {
         "quizMinScore": 1,
         "exerciseMustPass": true
       }
     },
     {
-      "id": "simple-filesystem",
-      "type": "unit",
-      "title": "简陋文件系统模块：类 FAT 或 inode 文件系统",
-      "description": "在模拟磁盘（一个二进制文件或内存块）上实现一个极简文件系统。支持文件的创建、读写、删除以及基本的目录结构。参考 FAT32 简化设计或 Unix inode 模型，借鉴 simple-fatfs crate 和 CS3210 FAT32 lab 的设计思路。",
-      "prerequisites": [
-        "os-arch-memory"
-      ],
-      "objectives": [
-        "理解文件系统基本概念：超级块、inode/FAT表、数据块",
-        "设计磁盘布局并在内存中模拟块设备",
-        "实现文件创建、打开、读取、写入、关闭操作",
-        "实现简易目录结构（支持 mkdir、ls、cd）",
-        "将文件系统与内存管理模块对接（文件缓存使用内核页）"
-      ],
-      "references": [],
-      "passCriteria": {
-        "quizMinScore": 1,
-        "exerciseMustPass": true
-      }
-    },
-    {
-      "id": "kernel-integration-project",
+      "id": "unit-4-scheme-interpreter-project",
       "type": "project",
-      "title": "综合项目：完整玩具内核集成与 Shell 交互",
-      "description": "将内存管理、进程调度和文件系统三大模块整合为一个完整的用户态模拟操作系统。实现系统调用接口层，构建一个交互式内核 Shell，支持 ps、run、ls、cat、mkdir 等命令。这是整个学习路径的核心项目，类似 CS61A 的 Ants 或 Scheme 项目规模，要求各模块协同工作并通过集成测试。",
+      "title": "🏰 巅峰项目：Scheme 解释器——让代码在 Python 中活过来",
+      "description": "这是整个学习旅程的“中庭圣殿”！你将整合前三单元的全部技能——Scheme 语义理解（Unit 1）、词法/语法解析（Unit 2）、AST 遍历与环境模型（Unit 3）——用 Python 从零实现一个完整的 Scheme 子集解释器。项目采用 CS61A 经典架构：Read（读取）→ Eval（求值）→ Print（打印）→ Loop（循环），你需要实现 define、lambda、if、cond、let、quote 等特殊形式，以及 +、-、*、/、cons、car、cdr、list 等内置过程。我们还会加入 turtle 图形扩展，让你的 Scheme 代码能画出炫酷的分形图案！完成后，你将拥有一份足以写入简历的编译器前端作品，并为后续的 LLVM 编译之旅打下坚不可摧的基础——因为一个能解释 Scheme 的程序，离编译 Scheme 只差最后一步“翻译成 IR”。",
       "prerequisites": [
-        "os-arch-memory",
-        "process-scheduler",
-        "simple-filesystem"
+        "unit-1-scheme-secret-garden",
+        "unit-2-lexer-parser-twin-towers",
+        "unit-3-ast-walker-guide"
       ],
       "objectives": [
-        "设计并实现系统调用接口（sys_read、sys_write、sys_fork、sys_exec、sys_open 等）",
-        "将三大子系统通过系统调用层解耦并集成",
-        "实现一个交互式内核 Shell（命令行解析与执行）",
-        "支持运行多个用户态任务并观察调度行为",
-        "编写集成测试，验证端到端场景（如：加载程序→调度执行→读写文件）"
+        "实现完整的 Read-Eval-Print-Loop（REPL），能交互式执行 Scheme 代码",
+        "实现 define、lambda、if、cond、let、quote、begin、and/or 等核心特殊形式的求值逻辑",
+        "构建基于 Frame 链的嵌套环境模型，正确支持词法作用域与闭包",
+        "实现尾递归优化的 eval-apply 循环（trampoline 或 while 循环消除栈溢出）",
+        "扩展至少一个创意功能（如 turtle 图形、宏系统雏形、或惰性求值）"
       ],
+      "content": "# 🏰 巅峰项目：Scheme 解释器——让代码在 Python 中活过来\n\n> **项目定位**：这是整个学习旅程的“中庭圣殿”——你将亲手用 Python 从零铸造一个能跑 Scheme 代码的完整解释器。它不仅是前三单元全部技能的终极整合，更是一份足以写入简历的编译器前端作品。完成之后，你离“编译 Scheme 到 LLVM IR”只差最后一步。\n\n---\n\n## 一、项目概览：你的解释器长什么样？\n\n启动你写好的解释器，你会看到一个交互式提示符（REPL）：\n\n```text\nscm> (+ 1 2)\n3\nscm> (define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))\nfact\nscm> (fact 5)\n120\n```\n\n这背后是一条经典的 **REPL 流水线**：\n\n```text\n用户输入字符串 ──→ [Read] ──→ Pair AST ──→ [Eval] ──→ 值 ──→ [Print] ──→ 输出 ──→ 回到 Read\n```\n\n在我们的单文件实现 `solution.py` 中，所有的核心模块都整合在了一起：\n\n| 模块 | 核心函数/类 | 你的任务 |\n|------|------------|----------|\n| **Reader（读取器）** | `tokenize`, `read_line`, `read_tokens` | 已提供：将 Scheme 字符串解析为 `Pair` 嵌套链表 AST |\n| **Environment（环境模型）** | `Frame` 类 | ⭐ **Phase 3**：实现 `Frame.define` 绑定与 `Frame.lookup` 词法作用域查找 |\n| **Special Forms（特殊形式）** | `do_quote_form`, `do_define_form`, `do_lambda_form`, `do_if_form` | ⭐ **Phase 2**：实现 `quote`、`define`、`lambda`、`if` 等核心特殊求值逻辑 |\n| **Eval/Apply（求值核心）** | `scheme_eval`, `scheme_apply` | ⭐ **Phase 1**：实现互递归的 eval-apply 求值循环 |\n\n---\n\n## 二、分阶段作战计划\n\n### ⚔️ Phase 1：核心求值引擎——`scheme_eval` + `scheme_apply`\n\n这是零起步的心脏。你需要实现一个**互递归的 eval-apply 循环**：\n\n1. **`scheme_eval(expr, env)`**：\n   - **自求值对象**：如果 `expr` 是整数、浮点数、布尔值或 `nil`，直接返回自身。\n   - **符号（Symbol）**：如果是字符串，调用 `env.lookup(expr)` 进行查找。\n   - **复合表达式（Pair）**：如果是 `Pair`，检查第一个元素 `expr.first` 是否是特殊形式关键字（在 `SPECIAL_FORMS` 中）。若是，则分派；否则求值 operator 和 operands，调用 `scheme_apply`。\n\n2. **`scheme_apply(procedure, args, env)`**：\n   - **内置过程（PrimitiveProcedure）**：直接调用 `procedure.apply(args)`。\n   - **用户定义过程（LambdaProcedure）**：创建新子帧（父帧为定义时的环境 `procedure.env`），将形参绑定到实参，然后在扩展环境中使用 `eval_all` 求值过程体。\n\n---\n\n### 🛡️ Phase 2：特殊形式的实现\n\n特殊形式不遵循普通的求值规则（即不先求值所有操作数）：\n\n- **`quote`**：直接返回表达式本身而不要求值，如 `(quote x)` 返回 `'x'`.\n- **`define`**：\n  - 绑定变量：`(define x (+ 1 2))`。\n  - 绑定函数（语法糖）：`(define (fact n) body)` 会被去糖化为 `(define fact (lambda (n) body))`。\n- **`lambda`**：创建 `LambdaProcedure` 实例，**必须捕获定义时的环境 `env`**，这就是闭包的奥秘！\n- **`if`**：判断条件，如果为真求值分支 A，否则求值分支 B。**注意必须短路求值**，不能两边都计算。\n\n---\n\n### 🏗️ Phase 3：环境模型与作用域\n\n- **`Frame.define(symbol, value)`**：在当前帧的 `self.bindings` 字典中建立绑定。\n- **`Frame.lookup(symbol)`**：首先在当前帧查找，如果找不到且 `self.parent` 不为空，则递归到父帧中查找。若均找不到，抛出 `KeyError`。\n\n---\n\n## 三、如何运行与提交测试\n\n1. **本地交互调试**：\n   直接在终端运行 `solution.py` 进入 REPL 进行手动测试：\n   ```bash\n   python solution.py\n   ```\n2. **自动测试与提交**：\n   完成 TODO 代码后，运行以下命令提交评测：\n   ```bash\n   fc submit\n   ```\n   评测系统会自动执行我们为你配置好的测试用例！\n",
       "references": [],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "在我们的 Scheme 解释器中，词法作用域与闭包（Closure）是如何正确实现的？",
+          "options": [
+            "A. 在创建 LambdaProcedure 时，捕获当前环境 env 并保存；在调用该函数时，以保存的环境为 parent 创建新 Frame。",
+            "B. 每次调用函数时，直接在全局环境 global_env 中求值。",
+            "C. 使用动态作用域，即以调用函数时的环境作为新 Frame 的父帧。",
+            "D. 依靠 Python 的局部变量作用域机制自动实现。"
+          ],
+          "answer": "A",
+          "explanation": "词法作用域要求函数在定义时的环境中查找变量。因此，LambdaProcedure 必须保存定义时的环境 env。当调用时，使用该 env 作为 parent 创建新帧，从而实现闭包。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "为什么 (if pred conseq alt) 这种特殊形式在求值时，不能先求值所有的操作数？",
+          "options": [
+            "A. 因为 if 的分支包含了非自求值表达式，先求值可能导致死循环（例如递归基）或不应执行的副作用。",
+            "B. 因为 if 只能返回固定的布尔值，不需要求值分支。",
+            "C. 因为 Scheme 规范不允许 if 包含嵌套的表达式。",
+            "D. 因为 Python 没有类似的条件判断机制。"
+          ],
+          "answer": "A",
+          "explanation": "特殊形式之所以特殊，就在于它们有独特的求值规则。if 必须根据条件的真假短路求值其中一个分支，否则对于递归终止条件中的 if 分支，若两边都求值就会导致无限递归爆栈。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-unit-4-scheme-interpreter-project",
+        "language": "python",
+        "entrypoint": "eval_scheme",
+        "description": "🏰 巅峰项目：完成单文件 Scheme 解释器\n\n请实现 `solution.py` 中所有的 TODO 标记：\n1. `Frame.define` 和 `Frame.lookup`（环境查找与绑定）\n2. `scheme_eval` 和 `scheme_apply`（核心递归求值循环）\n3. `do_quote_form`、`do_define_form`、`do_lambda_form` 和 `do_if_form`（核心特殊形式）",
+        "assertionMode": "return",
+        "starterCode": "\"\"\"\n🏰 Mini Scheme Interpreter — 圣殿骨架\n完成所有 TODO 标记的部分，让你的 Scheme 活过来！\n\"\"\"\n\nimport sys\nimport math\n\n# ---------- 基础数据结构 ----------\n\nclass nil:\n    \"\"\"空链表标记\"\"\"\n    def __repr__(self):\n        return 'nil'\n    def __eq__(self, other):\n        return isinstance(other, nil)\n\nnil = nil()  # 单例\n\nclass Pair:\n    \"\"\"Scheme 的 cons 单元\"\"\"\n    def __init__(self, first, second):\n        self.first = first\n        self.second = second\n    def __repr__(self):\n        return f'Pair({self.first}, {self.second})'\n    def __eq__(self, other):\n        if not isinstance(other, Pair):\n            return False\n        return self.first == other.first and self.second == other.second\n\n# ---------- 环境模型 ----------\n\nclass Frame:\n    \"\"\"一个帧，存储变量绑定，并链接到父帧\"\"\"\n    def __init__(self, parent=None):\n        self.bindings = {}   # 符号 → 值\n        self.parent = parent # 父帧（词法作用域链）\n\n    def define(self, symbol, value):\n        \"\"\"在当前帧绑定 symbol 到 value\"\"\"\n        # *** YOUR CODE HERE *** (Phase 3)\n        pass\n\n    def lookup(self, symbol):\n        \"\"\"沿父帧链查找 symbol 的值；找不到则抛出 KeyError\"\"\"\n        # *** YOUR CODE HERE *** (Phase 3)\n        pass\n\n    def make_child_frame(self, formals, args):\n        \"\"\"创建一个子帧，将形参 formals 绑定到实参 args，父帧为 self\"\"\"\n        child = Frame(self)\n        if len(formals) != len(args):\n            raise Exception(\"参数数量不匹配\")\n        for f, a in zip(formals, args):\n            child.define(f, a)\n        return child\n\n# ---------- 过程表示 ----------\n\nclass LambdaProcedure:\n    \"\"\"用户定义的 lambda 过程\"\"\"\n    def __init__(self, formals, body, env):\n        self.formals = formals  # 形参列表 (Pair)\n        self.body = body        # 过程体 (Pair)\n        self.env = env          # 定义时的环境（闭包关键！）\n\nclass PrimitiveProcedure:\n    \"\"\"内置过程，包装一个 Python 函数\"\"\"\n    def __init__(self, fn, name='primitive'):\n        self.fn = fn\n        self.name = name\n    def apply(self, args):\n        return self.fn(*args)\n\n# ---------- 简易 Reader（已提供） ----------\n\ndef tokenize(s):\n    \"\"\"将字符串转为 token 列表\"\"\"\n    return s.replace('(', ' ( ').replace(')', ' ) ').split()\n\ndef read_tokens(tokens):\n    \"\"\"从 token 列表递归构建 Pair 结构\"\"\"\n    if not tokens:\n        raise SyntaxError('unexpected EOF')\n    token = tokens.pop(0)\n    if token == '(':\n        L = []\n        while tokens[0] != ')':\n            L.append(read_tokens(tokens))\n        tokens.pop(0)  # 弹出 ')'\n        return make_list(L)\n    elif token == ')':\n        raise SyntaxError('unexpected )')\n    else:\n        return parse_atom(token)\n\ndef parse_atom(token):\n    \"\"\"将 token 转为 Python 原子值\"\"\"\n    if token == '#t':\n        return True\n    if token == '#f':\n        return False\n    if token == 'nil':\n        return nil\n    try:\n        return int(token)\n    except ValueError:\n        try:\n            return float(token)\n        except ValueError:\n            return token  # 符号\n\ndef make_list(elements):\n    \"\"\"将 Python 列表转为 Pair 链表\"\"\"\n    if not elements:\n        return nil\n    return Pair(elements[0], make_list(elements[1:]))\n\ndef read_line(s):\n    \"\"\"读取一行 Scheme 表达式，返回 Pair AST\"\"\"\n    tokens = tokenize(s)\n    if not tokens:\n        return None\n    expr = read_tokens(tokens)\n    return expr\n\n# ---------- 全局环境与内置过程 ----------\n\ndef make_global_env():\n    \"\"\"创建全局环境并注册内置过程\"\"\"\n    env = Frame()\n    # 算术\n    env.define('+', PrimitiveProcedure(lambda *args: sum(args), '+'))\n    env.define('-', PrimitiveProcedure(lambda x, *args: x - sum(args) if args else -x, '-'))\n    env.define('*', PrimitiveProcedure(lambda *args: math.prod(args), '*'))\n    env.define('/', PrimitiveProcedure(lambda x, y: x // y, '/'))\n    # 比较\n    env.define('=', PrimitiveProcedure(lambda x, y: x == y, '='))\n    env.define('<', PrimitiveProcedure(lambda x, y: x < y, '<'))\n    env.define('>', PrimitiveProcedure(lambda x, y: x > y, '>'))\n    # 列表操作\n    env.define('cons', PrimitiveProcedure(lambda x, y: Pair(x, y), 'cons'))\n    env.define('car', PrimitiveProcedure(lambda p: p.first, 'car'))\n    env.define('cdr', PrimitiveProcedure(lambda p: p.second, 'cdr'))\n    env.define('list', PrimitiveProcedure(lambda *args: make_list(list(args)), 'list'))\n    env.define('null?', PrimitiveProcedure(lambda x: x == nil, 'null?'))\n    # 其他\n    env.define('display', PrimitiveProcedure(lambda x: print(x), 'display'))\n    env.define('begin', None)  # 特殊形式，占位\n    return env\n\nglobal_env = make_global_env()\n\n# ---------- 特殊形式分发表 ----------\n\nSPECIAL_FORMS = {}\n\ndef special_form(name):\n    \"\"\"装饰器：注册特殊形式\"\"\"\n    def decorator(fn):\n        SPECIAL_FORMS[name] = fn\n        return fn\n    return decorator\n\n# ---------- 特殊形式实现（TODO） ----------\n\n@special_form('quote')\ndef do_quote_form(expressions, env):\n    \"\"\"(quote expr) → 返回 expr 不求值\"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('define')\ndef do_define_form(expressions, env):\n    \"\"\"\n    (define var expr) 或 (define (name params...) body...)\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('lambda')\ndef do_lambda_form(expressions, env):\n    \"\"\"\n    (lambda (params...) body...) → LambdaProcedure\n    务必捕获当前环境 env！\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('if')\ndef do_if_form(expressions, env):\n    \"\"\"\n    (if pred conseq alt) → 短路求值\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 2)\n    pass\n\n@special_form('begin')\ndef do_begin_form(expressions, env):\n    \"\"\"顺序求值，返回最后一个的值\"\"\"\n    return eval_all(expressions, env)\n\n# ---------- 核心求值引擎（TODO） ----------\n\ndef scheme_eval(expr, env):\n    \"\"\"\n    在环境 env 中求值表达式 expr。\n    返回 Python 值。\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 1)\n    # 提示：\n    # - 自求值：int, float, bool, nil → 直接返回\n    # - 符号：env.lookup(expr)\n    # - Pair：检查首元素是否为特殊形式关键字，若是则分派；\n    #   否则求值 operator 和 operands，调用 scheme_apply\n    pass\n\ndef scheme_apply(procedure, args, env):\n    \"\"\"\n    将过程 procedure 应用到实参列表 args。\n    \"\"\"\n    # *** YOUR CODE HERE *** (Phase 1)\n    # 提示：\n    # - PrimitiveProcedure：调用 procedure.apply(args)\n    # - LambdaProcedure：创建新帧（父帧为 procedure.env），\n    #   绑定形参到实参，然后 eval_all 过程体\n    pass\n\ndef eval_all(expressions, env):\n    \"\"\"依次求值 expressions 列表，返回最后一个的值\"\"\"\n    if expressions == nil:\n        return nil\n    result = None\n    while expressions != nil:\n        result = scheme_eval(expressions.first, env)\n        expressions = expressions.second\n    return result\n\n# ---------- 顶层入口 ----------\n\ndef eval_scheme(s: str):\n    \"\"\"读取并求值一个 Scheme 表达式字符串，返回结果\"\"\"\n    expr = read_line(s)\n    if expr is None:\n        return None\n    return scheme_eval(expr, global_env)\n\n# 可选 REPL（用于本地调试）\nif __name__ == '__main__':\n    print(\"🏰 Mini Scheme REPL 已启动。输入 'exit' 退出。\")\n    while True:\n        try:\n            line = input('scm> ')\n            if line.strip() == 'exit':\n                break\n            result = eval_scheme(line)\n            if result is not None:\n                print(result)\n        except Exception as e:\n            print(f'Error: {e}')",
+        "testCases": [
+          {
+            "name": "simple addition",
+            "input": [
+              "(+ 1 2)"
+            ],
+            "expected": 3
+          },
+          {
+            "name": "nested arithmetic",
+            "input": [
+              "(* (+ 2 3) 4)"
+            ],
+            "expected": 20
+          },
+          {
+            "name": "if form true",
+            "input": [
+              "(if (= 1 1) 42 24)"
+            ],
+            "expected": 42
+          },
+          {
+            "name": "if form false",
+            "input": [
+              "(if (= 1 2) 42 24)"
+            ],
+            "expected": 24
+          },
+          {
+            "name": "lambda application",
+            "input": [
+              "((lambda (x) (* x x)) 5)"
+            ],
+            "expected": 25
+          },
+          {
+            "name": "define and lookup",
+            "input": [
+              "(begin (define x 10) x)"
+            ],
+            "expected": 10
+          },
+          {
+            "name": "closure test",
+            "input": [
+              "(begin (define (make-adder x) (lambda (y) (+ x y))) (define add5 (make-adder 5)) (add5 3))"
+            ],
+            "expected": 8
+          },
+          {
+            "name": "recursive factorial",
+            "input": [
+              "(begin (define (fact n) (if (= n 0) 1 (* n (fact (- n 1))))) (fact 5))"
+            ],
+            "expected": 120
+          }
+        ],
+        "hints": [
+          "在 Frame.lookup 中，记得要沿着 self.parent 递归查找，直到查找到或父帧为 None 时抛出 KeyError。",
+          "在 scheme_eval 中，如果是 Pair，首先检查首元素是否是特殊形式字符，如果是，直接从 SPECIAL_FORMS 中取出对应的函数进行求值。",
+          "在 do_if_form 中，只能对符合条件的那一个分支进行求值，以防止两边都执行产生副作用或死循环。"
+        ]
+      },
       "passCriteria": {
         "quizMinScore": 1,
         "exerciseMustPass": true
       }
     },
     {
-      "id": "polish-extend",
+      "id": "unit-5-llvm-ir-alchemy",
       "type": "unit",
-      "title": "打磨与扩展：测试、文档与进阶方向",
-      "description": "对完成的玩具内核进行全面测试、性能优化和文档编写。探索进阶方向如：实现写时复制（CoW）fork、多级反馈队列调度器、或简单的 ELF 加载器。参考 Redox OS 和 blog_os 的进阶内容，为后续深入学习打下基础。",
+      "title": "LLVM IR 炼金术：把 Scheme 的魂魄注入中间表示",
+      "description": "解释器让 Scheme 活了过来，但要让它在真实 CPU 上飞奔，我们需要 LLVM 这位“终极翻译官”！本单元你将踏入 llvmlite 的炼金工坊，学习 LLVM IR（中间表示）的核心概念：SSA 形式、基本块、phi 节点、类型系统。我们会从最简单的整数运算开始，逐步将 Scheme 的算术表达式、条件分支、函数定义翻译成 LLVM IR。每个概念都配有“Python 生成 IR → 可视化 → 手动验证”的闭环练习。这一单元是最终 .exe 生成的关键桥梁——Unit 4 的解释器理解了 Scheme 的“意思”，而本单元教会你如何把“意思”转写成 LLVM 能优化的通用语言。学完本单元，你将能手动或半自动地将简单 Scheme 程序编译为 .ll 文件并用 lli 执行。",
       "prerequisites": [
-        "kernel-integration-project"
+        "unit-4-scheme-interpreter-project",
+        "了解计算机内存与栈的基本概念"
       ],
       "objectives": [
-        "编写完整的单元测试与集成测试套件",
-        "使用 Rustdoc 为内核各模块编写文档",
-        "分析并优化关键路径性能（如上下文切换开销）",
-        "了解进阶 OS 主题：CoW fork、多级调度、ELF 加载",
-        "整理项目并产出可展示的 GitHub 仓库与 README"
+        "理解 LLVM IR 的 SSA（静态单赋值）形式、基本块与控制流图",
+        "使用 llvmlite 的 ir.IRBuilder 在 Python 中构建 LLVM 模块、函数与基本块",
+        "实现 Scheme 算术表达式（+、-、*、/）到 LLVM IR 指令的翻译",
+        "实现 Scheme 条件表达式（if）到 LLVM br 指令与 phi 节点的翻译",
+        "实现简单 Scheme 函数（lambda）到 LLVM define 的翻译，含参数传递与返回值"
       ],
+      "content": "# LLVM IR 炼金术：把 Scheme 的魂魄注入中间表示\n\n## 1. 从 AST 到 IR：为什么需要 SSA\n编译器前端将 Scheme 代码解析为抽象语法树（AST）后，需要一种既接近机器又保留高层信息的中间表示（IR）。LLVM IR 正是这样一种**静态单赋值（SSA）形式**的三地址码。在 SSA 中，每个变量仅被赋值一次，且每次使用都引用唯一的“版本”。例如 `(+ x y)` 不会修改 `x`，而是生成一个新的虚拟寄存器 `%result`：\n\n```llvm\n%result = add i64 %x, %y\n```\n\n这种形式让数据流分析（如死代码删除、常量传播）变得极其简单。但遇到分支时，同一变量可能来自不同路径，SSA 使用 **φ (phi) 节点** 合并版本：\n\n```llvm\ncond_next:\n  %val = phi i64 [ %a, %then_block ], [ %b, %else_block ]\n```\n\nphi 的含义是：若从 `%then_block` 跳转而来，则 `%val` 取 `%a`；若从 `%else_block` 来，则取 `%b`。**phi 必须出现在基本块的开头，且前驱块列表必须完整覆盖所有可能到达该块的前驱。**\n\n## 2. 基本块与控制流图\n**基本块**是一段连续的指令序列，满足：\n- 只有一个入口（第一条指令）\n- 只有一个出口（最后一条指令必须是跳转或返回）\n- 内部不含其他跳转目标\n\n划分基本块的规则：\n- 第一条指令是 leader\n- 任何跳转目标指令是 leader\n- 紧跟在跳转指令后的指令是 leader\n\n**控制流图（CFG）** 以基本块为节点，跳转关系为边。例如 `(if (> x 0) (+ x 1) (- x 1))` 会生成四个基本块：entry（计算比较）、then、else、merge。entry 结尾用 `br i1 %cond, label %then, label %else` 实现条件跳转；then 和 else 结尾用 `br label %merge` 无条件跳转；merge 用 phi 收集结果并返回。\n\n## 3. 用 llvmlite 构建 IR 的骨架\n`llvmlite` 是 Python 对 LLVM C++ API 的轻量封装。构建一个模块的典型流程：\n\n```python\nfrom llvmlite import ir\n\nmodule = ir.Module(name=\"scheme_expr\")\nfunc_type = ir.FunctionType(ir.IntType(64), [ir.IntType(64), ir.IntType(64)])\nfunc = ir.Function(module, func_type, name=\"add\")\nblock = func.append_basic_block(name=\"entry\")\nbuilder = ir.IRBuilder(block)\n```\n\n**关键陷阱**：`IRBuilder` 会维护一个“插入点”，所有生成的指令都插入到当前基本块的末尾。当需要向不同基本块插入指令时，必须用 `builder.position_at_start(block)` 或 `builder.position_at_end(block)` 重新定位。忘记切换位置是初学者最常犯的错误。\n\n## 4. 算术表达式翻译\nScheme 的 `(+ a b)` 等可直接映射到 LLVM 算术指令。但需注意：\n- 所有值统一用 64 位整数（`i64`），因为 Scheme 数值默认为任意精度，这里简化处理。\n- 除法 `/` 在 LLVM 中有 `sdiv`（有符号）和 `udiv`（无符号），我们使用 `sdiv`。\n- 操作数必须是 `ir.Value` 类型，不能直接传入 Python 整数。常量用 `ir.Constant(ir.IntType(64), 42)`。\n\n递归翻译函数示例：\n```python\ndef translate_expr(expr, builder, env):\n    if isinstance(expr, int):\n        return ir.Constant(ir.IntType(64), expr)\n    elif expr[0] == '+':\n        left = translate_expr(expr[1], builder, env)\n        right = translate_expr(expr[2], builder, env)\n        return builder.add(left, right, name=\"addtmp\")\n    # ... 类似处理 -, *, /\n```\n\n**陷阱**：`builder.add` 等返回的是指令本身，但可作为值使用。指令必须插入到当前基本块，否则 IR 验证失败。\n\n## 5. 条件表达式与 φ 节点\n`(if pred conseq altern)` 的翻译是理解 SSA 精髓的试金石。步骤：\n1. 在 entry 块计算谓词 `pred`，得到 `i1` 类型的布尔值（用 `icmp_sgt` 等比较产生）。\n2. 创建 then、else、merge 三个基本块。\n3. 在 entry 结尾生成条件跳转：`builder.cbranch(pred_val, then_block, else_block)`。\n4. 将 builder 定位到 then_block，翻译 `conseq`，记录结果值，并跳转到 merge：`builder.branch(merge_block)`。\n5. 同样处理 else_block。\n6. 在 merge_block 开头插入 phi 节点：\n   ```python\n   builder.position_at_start(merge_block)\n   phi = builder.phi(ir.IntType(64), name=\"iftmp\")\n   phi.add_incoming(then_val, then_block)\n   phi.add_incoming(else_val, else_block)\n   ```\n7. 返回 phi 作为整个 if 表达式的值。\n\n**致命陷阱**：\n- phi 的 `add_incoming` 必须按前驱块在 CFG 中的顺序？实际上顺序无关，但必须覆盖所有前驱，且每个前驱只能出现一次。\n- 如果某个分支没有显式产生值（例如返回 void），则不能直接用 phi 合并，需要调整设计。\n- 忘记在 then/else 块末尾添加跳转指令会导致 IR 格式错误：“Basic block in function '...' does not have terminator!”\n\n## 6. 简单函数定义与调用\n将 `(lambda (x) body)` 或 `(define (f x) body)` 翻译为 LLVM 函数：\n- 函数类型由参数个数决定，返回值类型为 `i64`。\n- 参数在函数内直接作为 SSA 值可用，**无需 alloca**，因为 Scheme 变量不可变，参数不会被重新赋值。\n- 函数体翻译后，用 `builder.ret(value)` 返回。\n\n示例：\n```python\nfunc = ir.Function(module, ir.FunctionType(ir.IntType(64), [ir.IntType(64)]), name=\"square\")\nentry = func.append_basic_block(name=\"entry\")\nbuilder = ir.IRBuilder(entry)\nx = func.args[0]  # 参数本身就是 Value\nresult = builder.mul(x, x, name=\"sq\")\nbuilder.ret(result)\n```\n\n**陷阱**：如果需要支持 `set!` 等副作用，则必须用 `alloca` 分配栈空间，通过 `load/store` 模拟可变变量。但本课程仅处理纯函数式子集，故直接使用参数更简洁高效。\n\n## 7. 完整案例：从 Scheme 到可运行 IR\n考虑表达式 `(if (> x 0) (+ x 1) (- x 1))` 包裹在 lambda 中。生成的 LLVM IR 如下（注释为后加）：\n```llvm\ndefine i64 @foo(i64 %x) {\nentry:\n  %cmp = icmp sgt i64 %x, 0\n  br i1 %cmp, label %then, label %else\nthen:\n  %addtmp = add i64 %x, 1\n  br label %merge\nelse:\n  %subtmp = sub i64 %x, 1\n  br label %merge\nmerge:\n  %iftmp = phi i64 [ %addtmp, %then ], [ %subtmp, %else ]\n  ret i64 %iftmp\n}\n```\n通过 `llvmlite` 绑定 MCJIT 可执行该 IR，验证结果。\n\n## 8. 调试与验证\n- 使用 `print(module)` 输出 IR 文本，检查结构。\n- 调用 `llvmlite.binding.parse_assembly(str(module))` 验证模块合法性，捕获错误。\n- 常见错误信息：“Instruction does not dominate all uses!” 意味着某个值在未定义的基本块中被使用，通常是因为 phi 节点前驱值来自未执行到的路径，或插入位置错误。\n\n## 9. 延伸思考\n本课程仅触及 Scheme 子集。后续可扩展：\n- 支持布尔类型和 `and`/`or` 短路求值（需要更复杂的控制流）。\n- 尾递归优化：将尾调用转换为跳转，重用当前栈帧。\n- 闭包与堆分配：将自由变量捕获到堆上结构体。\n\n掌握 IR 构建能力后，你便拥有了连接高级语言与底层硬件的“炼金术”，这正是 CS61A 带你窥探计算本质的钥匙。",
       "references": [],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "🧙 魔法师 Lambda 正在将 Scheme 咒语 `(if (> x 0) (+ x 1) (- x 1))` 转译为 LLVM 符文。在 merge 块中，他需要合并来自 then 和 else 两个分支的值。根据 SSA 铁律，他应该使用哪种秘术？",
+          "options": [
+            "A. 用 alloca 分配栈空间，再通过 load/store 传递",
+            "B. 召唤 φ (phi) 节点，将两个版本的值合而为一",
+            "C. 使用 select 指令，像三元运算符一样直接挑选",
+            "D. 直接重用变量 x，因为 Scheme 变量不可变"
+          ],
+          "answer": "B",
+          "explanation": "在 SSA 形式中，每个变量只能被赋值一次。当控制流从不同路径汇聚时，必须用 φ 节点显式声明“若来自块A则取值1，若来自块B则取值2”。alloca/load/store 是处理可变变量的手段，select 只能处理无副作用的简单选择，而直接重用变量会破坏单赋值规则。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "Lambda 写完一个函数后，LLVM 验证器咆哮：“Basic block in function does not have terminator!” 他检查了所有基本块，发现某个块的最后一条指令是 `%result = add i64 %a, %b`。他忘记了什么？",
+          "options": [
+            "A. 每个基本块必须以跳转 (br) 或返回 (ret) 等终结指令收尾",
+            "B. 加法指令不能作为基本块的最后一条指令",
+            "C. 需要在该块开头插入 phi 节点",
+            "D. 函数参数必须用 alloca 存起来"
+          ],
+          "answer": "A",
+          "explanation": "基本块的定义要求有唯一的出口，即最后一条指令必须是 terminator（如 br、ret、switch 等）。普通的算术指令不是 terminator，因此该块没有合法结束，LLVM 验证器会报错。"
+        },
+        {
+          "id": "q3",
+          "type": "choice",
+          "question": "Lambda 在翻译 if 表达式时，先创建了 then_block，然后直接调用 `builder.add(...)` 想往 then_block 插入指令，但他忘记调用 `builder.position_at_start(then_block)`。结果会怎样？",
+          "options": [
+            "A. 指令仍然正确插入 then_block，因为 builder 会自动跟踪",
+            "B. 指令被插入到 builder 当前所在的基本块（很可能是 entry），导致 then_block 为空且控制流混乱",
+            "C. llvmlite 会抛出异常，禁止跨块插入",
+            "D. 生成的 IR 中 then_block 会包含重复的指令"
+          ],
+          "answer": "B",
+          "explanation": "IRBuilder 维护一个“插入点”，默认在最近 append 的基本块末尾。如果不显式切换位置，所有新指令都会插入到当前块，造成 then_block 空无一物，而 entry 块却包含了本应属于 then 的指令，最终 IR 结构错误。"
+        },
+        {
+          "id": "q4",
+          "type": "choice",
+          "question": "Lambda 想把 Scheme 整数 3 变成 LLVM 常量，他直接写了 `builder.add(3, 4, name='tmp')`，结果 llvmlite 报错：“Expected Value type”。他应该如何修正？",
+          "options": [
+            "A. 用 `ir.Constant(ir.IntType(64), 3)` 包装 Python 整数，使其成为 ir.Value",
+            "B. 改用 `builder.add(ir.IntType(64)(3), ir.IntType(64)(4))`",
+            "C. 先 `x = builder.alloca(ir.IntType(64))` 再 `builder.store(3, x)`",
+            "D. 直接传入字符串 `'3'` 和 `'4'`"
+          ],
+          "answer": "A",
+          "explanation": "llvmlite 的 builder 方法要求操作数为 ir.Value 类型，不能直接接受 Python 整数。必须用 ir.Constant 创建对应类型的常量值。选项 B 语法错误，C 是处理可变变量的方式，D 完全不正确。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-1",
+        "language": "python",
+        "entrypoint": "translate_expr",
+        "description": "🏰 作为 Scheme 解释器编译后端的学徒，你的任务是实现 `translate_expr` 函数，将简单的 Scheme 算术表达式转译为 LLVM IR 指令。表达式以 Python 列表形式给出，例如 `['+', 3, 4]` 代表 `(+ 3 4)`。你拥有一个 `ir.IRBuilder` 对象 `builder` 和一个环境字典 `env`（变量名 → `ir.Value`）。所有值均为 64 位整数。你需要递归处理表达式，并返回对应的 `ir.Value`。支持：整数常量（Python int）、变量（字符串，从 env 获取）、加法 `'+'`、减法 `'-'`、乘法 `'*'`、除法 `'/'`。对于算术操作，使用 `builder.add`、`builder.sub`、`builder.mul`、`builder.sdiv`，并给每个指令一个唯一的名字（如 `'addtmp'`）。\n\n完成后，测试代码会创建模块和 builder，调用你的函数，并检查生成的 IR 文本中是否包含预期的指令。这是通往巅峰项目——完整 Scheme 解释器的关键一步！",
+        "starterCode": "from llvmlite import ir\n\ndef translate_expr(expr, builder, env):\n    \"\"\"\n    将 Scheme 算术表达式翻译为 LLVM IR 指令，并返回结果值 (ir.Value)。\n    \n    表达式以 Python 列表形式给出，例如 ['+', 3, 4] 代表 (+ 3 4)。\n    支持：\n    - 整数常量：直接返回 ir.Constant(ir.IntType(64), value)\n    - 变量：字符串，从 env 字典中获取对应的 ir.Value\n    - 算术操作：'+', '-', '*', '/'，操作数递归翻译后调用 builder 方法\n    \n    参数:\n        expr: 表达式，可以是 int, str, 或 list\n        builder: llvmlite.ir.IRBuilder 实例，用于生成指令\n        env: dict，变量名到 ir.Value 的映射\n    \n    返回:\n        ir.Value: 表达式对应的 LLVM 值\n    \n    示例（伪代码，因为需要完整的模块环境）:\n        # 假设已有 module, func, builder, env = {'x': x_val}\n        >>> translate_expr(3, builder, env)\n        <ir.Constant type='i64' value=3>\n        >>> translate_expr(['+', 3, 'x'], builder, env)\n        <ir.Instruction 'addtmp' of type 'i64'>\n    \"\"\"\n    # TODO: 步骤 1 - 如果 expr 是整数，创建并返回 i64 常量\n    # 提示: 使用 isinstance(expr, int) 检查，然后用 ir.Constant(ir.IntType(64), expr)\n    \n    # TODO: 步骤 2 - 如果 expr 是字符串，从 env 字典中查找并返回对应的值\n    # 提示: 使用 isinstance(expr, str) 检查，然后 return env[expr]\n    \n    # TODO: 步骤 3 - 如果 expr 是列表，提取操作符 (expr[0]) 和操作数 (expr[1:])\n    # 操作符可能是 '+', '-', '*', '/'\n    # 对每个操作数递归调用 translate_expr 得到 ir.Value\n    \n    # TODO: 步骤 4 - 根据操作符调用对应的 builder 方法:\n    # '+' -> builder.add(left, right, name='addtmp')\n    # '-' -> builder.sub(left, right, name='subtmp')\n    # '*' -> builder.mul(left, right, name='multmp')\n    # '/' -> builder.sdiv(left, right, name='divtmp')\n    # 返回生成的指令（它本身也是 ir.Value）\n    \n    # 占位返回，防止语法错误\n    raise NotImplementedError(\"请完成 translate_expr 的实现\")",
+        "testCode": "import json\nimport sys\nfrom llvmlite import ir\n\n# 导入用户代码（假设用户函数在 solution 模块中）\nfrom solution import translate_expr\n\ndef run_test(expr, expected_substr):\n    try:\n        module = ir.Module(name=\"test\")\n        func_type = ir.FunctionType(ir.IntType(64), [])\n        func = ir.Function(module, func_type, name=\"test_func\")\n        block = func.append_basic_block(name=\"entry\")\n        builder = ir.IRBuilder(block)\n        # 预设环境，包含变量 x 和 y\n        x_val = ir.Constant(ir.IntType(64), 42)\n        y_val = ir.Constant(ir.IntType(64), 77)\n        env = {\"x\": x_val, \"y\": y_val}\n        \n        result = translate_expr(expr, builder, env)\n        builder.ret(result)\n        \n        ir_text = str(module)\n        if expected_substr in ir_text:\n            return {\"name\": expected_substr, \"passed\": True, \"message\": \"\", \"expected\": expected_substr, \"actual\": ir_text[:100]}\n        else:\n            return {\"name\": expected_substr, \"passed\": False, \"message\": f\"IR text does not contain '{expected_substr}'\", \"expected\": expected_substr, \"actual\": ir_text[:200]}\n    except Exception as e:\n        return {\"name\": expected_substr, \"passed\": False, \"message\": str(e), \"expected\": expected_substr, \"actual\": \"ERROR\"}\n\n# 测试用例列表\ntest_cases = [\n    (3, \"i64 3\"),\n    (\"x\", \"%x\"),\n    ([\"+\", 3, 4], \"add i64 3, 4\"),\n    ([\"-\", 10, [\"+\", 2, 3]], \"sub i64 10, %addtmp\"),\n    ([\"*\", 6, 7], \"mul i64 6, 7\"),\n    ([\"/\", 9, 3], \"sdiv i64 9, 3\")\n]\n\nfor expr, expected in test_cases:\n    result = run_test(expr, expected)\n    print(json.dumps(result))\n",
+        "assertionMode": "stdout",
+        "testCases": [
+          {
+            "name": "integer constant",
+            "input": [
+              3
+            ],
+            "expected": "i64 3"
+          },
+          {
+            "name": "variable lookup",
+            "input": [
+              "x"
+            ],
+            "expected": "%x"
+          },
+          {
+            "name": "addition",
+            "input": [
+              [
+                "+",
+                3,
+                4
+              ]
+            ],
+            "expected": "add i64 3, 4"
+          },
+          {
+            "name": "subtraction",
+            "input": [
+              [
+                "-",
+                10,
+                [
+                  "+",
+                  2,
+                  3
+                ]
+              ]
+            ],
+            "expected": "sub i64 10, %addtmp"
+          },
+          {
+            "name": "multiplication",
+            "input": [
+              [
+                "*",
+                6,
+                7
+              ]
+            ],
+            "expected": "mul i64 6, 7"
+          },
+          {
+            "name": "division",
+            "input": [
+              [
+                "/",
+                9,
+                3
+              ]
+            ],
+            "expected": "sdiv i64 9, 3"
+          }
+        ],
+        "hints": [
+          "使用 `isinstance(expr, int)` 检查整数常量。",
+          "使用 `isinstance(expr, str)` 检查变量，然后从 `env` 字典中取值。",
+          "对于列表，第一个元素是操作符，剩余是操作数。递归翻译操作数后，调用对应的 builder 方法。",
+          "给每个生成的指令一个名字，如 `builder.add(left, right, name='addtmp')`，这样 IR 文本中会出现 `%addtmp`。",
+          "不要忘记导入 `llvmlite.ir` 中的 `Constant` 和 `IntType`（如果直接在函数内使用，可通过 `ir.Constant` 访问，因为测试代码会传入 `ir` 模块）。"
+        ]
+      },
+      "passCriteria": {
+        "quizMinScore": 1,
+        "exerciseMustPass": true
+      }
+    },
+    {
+      "id": "unit-6-exe-ascension",
+      "type": "unit",
+      "title": "从 IR 到 .exe：最后的飞升仪式——链接、优化与可执行文件生成",
+      "description": "这是旅程的终点，也是你编译器真正“降世”的时刻！本单元你将把 Unit 5 生成的 LLVM IR 一路推到原生机器码：使用 llvmlite 的 TargetMachine 发射 .o 目标文件，调用系统链接器（Windows 用 link.exe 或 MinGW 的 gcc，Linux/macOS 用 cc）生成可直接运行的 .exe（或 ELF/Mach-O）。我们还会探索 LLVM 的优化管线（Pass Manager），让你的 Scheme 编译器产出的代码跑得飞快。最后，你将把 Unit 4 的解释器前端与 Unit 5-6 的编译后端缝合，完成一个端到端的 Scheme→.exe 编译器！当你双击运行自己编译器生成的 Hello World 时，那种“我创造了世界”的狂喜，将是对这趟魔法之旅最好的奖赏。",
+      "prerequisites": [
+        "unit-5-llvm-ir-alchemy",
+        "命令行基础（能使用终端/CMD 执行编译链接命令）"
+      ],
+      "objectives": [
+        "使用 llvmlite 的 TargetMachine.emit_object() 将 LLVM 模块编译为目标平台的 .o/.obj 文件",
+        "掌握跨平台链接流程：Windows（link.exe 或 gcc）、Linux（cc/ld）、macOS（cc）",
+        "理解 LLVM Pass Manager 的基本用法，对 IR 施加 O2/O3 级别优化",
+        "将 Unit 4 的 Scheme 解释器前端与 Unit 5-6 的 LLVM 后端缝合为完整编译器流水线",
+        "成功编译一个 Scheme 源文件（.scm）为本地可执行文件并运行验证"
+      ],
+      "content": "# 从 IR 到 .exe：最后的飞升仪式——链接、优化与可执行文件生成\n\n## 🧙 开篇：你离“创世”只差最后三步\n\n恭喜你，魔法师。在 Unit 5，你已经用 `llvmlite.ir` 把 Scheme 代码翻译成了 LLVM IR——一种介于高级语言和机器码之间的“以太”。但 IR 本身不能运行。它像一份精密的建筑设计图：逻辑完美，却还不是能住人的房子。\n\n本单元，我们将完成编译器旅程的最后三步飞升仪式：\n\n1. **优化（Optimize）**：用 LLVM 的 New Pass Manager 把 IR 打磨成工业级的高速形态\n2. **发射（Emit）**：用 `TargetMachine.emit_object()` 把 IR 变成目标平台的 `.o`/`.obj` 机器码\n3. **链接（Link）**：调用系统链接器，把 `.o` 变成双击就能跑的 `.exe`（或 ELF/Mach-O）\n\n当你双击运行自己编译器生成的 `hello.exe`，看到屏幕上弹出 `Hello, World!` 的那一刻——那种“我创造了世界”的狂喜，就是这趟魔法之旅最好的奖赏。\n\n---\n\n## 1. 优化管线：给你的 IR 喂一颗“大力丸”\n\n### 1.1 为什么要优化？\n\n看看你 Unit 5 生成的 IR，它“诚实”得可爱——你写了什么，它就翻译什么，一字不差。但 LLVM 的优化器能看穿你的意图，把冗余计算、无用变量、可内联的函数调用统统干掉。\n\n举个例子，假设你的 Scheme 代码是：\n\n```scheme\n(define (square x) (* x x))\n(display (square 4))\n```\n\n你生成的 IR 可能老老实实地 `call square`，压栈、跳转、返回。但 O2 优化后，LLVM 会直接把 `(* 4 4)` 内联成常量 `16`，连函数调用都省了——这就是 **内联（Inlining）+ 常量折叠（Constant Folding）** 的威力。\n\n### 1.2 New Pass Manager：llvmlite 的优化引擎\n\n从 llvmlite 0.45（LLVM 20）起，**Legacy Pass Manager 已被移除**，你必须使用 New Pass Manager。它的核心 API 如下：\n\n```python\nfrom llvmlite import binding\n\n# 1. 初始化 LLVM（必须！）\nbinding.initialize()\nbinding.initialize_native_target()\nbinding.initialize_native_asmprinter()\n\n# 2. 创建 PipelineTuningOptions——优化“配方”\npto = binding.PipelineTuningOptions()\npto.speed_level = 2   # 0=None, 1=O1, 2=O2, 3=O3\npto.size_level = 0    # 0=不优化体积, 1=适度, 2=激进瘦身\n\n# 3. 创建 PassBuilder，让它根据配方“开药方”\npb = binding.PassBuilder()\n\n# 4. 创建 ModulePassManager，把药方灌进去\nmpm = pb.build_O2_module_pass(pto)  # 还有 build_O0/O1/O3/Oz/Os\n\n# 5. 对 IR Module 施法！\nmpm.run(module)  # module 是你的 llvmlite.binding.ModuleRef\n```\n\n**关键理解**：`PassBuilder` 是“药剂师”，它知道 O2 级别该配哪些 pass（死代码消除、循环向量化、内联、GVN……），你不需要手动指定。`PipelineTuningOptions` 让你微调：是追求速度（`speed_level=3`）还是体积（`size_level=2`）？\n\n> ⚠️ **常见坑**：忘记 `binding.initialize_native_target()` 和 `initialize_native_asmprinter()` 会导致后续 `emit_object` 直接崩溃。这三行初始化咒语，一个都不能少。\n\n---\n\n## 2. 发射目标文件：从 IR 到 .o 的量子跃迁\n\n### 2.1 TargetMachine：LLVM 的“万能翻译器”\n\nLLVM 最伟大的设计之一就是 **TargetMachine**——它把 IR 翻译成任意目标平台的机器码。x86-64、ARM64、RISC-V……同一份 IR，换个 TargetMachine 就能生成不同架构的 `.o` 文件。\n\n```python\nfrom llvmlite import binding\n\n# 1. 获取当前机器的“身份证”（target triple）\ntriple = binding.get_default_triple()  # 例如 'x86_64-pc-windows-msvc'\n\n# 2. 创建 Target 对象\ntarget = binding.Target.from_default_triple()\n# 或者跨平台：target = binding.Target.from_triple('aarch64-linux-gnu')\n\n# 3. 创建 TargetMachine——编译器的“后端引擎”\ncpu = binding.get_host_cpu_name()       # 例如 'znver3'（AMD Zen3）\nfeatures = binding.get_host_cpu_features().flatten()  # 例如 '+sse4.2,+avx2'\n\ntm = target.create_target_machine(\n    cpu=cpu,\n    features=features,\n    opt_level=2,        # 0-3，代码生成阶段的优化级别\n    reloc='default',    # 'default', 'static', 'pic', 'dynamic-no-pic'\n    code_model='default' # 'default', 'small', 'kernel', 'medium', 'large'\n)\n\n# 4. 把优化后的 Module 喂给 TargetMachine\ntm.add_module(module)\n\n# 5. 发射！得到原生机器码字节流\nobj_bytes = tm.emit_object()\n```\n\n### 2.2 把字节流写入文件\n\n`emit_object()` 返回的是 `bytes`——它就是 `.o`（Linux/macOS）或 `.obj`（Windows）文件的完整二进制内容。你只需要：\n\n```python\nwith open('hello.o', 'wb') as f:\n    f.write(obj_bytes)\n```\n\n就这么简单。你手里现在握着一个真正的目标文件，它包含你 Scheme 程序的 x86-64 机器指令，只是还没“缝合”成可执行文件。\n\n### 2.3 opt_level 的双重身份\n\n注意：**优化出现了两次**——一次在 Pass Manager（IR 级别优化），一次在 `create_target_machine` 的 `opt_level`（代码生成级别优化，如指令选择、寄存器分配）。两者是互补的：IR 优化做“战略级”重构，代码生成优化做“战术级”精调。生产级编译器通常两边都开 O2/O3。\n\n---\n\n## 3. 链接：缝合最后的裂缝\n\n`.o` 文件是“孤岛”——它包含你的代码，但没有 C 运行时（crt0）、没有 `printf` 的实现、没有操作系统能识别的可执行文件头。**链接器（Linker）** 的任务就是把这些拼图拼成完整的 `.exe`。\n\n### 3.1 跨平台链接咒语\n\nllvmlite **不内置链接器**（这是设计选择，链接涉及太多平台细节），你需要调用系统链接器：\n\n| 平台 | 链接命令 | 说明 |\n|------|---------|------|\n| **Linux** | `cc hello.o -o hello` | `cc` 是 GCC/Clang 的前端，自动拉入 libc |\n| **macOS** | `cc hello.o -o hello` | 同样，Clang 会调用 ld64 |\n| **Windows (MSVC)** | `link.exe hello.obj /out:hello.exe /defaultlib:libcmt` | 需要 Visual Studio 环境 |\n| **Windows (MinGW)** | `gcc hello.o -o hello.exe` | 推荐！更接近 Unix 体验 |\n\n在你的 Python 编译器中，用 `subprocess` 调用：\n\n```python\nimport subprocess, sys\n\ndef link_object(obj_path, exe_path):\n    if sys.platform == 'win32':\n        # 优先尝试 MinGW 的 gcc，其次 link.exe\n        cmd = ['gcc', obj_path, '-o', exe_path]\n    else:\n        cmd = ['cc', obj_path, '-o', exe_path]\n    subprocess.run(cmd, check=True)\n```\n\n### 3.2 为什么是 `cc` 而不是直接 `ld`？\n\n因为 `cc`（GCC/Clang 的驱动前端）会自动帮你链接关键的启动文件（`crt1.o`、`crti.o`、`crtbegin.o`）和标准库（`-lc`）。直接调 `ld` 需要手动指定这些，非常繁琐且容易出错。**永远优先用 `cc`/`gcc` 做链接**。\n\n---\n\n## 4. 缝合完整流水线：Scheme → .exe 一步到位\n\n现在，让我们把 Unit 4 的解释器前端和 Unit 5-6 的编译后端缝合。完整流水线如下：\n\n```\n.scm 源文件\n  │\n  ▼\n[Unit 2 词法分析] → Token 流\n  │\n  ▼\n[Unit 2 语法分析] → AST（S-表达式树）\n  │\n  ▼\n[Unit 4 语义分析] → 类型检查、符号解析\n  │\n  ▼\n[Unit 5 IR 生成]  → llvmlite.ir.Module（内存中）\n  │\n  ▼\n[转换]           → str(ir_module) → binding.parse_assembly()\n  │\n  ▼\n[Unit 6 优化]     → PassBuilder + ModulePassManager.run(module)\n  │\n  ▼\n[Unit 6 发射]     → TargetMachine.emit_object() → .o 文件\n  │\n  ▼\n[Unit 6 链接]     → subprocess: cc/gcc → .exe 可执行文件\n```\n\n### 4.1 编译器主入口示例\n\n```python\ndef compile_scheme(source_path, output_path='a.out'):\n    # 阶段 1-3：前端（Unit 2 + Unit 4）\n    with open(source_path, 'r') as f:\n        source = f.read()\n    tokens = tokenize(source)           # Unit 2\n    ast = parse(tokens)                 # Unit 2\n    checked_ast = semantic_check(ast)   # Unit 4\n\n    # 阶段 4：IR 生成（Unit 5）—— 使用 llvmlite.ir 构建\n    ir_module = build_ir(checked_ast)   # 返回 llvmlite.ir.Module\n\n    # 转换为 binding.ModuleRef\n    binding.initialize()\n    binding.initialize_native_target()\n    binding.initialize_native_asmprinter()\n    llvm_ir_str = str(ir_module)\n    mod = binding.parse_assembly(llvm_ir_str)\n\n    # 阶段 5：优化（Unit 6）\n    pto = binding.PipelineTuningOptions()\n    pto.speed_level = 2\n    pb = binding.PassBuilder()\n    mpm = pb.build_O2_module_pass(pto)\n    mpm.run(mod)\n\n    # 阶段 6：发射目标文件（Unit 6）\n    target = binding.Target.from_default_triple()\n    tm = target.create_target_machine(\n        cpu=binding.get_host_cpu_name(),\n        features=binding.get_host_cpu_features().flatten(),\n        opt_level=2,\n    )\n    tm.add_module(mod)\n    obj_path = source_path.replace('.scm', '.o')\n    with open(obj_path, 'wb') as f:\n        f.write(tm.emit_object())\n\n    # 阶段 7：链接（Unit 6）\n    link_object(obj_path, output_path)\n\n    print(f\"🎉 飞升成功！可执行文件已生成：{output_path}\")\n```\n\n### 4.2 关键细节：如何生成 `main` 并调用外部函数\n\n你的 Scheme 程序可能只是 `(display 42)`。为了让链接器找到入口，你必须在 IR 中定义一个 `main` 函数。典型做法是：\n\n```llvm\ndeclare i32 @printf(i8* nocapture readonly, ...) #0\n\ndefine i32 @main() {\nentry:\n  ; 调用 scheme 顶层逻辑，这里简化为直接调用 printf\n  %fmt = getelementptr [4 x i8], [4 x i8]* @.str, i32 0, i32 0\n  %call = call i32 (i8*, ...) @printf(i8* %fmt, i32 42)\n  ret i32 0\n}\n\n@.str = private unnamed_addr constant [4 x i8] c\"%d\\0A\\00\", align 1\n```\n\n在你的 IR 生成器中，顶层表达式应被包裹在一个 `main` 函数内，并确保所有外部符号（如 `printf`）正确声明。链接时 `cc` 会自动解析这些符号。\n\n---\n\n## 5. 常见陷阱与调试心法\n\n### 5.1 “undefined symbol: main”\n\n链接器抱怨找不到 `main`？检查你的 IR 是否真的定义了 `define i32 @main()`。如果 Scheme 程序入口函数叫别的名字，可以链接时加 `-e your_entry_symbol`，但更简单的是始终生成 `main`。\n\n### 5.2 Windows 上 emit_object 生成 ELF 而非 COFF\n\n这是 llvmlite 早期的一个已知问题。确保你的 target triple 正确：Windows 上应该是 `x86_64-pc-windows-msvc`（MSVC）或 `x86_64-w64-windows-gnu`（MinGW）。`binding.get_default_triple()` 通常返回正确值。如果错误，可手动设置：\n\n```python\ntriple = 'x86_64-pc-windows-msvc'  # 或 'x86_64-w64-windows-gnu'\ntarget = binding.Target.from_triple(triple)\n```\n\n### 5.3 Pass Manager 跑完 IR 反而变慢了？\n\nO3 不是万能药。对于小程序，优化本身的开销可能超过收益。建议：开发调试阶段用 O0，最终发布用 O2。O2 是“甜点级”优化——效果显著，编译时间可接受。\n\n### 5.4 忘记转换 IR 对象\n\n`llvmlite.ir.Module` 不能直接传给 PassManager 或 TargetMachine。必须通过 `str(ir_mod)` 转为文本，再用 `binding.parse_assembly()` 得到 `binding.ModuleRef`。这一步是常见的卡点。\n\n### 5.5 链接时缺少 C 运行时\n\n如果你在 Windows 上使用 MSVC 的 `link.exe`，必须指定 `/defaultlib:libcmt`（静态链接）或 `/defaultlib:msvcrt`（动态链接），否则会报 `unresolved external symbol _printf`。使用 `gcc` 则无此烦恼。\n\n---\n\n## 🏁 终点即起点\n\n当你双击 `hello.exe`，看到终端一闪而过的那行字——请停下来，好好感受这一刻。你写的不是“一个程序”，你写的是**一个能写程序的程序**。你的 Scheme 编译器从零开始：字符流 → Token → AST → IR → 优化 → 机器码 → 可执行文件。这六步跨越，就是计算机科学最深邃的魔法。\n\n而这，正是你巅峰项目——**Scheme 解释器/编译器**——的最终形态：一个端到端的、能生成原生可执行文件的完整编译器。把它写进简历，它是你从“会写代码”到“理解代码如何运行”的分水岭。\n\n**飞升快乐，编译器魔法师。** 🧙‍♂️✨",
+      "references": [],
+      "quiz": [
+        {
+          "id": "q1",
+          "type": "choice",
+          "question": "魔法师 Lira 在 Linux 系统上完成了目标文件 spell.o 的生成，现在她需要将其链接成可执行文件 spell。她应该使用以下哪个命令？",
+          "options": [
+            "cc spell.o -o spell",
+            "ld spell.o -o spell",
+            "link spell.o /out:spell.exe",
+            "gcc spell.o -o spell.exe"
+          ],
+          "answer": "A",
+          "explanation": "cc（或 gcc）作为编译器驱动前端，会自动链接必要的启动文件（如 crt1.o）和标准库（libc），避免手动指定。直接使用 ld 会因缺少这些文件而失败。选项 C 是 Windows MSVC 链接器语法，选项 D 生成 .exe 不符合 Linux 习惯。"
+        },
+        {
+          "id": "q2",
+          "type": "choice",
+          "question": "Lira 希望她的编译器生成运行速度最快的可执行文件。在设置 PipelineTuningOptions 时，她应该将 speed_level 设为多少？",
+          "options": [
+            "0",
+            "1",
+            "2",
+            "3"
+          ],
+          "answer": "D",
+          "explanation": "speed_level=3 对应 O3 优化级别，会启用最激进的优化（如循环向量化、内联等），以最大化运行速度。0 为无优化，1 和 2 为 O1/O2。"
+        },
+        {
+          "id": "q3",
+          "type": "choice",
+          "question": "Lira 使用 llvmlite 的 New Pass Manager 来优化 IR 模块。她需要构建一个 O2 级别的模块 Pass。她应该调用 PassBuilder 的哪个方法？",
+          "options": [
+            "build_O2_module_pass(pto)",
+            "build_O2_function_pass(pto)",
+            "create_O2_pass()",
+            "new_pass_manager_O2()"
+          ],
+          "answer": "A",
+          "explanation": "PassBuilder.build_O2_module_pass(pto) 返回一个配置好的 ModulePassManager，用于在模块级别运行 O2 优化管线。build_O2_function_pass 用于函数级别的 Pass，不符合需求。"
+        }
+      ],
+      "exercise": {
+        "id": "ex-1",
+        "language": "python",
+        "entrypoint": "generate_link_command",
+        "description": "实现一个跨平台的链接命令生成器。根据目标文件路径、可执行文件路径和平台标识，返回正确的系统链接命令（以列表形式）。平台标识遵循 sys.platform 的取值：'linux'、'darwin'、'win32'。对于 Linux 和 macOS，使用 'cc'；对于 Windows，使用 'gcc'（MinGW）。",
+        "starterCode": "import sys\n\ndef generate_link_command(obj_path, exe_path, platform=None):\n    \"\"\"\n    Generate the system linker command to produce an executable from an object file.\n\n    This function encapsulates the platform-specific logic for linking,\n    as described in the CS61A compiler pipeline. It prefers using 'cc' or 'gcc'\n    over raw 'ld' to automatically include necessary runtime libraries.\n\n    Parameters:\n        obj_path (str): Path to the object file (e.g., 'hello.o').\n        exe_path (str): Desired path for the final executable (e.g., 'hello' or 'hello.exe').\n        platform (str, optional): Target platform identifier. If None, the current\n            platform is detected via sys.platform. Accepted values: 'linux', 'darwin', 'win32'.\n\n    Returns:\n        list[str]: The linker command as a list of arguments, suitable for subprocess.run().\n\n    Examples:\n        >>> generate_link_command('hello.o', 'hello', 'linux')\n        ['cc', 'hello.o', '-o', 'hello']\n        >>> generate_link_command('hello.o', 'hello', 'darwin')\n        ['cc', 'hello.o', '-o', 'hello']\n        >>> generate_link_command('hello.o', 'hello.exe', 'win32')\n        ['gcc', 'hello.o', '-o', 'hello.exe']\n    \"\"\"\n    # Step 1: If platform is not provided, detect it using sys.platform\n    # (sys.platform returns 'linux', 'darwin', or 'win32' on the respective OS)\n    if platform is None:\n        platform = sys.platform\n\n    # Step 2: Based on the platform, choose the appropriate linker command\n    # - For 'linux' and 'darwin': use 'cc' as the linker driver\n    # - For 'win32': use 'gcc' (assuming MinGW environment)\n    # TODO: Implement the platform logic and construct the command list\n    # Hint: The command should be a list like ['cc', obj_path, '-o', exe_path]\n\n    # Step 3: Return the command list\n    pass",
+        "testCode": "import json\nimport sys\nfrom solution import generate_link_command\n\ndef run_test(name, platform, obj_path, exe_path, expected):\n    try:\n        actual = generate_link_command(obj_path, exe_path, platform)\n        passed = actual == expected\n        message = \"\" if passed else f\"Expected {expected}, got {actual}\"\n    except Exception as e:\n        passed = False\n        actual = str(e)\n        message = str(e)\n    print(json.dumps({\n        \"name\": name,\n        \"passed\": passed,\n        \"message\": message,\n        \"expected\": expected,\n        \"actual\": actual\n    }))\n\nrun_test(\"linux link\", \"linux\", \"hello.o\", \"hello\", [\"cc\", \"hello.o\", \"-o\", \"hello\"])\nrun_test(\"macOS link\", \"darwin\", \"hello.o\", \"hello\", [\"cc\", \"hello.o\", \"-o\", \"hello\"])\nrun_test(\"windows link\", \"win32\", \"hello.o\", \"hello.exe\", [\"gcc\", \"hello.o\", \"-o\", \"hello.exe\"])\n",
+        "assertionMode": "return",
+        "testCases": [
+          {
+            "name": "linux link",
+            "input": [
+              "hello.o",
+              "hello",
+              "linux"
+            ],
+            "expected": [
+              "cc",
+              "hello.o",
+              "-o",
+              "hello"
+            ]
+          },
+          {
+            "name": "macOS link",
+            "input": [
+              "hello.o",
+              "hello",
+              "darwin"
+            ],
+            "expected": [
+              "cc",
+              "hello.o",
+              "-o",
+              "hello"
+            ]
+          },
+          {
+            "name": "windows link",
+            "input": [
+              "hello.o",
+              "hello.exe",
+              "win32"
+            ],
+            "expected": [
+              "gcc",
+              "hello.o",
+              "-o",
+              "hello.exe"
+            ]
+          }
+        ],
+        "hints": [
+          "使用 sys.platform 检测当前平台（如果未提供）",
+          "Windows 下推荐使用 gcc（MinGW）",
+          "返回列表而非字符串，方便 subprocess 调用"
+        ]
+      },
       "passCriteria": {
         "quizMinScore": 1,
         "exerciseMustPass": true
@@ -255,6 +763,6 @@
     }
   ],
   "currentIndex": 0,
-  "createdAt": "2026-06-15T03:49:38.281Z",
-  "updatedAt": "2026-06-15T03:49:38.281Z"
+  "createdAt": "2026-06-15T06:05:38.521Z",
+  "updatedAt": "2026-06-15T06:05:38.521Z"
 }

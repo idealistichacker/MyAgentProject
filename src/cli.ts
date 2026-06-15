@@ -196,7 +196,7 @@ program.command('start [unitId]')
       const s = spinner();
       s.start(`FCAgent 正在全网检索并生成 [${unit.id}] 的课件与练习...`);
       const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
-      unit = await generateUnitContent(unit, plan.learnerProfile, provider);
+      unit = await generateUnitContent(unit, plan, provider);
       const index = plan.units.findIndex(u => u.id === unit.id);
       if (index !== -1) {
         plan.units[index] = unit;
@@ -467,10 +467,44 @@ program.command('status')
     outro('💪 Keep going!');
   });
 
+function pLimit(concurrency: number) {
+  const queue: (() => void)[] = [];
+  let activeCount = 0;
+
+  const next = () => {
+    activeCount--;
+    if (queue.length > 0) {
+      queue.shift()!();
+    }
+  };
+
+  return <T>(fn: () => Promise<T>): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const run = async () => {
+        activeCount++;
+        try {
+          const result = await fn();
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        } finally {
+          next();
+        }
+      };
+
+      if (activeCount < concurrency) {
+        run();
+      } else {
+        queue.push(run);
+      }
+    });
+  };
+}
+
 program.command('generate-all')
   .description('Pre-generate all lessons and exercise skeletons in the plan for quick offline browsing')
   .action(async () => {
-    intro(color.inverse(' 🚀 全量课件预生成 (Generate All) '));
+    intro(color.inverse(' 🚀 全量课件并发预生成 (Generate All - Optimized) '));
     ensureProjectDirs();
     const plan = loadPlan();
     if (!plan) {
@@ -487,23 +521,51 @@ program.command('generate-all')
 
     const s = spinner();
     let generatedCount = 0;
-    for (let i = 0; i < plan.units.length; i++) {
-      let unit = plan.units[i];
+    s.start(`正在检查需生成的单元...`);
+
+    const tasks = plan.units.map((unit, i) => {
+      return { unit, index: i };
+    }).filter(({ unit }) => {
       const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
-      if (!unit.content || !unit.exercise || isFallback) {
-        s.start(`正在生成 [${unit.id}] 的课件与练习 (${i + 1}/${plan.units.length})...`);
-        unit = await generateUnitContent(unit, plan.learnerProfile, provider);
-        plan.units[i] = unit;
-        savePlan(plan);
-        const extension = getExtensionForLanguage(unit.exercise?.language ?? 'typescript');
-        writeTextFile(getLessonPath(unit.id), unit.content || '');
-        if (unit.exercise) {
-          writeTextFile(getSolutionPath(unit.id, extension), unit.exercise.starterCode);
-        }
-        generatedCount++;
-      }
+      return !unit.content || !unit.exercise || isFallback;
+    });
+
+    if (tasks.length === 0) {
+      s.stop(color.green('✔ 所有单元已生成完毕，无需重复生成！'));
+      outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
+      return;
     }
-    s.stop(color.green(`✔ 预生成完毕！本次共生成 ${generatedCount} 个新单元的讲义。`));
+
+    s.stop(`需要生成 ${tasks.length} 个单元。受限于模型提供商并发控制，降级为单线程稳健生成 (并发度: 1)...`);
+
+    const limit = pLimit(1); // 允许最大并发数为 1 避免 ECONNRESET
+    let completed = 0;
+
+    const promises = tasks.map(({ unit, index }, taskNum) => {
+      return limit(async () => {
+        // 错峰启动，避免一开始全部触发请求
+        await new Promise(r => setTimeout(r, taskNum * 3000));
+        
+        console.log(color.cyan(`⏳ [${unit.id}] 开始生成...`));
+        const updatedUnit = await generateUnitContent(unit, plan, provider);
+        
+        plan.units[index] = updatedUnit;
+        savePlan(plan); // savePlan is synchronous writeFileSync, so it's safe
+        
+        const extension = getExtensionForLanguage(updatedUnit.exercise?.language ?? 'typescript');
+        writeTextFile(getLessonPath(updatedUnit.id), updatedUnit.content || '');
+        if (updatedUnit.exercise) {
+          writeTextFile(getSolutionPath(updatedUnit.id, extension), updatedUnit.exercise.starterCode);
+        }
+        
+        completed++;
+        generatedCount++;
+        console.log(color.green(`✅ [${updatedUnit.id}] 生成完毕 (${completed}/${tasks.length})`));
+      });
+    });
+
+    await Promise.all(promises);
+    console.log(color.green(`\n✔ 预生成完毕！本次共并发生成 ${generatedCount} 个新单元。`));
     outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
   });
 
