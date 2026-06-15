@@ -109,6 +109,26 @@ graph TD
     - `FileReadTool` / `FileWriteTool`：赋予 Agent 读写特定代码模板和配置的能力。
     - `ExecuteCommandTool`：基于 Node.js `exec` 异步子进程接口，限制最大 10 秒执行超时。AI 可以运行本地编译命令、校验测试用例是否生成正确，从而在输出课件前完成自我纠错。
 
+### 8. 高性能 L2 缓存与速率极限流控 (L2 Caching & Rate-Limit Concurrency Control)
+* **实现逻辑**：
+  在 [`src/utils/cache.ts`](file:///y:/MyAgentProject/src/utils/cache.ts) 中自主实现。
+* **功能点**：
+  - **SHA-256 分层哈希映射**：为了实现极速响应并最大程度节约 Token 消耗，我们构建了以 LRU 算法为主的 L1 内存和 `.fuckcolloge/cache/` 磁盘文件的 L2 级持久化存储。将检索词、提示词和状态参数结合进行 SHA-256 签名作为 Cache Key。命中时 `1ms` 瞬间重现，未命中时在写入磁盘的同时进行双向读写同步。
+  - **Staggered 错峰串行流控**：针对课件一键生成接口在大并发下极易触发三方 API 服务商速率超限（Rate Limit Exceeded）及 Socket 连接重置的痛点，我们在 CLI 层面设计了 `pLimit(1)`（串行稳健调度器），并辅以每个任务 3 秒的 staggered delay 错峰偏移启动时间，完美熨平了 HTTP 瞬时连接的突发波峰。
+* **流程数据流图**：
+  ```text
+  [LLM / Search 请求] ──→ 计算 SHA-256 散列 ──→ 命中 L1 / L2 缓存？
+                                                ├── [YES] ──→ 1ms 极速返回 (Cache HIT)
+                                                └── [NO]  ──→ 进入 pLimit(1) 错峰调度 ──→ 发起 HTTP 请求 ──→ 回写 Cache 磁盘
+  ```
+
+### 9. 自适应重试与 Fallback 自我修复协议 (Resilient Auto-Retry & Fallback Recovery)
+* **实现逻辑**：
+  在 `src/agents/pipeline.ts` 的 `ensureUnitFullyPopulated` 与 `cli.ts` 的 `generate-all` 中配合实现。
+* **功能点**：
+  - **熔断关键字标识**：在遇到严重网络超时时，系统会平滑捕获异常，并为该单元的 `content` 与 `exercise.description` 注入特异性的 `"基础预备版本"` 与 `"占位练习"` 标志。
+  - **差异扫描与单单元断点重试**：当用户下一次执行生成指令时，CLI 会自动扫描大纲，跳过已生成合格课件的单元，仅过滤出包含 fallback 标识的失败单元重新呼叫 AI 提炼，实现零阻塞的断点续传。
+
 ---
 
 ## 🔒 企业级安全防泄密机制 (Git Secret Exclusion)

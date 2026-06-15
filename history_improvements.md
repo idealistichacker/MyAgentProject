@@ -131,3 +131,14 @@
   - **人格化导师注入**：全面重构了 Draft、Critic、Polish 及 TA Assessment 提示词，注入了极具幽默感、擅长生动类比和故事化叙述的顶级 AI 导师人格。
   - **逻辑大局观**：调整了 `generateUnitContent` 的签名，传入完整的 `LearningPlan` 使得生成器拥有上帝视角，使每个单元讲义在内容上均强关联大纲主线并为最终项目埋下伏笔。
   - **有温度的 AI TA**：重写了评估诊断的 Prompt，使得 AI 助教在批改作业时能提供温暖的关怀与极具感染力的鼓励，保护学习者的自尊心与学习积极性。
+
+---
+
+## 13. 高性能 L2 分层缓存层、Staggered 并发限制器与 Scheme 解释器沙箱集成对齐 (L2 Cache & Concurrency Limiter & Scheme Sandbox Alignment)
+* **背景与痛点**：
+  在生成大型单元（特别是 Project 实战单元）时，由于输出 Token 较长且伴随多轮 Function Calling 联网搜索，非常容易触发大模型服务商（如 SiliconFlow）的连接超时（Timeout Error）或 Socket 重置（`ECONNRESET`）。此外，如果在生成中途因超时崩溃降级，物理目录下的文件（如 Pass 1 写入的 `solution.py`）与 `plan.json` 里的占位元数据（通常默认降级为 TypeScript / `placeholderFunc`）会产生严重错配，导致本地 `fc submit` 命令行测试崩溃或判分无法进行。
+* **改进核心**：
+  - **L2 分层缓存层 (L2 Layered Cache)**：在 [`src/utils/cache.ts`](file:///y:/MyAgentProject/src/utils/cache.ts) 中实现基于 SHA-256 哈希的内存与磁盘二级存储。在发起联网搜索或大模型课件生成前，优先计算上下文哈希，如果命中直接以 `1ms` 级返回，完美节约 API 资源消耗并消除界面卡顿。
+  - **抗 Rate Limit 的控频调度 (Staggered Concurrency Controller)**：在 `generate-all` 全量生成命令中，将并发度限制重构为 `pLimit(1)`（串行稳健生成），并在循环中引入 3 秒错峰延迟启动（Staggered Delay Offset），以拉长网络握手间隔，消除由大量请求同时发起导致的网络中断与套接字重置。
+  - **断点续传感知与重试 (Resilient Auto-Retry & Recovery)**：当生成超时熔断并写入 basic 占位内容时，系统会自动在 `plan.json` 的 content 和 exercise 中打上 `"基础预备版本"` 与 `"占位练习"` 的标签。用户再次执行 `generate-all` 或 `start` 时，CLI 会自动扫描这些未完成的单元并重新向 AI 申请动态生成，实现断点续传。
+  - **Scheme Sandbox 实战评测对齐**：针对 Unit 4 的动态 Scheme 解释器项目，手动纠正了其 `plan.json` 配置与物理文件的错配，将语言类型修正为 `python`、入口函数对齐为 `eval_scheme`，并额外植入了 8 个覆盖前缀运算、if 短路求值、Lambda 作用域链、词法闭包与尾递归阶乘的真实物理集成测试用例，保证 `fc submit` 的真实评测闭环。

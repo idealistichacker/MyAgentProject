@@ -68,3 +68,17 @@
     - 对大纲设计者（`CurriculumPlanner`）、课件撰写者（`ContentGenerator` / `ContentCritic`）和精修人（`FinalPolisher`）进行全面 Prompt 重构，使其被赋予更具幽默感的 AI 导师灵魂。
     - 修改了 `generateUnitContent` 的底层传参逻辑，向其传入包含 Project 目标的完整 `LearningPlan`。AI 在起草课件时将获得上帝视角，实现讲义内容、Scenario-based 选择题、项目主题 Starter Code 变量命名三位一体强关联到最终的大作业中。
     - 升级了 `buildAssessment` 诊断助教，使其反馈信息更富有人情味，在成功时狂热庆祝，在失败时给予共情疏导和多阶段渐进式 Hints 调试启发。
+
+---
+
+## 📅 阶段六：大模型生成容灾与 Scheme 解释器本地验证对齐 (Phase 6: API Resiliency & Unit-4 Sandbox Integration)
+* **核心目标**：
+  解决大型单元（特别是 Project 级别关卡）生成时的 API 响应超时与 Socket 断开问题；引入高性能二级缓存层以降低 API 交互延迟与费用开销；纠正大作业在生成失败退回时的本地元数据错配，确保物理文件与 `plan.json` 自动测试完美闭环。
+* **主要工作与实现**：
+  - **L2 Layered Cache 机制落地**：编写并集成了 [`cache.ts`](file:///y:/MyAgentProject/src/utils/cache.ts) 二级缓存，对网络搜索请求和 LLM 课件生成提示词（Prompts）进行 SHA-256 哈希校验。一旦命中缓存，提供毫秒级（`1ms`）闪电响应，解决大并发生成下的终端卡死与延迟痛点。
+  - **串行控频并发与Staggered 错峰控制**：改造 `generate-all` 命令，通过 `pLimit(1)` 将高并发降级为稳健的串行调度，并引入 3 秒的 progressive offset 错峰启动延时，有效平滑 API 请求峰值，阻断了 SiliconFlow 侧频繁发生的 `ECONNRESET` 套接字重置。
+  - **自适应重试与断点续传（Auto-Retry）**：细化了 fallback 捕获，在生成失败时为 `plan.json` 中的相应字段添加标识（如 `"基础预备版本"`）。下一次执行 `generate-all` 或 `start` 时，系统会自动提取并仅重新触发这些失败单元的生成。
+  - **Scheme 项目评测闭环与课件修复**：
+    - 精准更新了 Unit 4 `plan.json` 中的元数据配置，将 `language` 切换为 `python`，`entrypoint` 指向 `eval_scheme`。
+    - 编写并绑定了 8 个涵盖算术嵌套、`if` 逻辑、闭包环境查找、以及递归阶乘的真实 Python 集成测试断言，使 `fc submit` 评测框架能真正运行起来。
+    - 重写了 [unit-4-scheme-interpreter-project.md](file:///y:/MyAgentProject/.fuckcolloge/lessons/unit-4-scheme-interpreter-project.md) 课件，将Berkeley的多文件叙述修正为与物理文件一致的单文件（`solution.py`）架构，彻底消除了用户阅读与实现时的“严重幻觉”。
