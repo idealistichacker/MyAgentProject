@@ -3,6 +3,7 @@ import type { SeedUnit } from '../types.js';
 export const SEED_CURRICULUM: SeedUnit[] = [
   {
     id: 'dsa-001',
+    type: 'unit',
     title: '数组与双指针：用两个游标压缩无效操作',
     description: '学习如何用双指针在有序数组上原地去重，并理解时间复杂度 O(n) 的来源。',
     prerequisites: ['数组基础', 'for 循环', '基本时间复杂度概念'],
@@ -131,6 +132,7 @@ export const SEED_CURRICULUM: SeedUnit[] = [
   },
   {
     id: 'dsa-002',
+    type: 'unit',
     title: '哈希表：把查找从线性扫描变成常数时间',
     description: '学习 Map/Set 如何帮助你用空间换时间，解决 two-sum 类问题。',
     prerequisites: ['数组遍历', '对象/Map 基础', '时间复杂度 O(n)'],
@@ -239,6 +241,7 @@ export const SEED_CURRICULUM: SeedUnit[] = [
   },
   {
     id: 'dsa-003',
+    type: 'unit',
     title: '栈与括号匹配：用 LIFO 表达嵌套结构',
     description: '学习栈的后进先出特性，并用它解决括号匹配问题。',
     prerequisites: ['数组基础', 'Map 基础', '函数调用直觉'],

@@ -28,6 +28,7 @@ export const defaultProviderConfig: ProviderConfig = {
   model: 'gpt-4o-mini',
   apiKey: '',
   temperature: 0.2,
+  searchProvider: 'wikipedia',
 };
 
 export function ensureProjectDirs(): void {
@@ -63,6 +64,8 @@ export function loadConfig(): ProviderConfig {
     apiKey: fromFile.apiKey ?? process.env.FC_API_KEY ?? '',
     baseUrl: fromFile.baseUrl ?? process.env.FC_BASE_URL ?? defaultProviderConfig.baseUrl,
     model: fromFile.model ?? process.env.FC_MODEL ?? defaultProviderConfig.model,
+    searchProvider: fromFile.searchProvider ?? process.env.FC_SEARCH_PROVIDER ?? defaultProviderConfig.searchProvider,
+    tavilyApiKey: fromFile.tavilyApiKey ?? process.env.FC_TAVILY_API_KEY ?? undefined,
   };
   return providerConfigSchema.parse(merged);
 }

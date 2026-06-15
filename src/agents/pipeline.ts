@@ -10,6 +10,7 @@ import type {
 } from '../types.js';
 import type { LLMProvider, ChatMessage } from '../providers/types.js';
 import { ToolManager, WebSearchTool, TimeTool, ExecuteCommandTool, FileReadTool, FileWriteTool } from './tools.js';
+import { loadConfig } from '../state/fsState.js';
 
 const nowIso = () => new Date().toISOString();
 
@@ -65,7 +66,8 @@ export async function generatePlan(
   if (provider) {
     try {
       const toolManager = new ToolManager();
-      toolManager.register(new WebSearchTool());
+      const config = loadConfig();
+      toolManager.register(new WebSearchTool(config.searchProvider, config.tavilyApiKey));
       toolManager.register(new TimeTool());
 
       let weeks = 6.5;
@@ -82,18 +84,22 @@ export async function generatePlan(
       // Clamp between 2 and 10 to guarantee token safety and prompt alignment.
       const calculatedCount = Math.round((weeks * hoursPerWeek) / 5);
       const targetUnitCount = Math.min(10, Math.max(2, calculatedCount));
+      const totalUnits = targetUnitCount >= 4 ? targetUnitCount + 1 : targetUnitCount;
 
       const prompt = `
-You are FCAgent CurriculumPlanner. Generate a personalized learning curriculum array (JSON) with exactly ${targetUnitCount} units based on the learner profile.
+You are FCAgent CurriculumPlanner. Generate a personalized learning curriculum array (JSON) with exactly ${totalUnits} units based on the learner profile.
 
 IMPORTANT RULES:
 1. First priority: Use the \`search_web\` tool to search for latest and highly-quality resources relating to the learner's goal.
 2. Second priority: Use your internal parametric knowledge to combine with search results.
 3. Once you have enough info, return the final JSON array.
+4. ${targetUnitCount >= 4 ? 'Since the course is long enough, you MUST include exactly 1 unit of `type: "project"` (a large-scale coding project, like CS61A Ants or Scheme, that integrates prior concepts). It should be placed in the mid-to-late part of the curriculum as an incremental challenge. Mark its id with a "-project" suffix.' : 'Generate regular instructional units.'}
+5. Ensure the JSON is completely valid and free of formatting issues. VERY IMPORTANT: Any double quotes inside JSON string values (such as titles, descriptions, objectives) MUST be properly escaped as \\\" (backslash double quote) or replaced with Chinese quotes (“ ”) or single quotes. DO NOT write unescaped double quotes inside strings, as it breaks JSON parsing.
 
-The JSON output MUST be a valid array of objects matching this schema (containing exactly ${targetUnitCount} elements):
+The JSON output MUST be a valid array of objects matching this schema (containing exactly ${totalUnits} elements):
 [{
   "id": "unique-unit-id",
+  "type": "unit",
   "title": "Unit Title",
   "description": "Brief description",
   "prerequisites": ["prereq1"],
@@ -106,7 +112,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
 `.trim();
 
       const messages: ChatMessage[] = [
-        { role: 'system', content: 'You are a JSON-only curriculum planner with web search capabilities.' },
+        { role: 'system', content: 'You are a JSON-only curriculum planner with web search capabilities. You must output strictly valid JSON, escaping any double quotes inside string fields with a backslash.' },
         { role: 'user', content: prompt }
       ];
 
@@ -154,22 +160,29 @@ ${JSON.stringify(learnerProfile, null, 2)}
         }
       }
 
+      let parsed: any;
       try {
-        const parsed = JSON.parse(cleanContent);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          units = parsed.map((u: any, index: number) => ({
-            ...u,
-            id: u.id || `dyn-unit-${index}`,
-            title: u.title || 'Untitled',
-            description: u.description || '',
-            prerequisites: u.prerequisites || [],
-            objectives: u.objectives || [],
-            passCriteria: { quizMinScore: 1, exerciseMustPass: true },
-          })) as SeedUnit[];
+        parsed = JSON.parse(cleanContent);
+      } catch (firstErr) {
+        try {
+          parsed = JSON.parse(sanitizeJsonString(cleanContent));
+        } catch (secondErr) {
+          console.warn('\n⚠️ Failed to parse JSON from LLM:\n', cleanContent);
+          throw firstErr;
         }
-      } catch (parseErr: any) {
-        console.warn('\n⚠️ Failed to parse JSON from LLM:\n', cleanContent);
-        throw parseErr;
+      }
+
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        units = parsed.map((u: any, index: number) => ({
+          ...u,
+          id: u.id || `dyn-unit-${index}`,
+          type: u.type || 'unit',
+          title: u.title || 'Untitled',
+          description: u.description || '',
+          prerequisites: u.prerequisites || [],
+          objectives: u.objectives || [],
+          passCriteria: { quizMinScore: 1, exerciseMustPass: true },
+        })) as SeedUnit[];
       }
     } catch (err) {
       console.warn('Failed to generate dynamic plan, falling back to seed.', err);
@@ -247,7 +260,8 @@ export async function generateUnitContent(
     let searchResult = 'No search results available.';
     try {
       const toolManager = new ToolManager();
-      const webSearch = new WebSearchTool();
+      const config = loadConfig();
+      const webSearch = new WebSearchTool(config.searchProvider, config.tavilyApiKey);
       const query = `${unit.title} ${unit.objectives?.[0] || ''}`.trim();
       console.log(`\n🔍 FCAgent ContentGenerator 正在联网检索资料: "${query}"...`);
       searchResult = await webSearch.execute({ query });
@@ -259,11 +273,15 @@ export async function generateUnitContent(
     // 2. Pass 1: Generate Initial Draft (with Tool Support)
     console.log('📝 Pass 1: 生成初稿 (Drafting)...');
     const toolManager = new ToolManager();
-    toolManager.register(new WebSearchTool());
+    const config = loadConfig();
+    toolManager.register(new WebSearchTool(config.searchProvider, config.tavilyApiKey));
     toolManager.register(new TimeTool());
     toolManager.register(new ExecuteCommandTool());
     toolManager.register(new FileReadTool());
     toolManager.register(new FileWriteTool());
+
+    const isProject = unit.type === 'project';
+    const projectDraftInstruction = isProject ? 'Since this is a PROJECT unit, generate a detailed Project Specification (similar to CS61A Ants/Scheme) detailing the architecture, phases of development, and module interactions instead of a regular conceptual lesson.' : 'Generate a rich, detailed markdown content explanation including technical definitions, examples, and deep explanation.';
 
     const draftPrompt = `
 You are FCAgent ContentGenerator, an elite AI tutor designed to produce educational content at the rigor of UC Berkeley's CS61A.
@@ -271,6 +289,7 @@ Your task is to write a comprehensive, high-quality, detailed technical course d
 
 Unit Outline:
 - Title: ${unit.title}
+- Type: ${unit.type || 'unit'}
 - Description: ${unit.description}
 - Objectives: ${unit.objectives.join(', ')}
 
@@ -283,7 +302,7 @@ Learner Profile:
 Search Results from Web:
 ${searchResult}
 
-Generate a rich, detailed markdown content explanation including technical definitions, examples, and deep explanation. Keep the draft dense and focused (under 800 words in Chinese).
+${projectDraftInstruction} Keep the draft dense and focused (under 1200 words in Chinese).
 Feel free to use tools to execute quick node scripts, read existing files, or do web searches to ensure absolute technical accuracy and ZERO factual errors. Once you have enough context, return the final draft.
 Do not format as JSON yet, just generate a deep markdown document draft.
 `.trim();
@@ -326,10 +345,12 @@ Do not format as JSON yet, just generate a deep markdown document draft.
 
     // 3. Pass 2: Critique and Expand (Refinement 1)
     console.log('🔧 Pass 2: 提炼与深度扩展 (Critique & Expand)...');
+    const projectCritiqueInstruction = isProject ? 'Ensure the Project Spec is detailed, explaining tricky architectural edge cases and providing comprehensive walk-throughs of how different modules interact.' : 'Provide additional insights, explain tricky edge cases, and add comprehensive practical walk-through examples or "gotchas".';
+
     const critiquePrompt = `
 You are FCAgent ContentCritic. Your task is to critique and significantly expand the course draft below to ensure it meets the rigorous academic and pedagogical standards of UC Berkeley's CS61A.
 Ensure the content is technically deep, impeccably clear, conforms to the learning objectives, and has zero factual errors.
-Provide additional insights, explain tricky edge cases, and add comprehensive practical walk-through examples or "gotchas".
+${projectCritiqueInstruction}
 
 Objectives: ${unit.objectives.join(', ')}
 Search Results Context:
@@ -338,7 +359,7 @@ ${searchResult}
 Original Draft:
 ${draftContent}
 
-Provide the expanded and corrected course content in Chinese. Focus on technical depth and gotchas, keeping the total content rich but under 1000 words in Chinese. Do not format as JSON yet, output the refined Markdown draft.
+Provide the expanded and corrected course content in Chinese. Focus on technical depth and gotchas, keeping the total content rich but under 1500 words in Chinese. Do not format as JSON yet, output the refined Markdown draft.
 `.trim();
 
     const critiqueRes = await provider.chat([
@@ -351,6 +372,19 @@ Provide the expanded and corrected course content in Chinese. Focus on technical
 
     // 4. Pass 3: Final Polishing, Quiz & Starter Code Generation (Refinement 2)
     console.log('💎 Pass 3: 格式化与精修 (Format & Polish)...');
+    const projectFinalInstruction = isProject ? `
+CS61A Pedagogical Rules for PROJECT STARTER_CODE:
+- The exercise MUST be a robust multi-phase project skeleton (e.g. Phase 1, Phase 2) with clear TODOs and docstrings.
+- The quiz MUST focus on testing the learner's understanding of the project architecture and module design, rather than isolated syntax.
+- The \`testCode\` MUST be a comprehensive integration test that runs tests across the project skeleton.
+` : `
+CS61A Pedagogical Rules for STARTER_CODE:
+- Must include a rich docstring (e.g. TSDoc or Python Docstring) explaining the problem.
+- Must include "doctest" style input/output examples within the comment (e.g. \`>>> funcName(1)\\n2\`).
+- Must use step-by-step TODO comments to scaffold the solution for the learner (e.g. \`// Step 1: Base case...\`, \`# Step 2: Recursive call...\`).
+- Do NOT simply provide an empty function. Give them a robust skeleton!
+`;
+
     const finalPrompt = `
 You are FCAgent FinalPolisher. Format the refined learning materials into the final required three-part output format.
 Ensure the final output reflects the premium quality of CS61A.
@@ -362,12 +396,7 @@ You must construct:
    - For bash exercises, assertionMode should likely be 'stdout'. For others it can be 'return' or 'mutate-and-return'.
 2. The final Markdown CONTENT (using the refined course content). Keep it dense and copy it directly from the refined draft without expanding it with unnecessary verbose prose.
 3. The STARTER_CODE block for the exercise. This must be the raw code for the exercise.
-
-CS61A Pedagogical Rules for STARTER_CODE:
-- Must include a rich docstring (e.g. TSDoc or Python Docstring) explaining the problem.
-- Must include "doctest" style input/output examples within the comment (e.g. \`>>> funcName(1)\n2\`).
-- Must use step-by-step TODO comments to scaffold the solution for the learner (e.g. \`// Step 1: Base case...\`, \`# Step 2: Recursive call...\`).
-- Do NOT simply provide an empty function. Give them a robust skeleton!
+${projectFinalInstruction}
 
 The output MUST contain exactly these three sections, using your generated exercise code and quiz instead of the template examples:
 \`\`\`json
@@ -436,7 +465,17 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
       const starterCodeMatch = responseContent.match(/### STARTER_CODE\n([\s\S]*)$/);
 
       if (!jsonMatch) throw new Error('Missing JSON block');
-      const parsed = JSON.parse(jsonMatch[1].trim());
+      const rawJson = jsonMatch[1].trim();
+      let parsed: any;
+      try {
+        parsed = JSON.parse(rawJson);
+      } catch (firstErr) {
+        try {
+          parsed = JSON.parse(sanitizeJsonString(rawJson));
+        } catch (secondErr) {
+          throw firstErr;
+        }
+      }
       
       const content = contentMatch ? contentMatch[1].trim() : '';
       let starterCode = starterCodeMatch ? starterCodeMatch[1].trim() : '';
@@ -733,3 +772,54 @@ export const assessmentSchema = z.object({
   nextAction: z.string(),
   createdAt: z.string().datetime(),
 });
+
+export function sanitizeJsonString(jsonStr: string): string {
+  let result = '';
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const char = jsonStr[i];
+
+    if (escapeNext) {
+      result += char;
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      result += char;
+      if (inString) {
+        escapeNext = true;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      if (!inString) {
+        inString = true;
+        result += char;
+      } else {
+        let nextNonWhitespace = '';
+        for (let j = i + 1; j < jsonStr.length; j++) {
+          if (!/\s/.test(jsonStr[j])) {
+            nextNonWhitespace = jsonStr[j];
+            break;
+          }
+        }
+
+        if (nextNonWhitespace === ':' || nextNonWhitespace === ',' || nextNonWhitespace === '}' || nextNonWhitespace === ']') {
+          inString = false;
+          result += char;
+        } else {
+          result += '\\"';
+        }
+      }
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}

@@ -50,7 +50,7 @@ export class ToolManager {
 
 export class WebSearchTool implements Tool {
   name = 'search_web';
-  description = 'Searches the web (Wikipedia) for a given query to gather latest educational resources or concepts. Always prioritize this to gather real-world info.';
+  description = 'Searches the web for a given query to gather latest educational resources or concepts. Always prioritize this to gather real-world info.';
   parameters = {
     type: 'object',
     properties: {
@@ -59,10 +59,53 @@ export class WebSearchTool implements Tool {
     required: ['query']
   };
 
+  private provider: 'wikipedia' | 'tavily';
+  private apiKey?: string;
+
+  constructor(provider: 'wikipedia' | 'tavily' = 'wikipedia', apiKey?: string) {
+    this.provider = provider;
+    this.apiKey = apiKey;
+  }
+
   async execute(args: Record<string, any>): Promise<string> {
     const query = args.query;
     if (!query) return 'Error: Missing query parameter.';
 
+    if (this.provider === 'tavily') {
+      if (!this.apiKey) {
+        return 'Error: Tavily API key is missing. Please configure it using `fc init`.';
+      }
+      try {
+        const response = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            api_key: this.apiKey,
+            query: query,
+            search_depth: 'basic',
+            include_answer: false,
+            max_results: 5
+          })
+        });
+        if (!response.ok) {
+          return `Tavily Search failed with status ${response.status}`;
+        }
+        const data = await response.json() as any;
+        if (!data.results || data.results.length === 0) {
+          return 'No results found.';
+        }
+        const output = data.results.map((r: any) => {
+          return `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}\n`;
+        }).join('\n');
+        return `Search results for "${query}":\n\n${output}`;
+      } catch (err: any) {
+        return `Tavily Search error: ${err.message}`;
+      }
+    }
+
+    // Default to Wikipedia
     try {
       const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json`;
       const response = await fetch(url);

@@ -30,20 +30,21 @@
 
 如果你有一些比较大、需要多步骤实现的设计想法，你可以直接在下方使用本模板起草：
 
-### 📌 想法草稿：[在学习了几个单元后有一定积累后穿插像CS61A中ants、Scheme Interpreter中大型的实战Project]
+### 📌 想法草稿：[在学习了几个单元后有一定积累后穿插像CS61A中ants、Scheme Interpreter中大型的实战Project] (✅ 已实现)
 
 * **背景与痛点**：没有像CS61A那样的有趣又能应用所学知识的Project
 * **教学/实战价值**：激发兴趣、巩固知识、拓展拔高、获得成就感
 * **期望的交互命令 (例)**：
   
   ```bash
-  npm run dev -- project --option value
+  npm run dev -- plan # 自动在中后期插入 Project
+  npm run dev -- start [project-unit-id]
   ```
-* **大概的底层思路 (可留空，等美少女来写)**：
+* **大概的底层思路 (已由美少女实现)**：已通过 `src/agents/pipeline.ts` 中 `targetUnitCount >= 4` 的判断，自动在生成的单元中额外加入 1-2 个带有 `type: "project"` 和 `-project` 后缀的单元。针对 Project 单元的内容生成，Prompt 已经特化为生成 Project Spec 讲义、架构测试 Quiz 与多阶段 Skeleton 代码。
 
 ---
 
-### 📌 想法草稿：[跳过本地测试、回答 Quiz 和 AI TA 深度诊断直接生成下一unit的内容以便快速浏览整个计划的课程内容]
+### 📌 想法草稿：[跳过本地测试、回答 Quiz 和 AI TA 深度诊断直接生成下一unit的内容以便快速浏览整个计划的课程内容] (✅ 已实现)
 
 * **背景与痛点**：不完全通过当前unit的测试不能进入下一unit。最好在学习者尝试5次npm run dev -- submit后仍失败后提醒学习者可以运行对应的命令直接进入下一Unit。同时将未完全通过的Unit进度保存下来，以便后续学习者回过头来继续学习完善。
 
@@ -52,7 +53,9 @@
 * **期望的交互命令 (例)**：
 
   ```bash
+  npm run dev -- submit # 失败5次后自动提示跳过
   npm run dev -- skip
+  npm run dev -- generate-all # 全局预生成快速浏览
   ```
 
-* **大概的底层思路 (可留空，等美少女来写)**：
+* **大概的底层思路 (已由美少女实现)**：在 `fc submit` 中监控 `attemptCount >= 5`，自动使用黄色提示引导跳过；并新增 `fc generate-all` 命令，通过遍历 `plan.units` 并发生成所有讲义，实现快速浏览痛点。

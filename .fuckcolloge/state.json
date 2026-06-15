@@ -1,6 +1,9 @@
 {
-  "currentUnitId": "ts-level-02",
+  "currentUnitId": "goroutines-channels-core",
   "completedUnitIds": [],
+  "skippedUnitIds": [
+    "go-fundamentals"
+  ],
   "attempts": {
     "dsa-001": {
       "count": 2,
@@ -21,6 +24,10 @@
     "ts-level-01": {
       "count": 5,
       "lastSubmittedAt": "2026-06-12T07:16:51.598Z"
+    },
+    "go-fundamentals": {
+      "count": 1,
+      "lastSubmittedAt": "2026-06-15T03:00:32.764Z"
     }
   },
   "assessments": [
@@ -861,7 +868,53 @@
       "diagnosis": "这次表现很好，所有测试和概念题都通过了。你的代码清晰地体现了 TypeScript 的核心价值：用类型约束数据形状，用运行时校验处理不可信输入。你能正确处理 JSON 解析失败、非数组输入、缺失可选字段默认值、非法标签/角色，以及标签去重和规范化。整体思路符合“先验证，再构造可信数据”的类型安全编程习惯。",
       "nextAction": "下一步可以尝试把这些校验逻辑抽象成更通用的解析器，练习如何在大型项目中复用类型守卫和错误报告。",
       "createdAt": "2026-06-12T07:16:51.598Z"
+    },
+    {
+      "unitId": "go-fundamentals",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 3,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "piston-runner",
+          "passed": false,
+          "message": "Piston execution failed: 401 Unauthorized"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": false,
+          "answer": "A. 可以在包级别使用，例如 `var x := 10`",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "B. [1 99 3 4]",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": false,
+          "answer": "B. 1\\n2",
+          "expected": "A"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "B. 接口变量只有动态类型和动态值都为 nil 时才等于 nil",
+          "expected": "B"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure"
+      ],
+      "diagnosis": "你的代码骨架正确，但核心逻辑尚未实现，导致测试无法通过（运行环境也出现了授权问题，这通常与代码无关）。概念上，短变量声明 `:=` 只能在函数内使用，不能出现在包级别；`defer` 遵循后进先出（LIFO）的顺序，多个 `defer` 时最后注册的最先执行。请先理清这两点，再动手补全 `MaxMin` 的遍历与比较逻辑。",
+      "nextAction": "建议重新阅读短变量声明的作用域规则和 defer 的执行顺序，然后完成 MaxMin 函数的实现并再次提交。",
+      "createdAt": "2026-06-15T03:00:32.764Z"
     }
   ],
-  "updatedAt": "2026-06-12T07:17:26.937Z"
+  "updatedAt": "2026-06-15T03:01:48.791Z"
 }

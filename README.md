@@ -20,6 +20,10 @@
 
 ## 🛠️ 快速上手 (Quick Start)
 
+> [!TIP]
+> **重要提示**：我们为你编写了一份极其详细的 **[从零上手与 CLI 命令指南 (GETTING_STARTED.md)](file:///y:/MyAgentProject/GETTING_STARTED.md)**！
+> 该文件包含了如何全局链接正式版命令 `fc`、AI 导师目标追问机制（Grilling Mode）、以及全部 CLI 子命令的详细参数手册。强烈建议优先阅读它！✨
+
 确保你的本地环境已安装 [Node.js (v18+)](https://nodejs.org/)。
 
 ### 1. 安装依赖

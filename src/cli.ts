@@ -38,22 +38,55 @@ program.command('init')
   .option('--base-url <url>', 'OpenAI-compatible API base URL')
   .option('--model <model>', 'Model name')
   .option('--api-key <key>', 'API key')
-  .action((options) => {
+  .option('--search-provider <provider>', 'Search provider: wikipedia | tavily')
+  .option('--tavily-api-key <key>', 'Tavily API key')
+  .action(async (options) => {
     intro(color.inverse(' 🚀 初始化 FuckColloge '));
     ensureProjectDirs();
     const config = loadConfig();
+
+    let searchProvider = options.searchProvider ?? config.searchProvider;
+    if (!options.searchProvider) {
+      const providerSelection = await select({
+        message: '选择搜索引擎 (Search Provider)',
+        options: [
+          { value: 'wikipedia', label: 'Wikipedia (免费自带)' },
+          { value: 'tavily', label: 'Tavily (需要 TAVILY_API_KEY)' },
+        ],
+        initialValue: config.searchProvider,
+      });
+      if (!isCancel(providerSelection)) {
+        searchProvider = providerSelection as 'wikipedia' | 'tavily';
+      }
+    }
+
+    let tavilyApiKey = options.tavilyApiKey ?? config.tavilyApiKey;
+    if (searchProvider === 'tavily' && !tavilyApiKey) {
+      const keyInput = await text({
+        message: '请输入你的 Tavily API Key:',
+        placeholder: 'tvly-...',
+      });
+      if (!isCancel(keyInput)) {
+        tavilyApiKey = keyInput as string;
+      }
+    }
+
     const next = {
       ...config,
       baseUrl: options.baseUrl ?? config.baseUrl,
       model: options.model ?? config.model,
       apiKey: options.apiKey ?? config.apiKey,
+      searchProvider,
+      tavilyApiKey,
     };
     saveConfig(next);
     note(
       `Provider: ${next.provider}\n` +
       `Base URL: ${next.baseUrl}\n` +
       `Model: ${next.model}\n` +
-      `API key configured: ${next.apiKey ? 'yes' : 'no'}`,
+      `API key configured: ${next.apiKey ? 'yes' : 'no'}\n` +
+      `Search Provider: ${next.searchProvider}\n` +
+      `Tavily API key configured: ${next.tavilyApiKey ? 'yes' : 'no'}`,
       'Config Info'
     );
     outro(color.green('✔ FuckColloge initialized at .fuckcolloge/'));
@@ -69,6 +102,8 @@ program.command('config')
       model: config.model,
       apiKeyConfigured: Boolean(config.apiKey),
       temperature: config.temperature,
+      searchProvider: config.searchProvider,
+      tavilyApiKeyConfigured: Boolean(config.tavilyApiKey),
     }, null, 2));
   });
 
@@ -137,7 +172,8 @@ program.command('plan')
     s.stop(color.green(`✔ 计划生成成功！共计 ${plan.units.length} 个单元。`));
     
     plan.units.forEach(unit => {
-      console.log(`${color.cyan('•')} ${color.bold(unit.id)}: ${unit.title}`);
+      const typeLabel = unit.type === 'project' ? color.magenta(color.bold(' 🚀 [PROJECT] ')) : '';
+      console.log(`${color.cyan('•')} ${color.bold(unit.id)}:${typeLabel} ${unit.title}`);
     });
     outro(color.gray('执行 `fc start` 开始第一个单元的学习吧！'));
   });
@@ -281,6 +317,9 @@ program.command('submit [unitId]')
     if (assessment.passed) {
       outro(color.green('🎉 恭喜通关本单元！执行 `fc next` 进入下一关！'));
     } else {
+      if ((state.attempts[unit.id]?.count ?? 0) >= 5) {
+        note(color.yellow(`💡 提示：检测到当前单元已尝试了 ${(state.attempts[unit.id]?.count ?? 0)} 次。如果你感到吃力，可以输入 \`fc skip\` 跳过本地测试与 Quiz，直接进入下一 Unit 的学习。你跳过的单元会被妥善记录在逃课账本中，随时可以回来复习哦！`), '逃课提示');
+      }
       outro(color.yellow('再接再厉，请根据诊断建议修改代码后再次 `fc submit`！'));
     }
   });
@@ -413,7 +452,8 @@ program.command('status')
       console.log(color.bold('学习进度: ') + createProgressBar(completedUnits, totalUnits));
       
       const currentUnit = plan.units[plan.currentIndex];
-      console.log(color.bold('当前单元: ') + color.yellow(currentUnit?.title ?? 'None'));
+      const typeLabel = currentUnit?.type === 'project' ? color.magenta(color.bold(' 🚀 [PROJECT] ')) : '';
+      console.log(color.bold('当前单元: ') + color.yellow(currentUnit?.title ?? 'None') + typeLabel);
       
       const passRate = state.assessments.length > 0 
         ? Math.floor((state.assessments.filter(a => a.passed).length / state.assessments.length) * 100)
@@ -425,6 +465,46 @@ program.command('status')
     }
 
     outro('💪 Keep going!');
+  });
+
+program.command('generate-all')
+  .description('Pre-generate all lessons and exercise skeletons in the plan for quick offline browsing')
+  .action(async () => {
+    intro(color.inverse(' 🚀 全量课件预生成 (Generate All) '));
+    ensureProjectDirs();
+    const plan = loadPlan();
+    if (!plan) {
+      cancel('No learning plan found. Run `fc plan` first.');
+      process.exitCode = 1;
+      return;
+    }
+    const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+    if (!provider) {
+      cancel('Provider not configured. Run `fc init` and set an API key.');
+      process.exitCode = 1;
+      return;
+    }
+
+    const s = spinner();
+    let generatedCount = 0;
+    for (let i = 0; i < plan.units.length; i++) {
+      let unit = plan.units[i];
+      const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
+      if (!unit.content || !unit.exercise || isFallback) {
+        s.start(`正在生成 [${unit.id}] 的课件与练习 (${i + 1}/${plan.units.length})...`);
+        unit = await generateUnitContent(unit, plan.learnerProfile, provider);
+        plan.units[i] = unit;
+        savePlan(plan);
+        const extension = getExtensionForLanguage(unit.exercise?.language ?? 'typescript');
+        writeTextFile(getLessonPath(unit.id), unit.content || '');
+        if (unit.exercise) {
+          writeTextFile(getSolutionPath(unit.id, extension), unit.exercise.starterCode);
+        }
+        generatedCount++;
+      }
+    }
+    s.stop(color.green(`✔ 预生成完毕！本次共生成 ${generatedCount} 个新单元的讲义。`));
+    outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
   });
 
 program.parseAsync(process.argv);

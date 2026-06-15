@@ -6,6 +6,8 @@ export const providerConfigSchema = z.object({
   model: z.string().default('gpt-4o-mini'),
   apiKey: z.string().default(''),
   temperature: z.number().min(0).max(2).default(0.2),
+  searchProvider: z.enum(['wikipedia', 'tavily']).default('wikipedia'),
+  tavilyApiKey: z.string().optional(),
 });
 
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
@@ -61,6 +63,7 @@ export type ExerciseSpec = z.infer<typeof exerciseSchema>;
 
 export const seedUnitSchema = z.object({
   id: z.string(),
+  type: z.enum(['unit', 'project']).default('unit'),
   title: z.string(),
   description: z.string(),
   prerequisites: z.array(z.string()).default([]),
