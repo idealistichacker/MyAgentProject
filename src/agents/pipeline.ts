@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { getSeedUnit, SEED_CURRICULUM } from '../curriculum/seed.js';
-import { exerciseSchema, quizQuestionSchema } from '../types.js';
+import { exerciseSchema, projectSpecSchema, quizQuestionSchema } from '../types.js';
 import type {
   AssessmentResult,
   LearnerProfile,
   LearningPlan,
+  ProjectSpec,
   QuizQuestion,
   SeedUnit,
   TestResult,
@@ -28,6 +29,7 @@ const exerciseMetadataSchema = exerciseSchema
 const generatedUnitMetadataSchema = z.object({
   quiz: z.array(quizQuestionSchema).min(1).max(5),
   exercise: exerciseMetadataSchema,
+  project: projectSpecSchema.optional(),
 });
 
 export async function diagnoseLearner(
@@ -271,7 +273,66 @@ export function placeholderFunc(): boolean {
       ],
       hints: ['请先完成核心概念的学习，然后再尝试此练习。']
     },
+    project: merged.project ?? (merged.type === 'project' ? buildFallbackProjectSpec(merged) : undefined),
     passCriteria: merged.passCriteria || { quizMinScore: 1, exerciseMustPass: true }
+  };
+}
+
+function buildFallbackProjectSpec(unit: SeedUnit): ProjectSpec {
+  const exercisePath = 'solution.ts';
+
+  return {
+    id: `project-${unit.id}`,
+    title: unit.title,
+    narrative: `${unit.description} 这个项目会把前置单元里的概念串成一个可以运行、可以测试、可以迭代的小系统。`,
+    drivingQuestion: `如何把《${unit.title}》拆成清晰的模块，并用测试证明每个阶段都可靠？`,
+    deliverables: [
+      `完成 ${exercisePath} 中的核心函数`,
+      '通过本项目附带的自动化测试',
+      '在代码注释中解释关键设计取舍',
+    ],
+    milestones: [
+      {
+        id: 'phase-1-core-model',
+        title: 'Phase 1: 建立核心模型',
+        goal: '先写出最小可运行的数据模型和函数签名。',
+        learnerTasks: [
+          '阅读 PROJECT.md 和讲义，标记输入、输出、不变量',
+          '补全 starter code 中的类型和基础分支',
+        ],
+        acceptanceCriteria: [
+          '正常输入能够返回结构正确的结果',
+          '边界输入不会抛出未处理异常',
+        ],
+      },
+      {
+        id: 'phase-2-rules-and-tests',
+        title: 'Phase 2: 落实规则与测试',
+        goal: '把项目规则变成可验证的代码路径。',
+        learnerTasks: [
+          '实现主要算法或状态转移规则',
+          '用本地测试反馈修正误区',
+        ],
+        acceptanceCriteria: [
+          '至少通过 normal、edge、misconception 三类测试',
+          '代码结构能让后续扩展点自然出现',
+        ],
+      },
+    ],
+    files: [
+      { path: exercisePath, purpose: '主要实现文件，由 fc start 自动生成 starter code。', required: true },
+      { path: 'test.ts', purpose: '提交时由本地 runner 生成的验收测试。', required: false },
+      { path: 'PROJECT.md', purpose: '项目规格、里程碑、评分标准和扩展方向。', required: true },
+    ],
+    rubric: [
+      { criterion: 'Correctness', points: 4, evidence: '核心测试全部通过，并正确处理边界情况。' },
+      { criterion: 'Design', points: 3, evidence: '函数边界清晰，状态和数据结构选择能解释。' },
+      { criterion: 'Learning Trace', points: 3, evidence: '注释或提交说明能说明关键误区如何被修正。' },
+    ],
+    extensionIdeas: [
+      '增加一组你自己设计的隐藏测试',
+      '把单函数实现拆成两个更清晰的辅助函数',
+    ],
   };
 }
 
@@ -381,6 +442,14 @@ CS61A Pedagogical Rules for PROJECT STARTER_CODE:
 - The exercise MUST be a robust multi-phase project skeleton (e.g. Phase 1, Phase 2) with clear TODOs and docstrings.
 - The quiz MUST focus on testing the learner's understanding of the project architecture and module design, rather than isolated syntax.
 - Prefer TypeScript, Python, Bash, or Rust so the local runner can execute the exercise without a cloud dependency.
+- The JSON metadata MUST include a "project" object. Treat it as a real CS61A-style project spec, not a marketing summary.
+- The project object must include:
+  - id, title, narrative, drivingQuestion
+  - at least 2 deliverables
+  - at least 3 milestones with learnerTasks and acceptanceCriteria
+  - files that reference PROJECT.md and the generated solution file
+  - at least 3 rubric items with points and evidence
+  - extensionIdeas for ambitious learners
 ` : `
 CS61A Pedagogical Rules for STARTER_CODE:
 - Must include a rich docstring (e.g. TSDoc or Python Docstring) explaining the problem.
@@ -388,6 +457,32 @@ CS61A Pedagogical Rules for STARTER_CODE:
 - Must use step-by-step TODO comments to scaffold the solution for the learner (e.g. \`// Step 1: Base case...\`, \`# Step 2: Recursive call...\`).
 - Do NOT simply provide an empty function. Give them a robust skeleton!
 `;
+
+    const projectMetadataTemplate = isProject ? `,
+  "project": {
+    "id": "project-unit-id",
+    "title": "Project title",
+    "narrative": "Why this project matters and how it connects the previous units.",
+    "drivingQuestion": "A precise design question the learner must answer.",
+    "deliverables": ["working implementation", "short design note"],
+    "milestones": [
+      {
+        "id": "phase-1",
+        "title": "Phase 1: ...",
+        "goal": "...",
+        "learnerTasks": ["..."],
+        "acceptanceCriteria": ["..."]
+      }
+    ],
+    "files": [
+      { "path": "PROJECT.md", "purpose": "Project spec" },
+      { "path": "solution.ts", "purpose": "Main implementation file" }
+    ],
+    "rubric": [
+      { "criterion": "Correctness", "points": 4, "evidence": "..." }
+    ],
+    "extensionIdeas": ["..."]
+  }` : '';
 
     const finalPrompt = `
 You are FCAgent FinalPolisher. Format the refined learning materials into the final required output format.
@@ -432,7 +527,7 @@ The output MUST contain these sections, using your generated exercise code and q
       { "name": "misconception guard", "input": ["tricky_input"], "expected": "correct_output" }
     ],
     "hints": ["hint 1", "hint 2"]
-  }
+  }${projectMetadataTemplate}
 }
 \`\`\`
 
@@ -506,14 +601,18 @@ function buildGeneratedUnit(unit: SeedUnit, responseContent: string): SeedUnit {
     starterCode,
     testCode: testCode || undefined,
   });
+  const project = unit.type === 'project'
+    ? projectSpecSchema.parse(parsed.project)
+    : undefined;
 
-  assertGeneratedUnitQuality(content, parsed.quiz, exercise);
+  assertGeneratedUnitQuality(unit, content, parsed.quiz, exercise, project);
 
   return {
     ...unit,
     content,
     quiz: parsed.quiz,
     exercise,
+    project,
     passCriteria: unit.passCriteria || { quizMinScore: 1, exerciseMustPass: true },
   };
 }
@@ -523,6 +622,53 @@ async function repairGeneratedUnit(
   brokenResponse: string,
   provider: LLMProvider
 ): Promise<SeedUnit> {
+  const projectRepairRules = unit.type === 'project'
+    ? '- Since this is a project unit, JSON must include a project object with at least 2 deliverables, 3 milestones, 2 files, 3 rubric items, and extensionIdeas.'
+    : '';
+  const projectRepairTemplate = unit.type === 'project'
+    ? `,
+  "project": {
+    "id": "project-${unit.id}",
+    "title": "${unit.title}",
+    "narrative": "...",
+    "drivingQuestion": "...",
+    "deliverables": ["...", "..."],
+    "milestones": [
+      {
+        "id": "phase-1",
+        "title": "Phase 1: ...",
+        "goal": "...",
+        "learnerTasks": ["...", "..."],
+        "acceptanceCriteria": ["...", "..."]
+      },
+      {
+        "id": "phase-2",
+        "title": "Phase 2: ...",
+        "goal": "...",
+        "learnerTasks": ["...", "..."],
+        "acceptanceCriteria": ["...", "..."]
+      },
+      {
+        "id": "phase-3",
+        "title": "Phase 3: ...",
+        "goal": "...",
+        "learnerTasks": ["...", "..."],
+        "acceptanceCriteria": ["...", "..."]
+      }
+    ],
+    "files": [
+      { "path": "PROJECT.md", "purpose": "Project spec" },
+      { "path": "solution.ts", "purpose": "Main implementation file" }
+    ],
+    "rubric": [
+      { "criterion": "Correctness", "points": 4, "evidence": "..." },
+      { "criterion": "Design", "points": 3, "evidence": "..." },
+      { "criterion": "Learning Trace", "points": 3, "evidence": "..." }
+    ],
+    "extensionIdeas": ["...", "..."]
+  }`
+    : '';
+
   const repairPrompt = `
 The previous FCAgent unit generation response could not be parsed or failed quality validation.
 Repair it into the exact required format below. Keep the same educational intent, but make it valid, runnable, and concise.
@@ -534,6 +680,7 @@ Rules:
 - CONTENT must be a useful Chinese markdown lesson, at least 400 Chinese characters.
 - STARTER_CODE must be raw code only and contain the exercise entrypoint.
 - Include TEST_CODE only if the language is not ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
+${projectRepairRules}
 
 Required format:
 \`\`\`json
@@ -553,7 +700,7 @@ Required format:
       { "name": "misconception guard", "input": [], "expected": false }
     ],
     "hints": ["...", "..."]
-  }
+  }${projectRepairTemplate}
 }
 \`\`\`
 
@@ -577,9 +724,11 @@ ${brokenResponse}
 }
 
 function assertGeneratedUnitQuality(
+  unit: SeedUnit,
   content: string,
   quiz: QuizQuestion[],
-  exercise: NonNullable<SeedUnit['exercise']>
+  exercise: NonNullable<SeedUnit['exercise']>,
+  project?: ProjectSpec
 ): void {
   if (content.replace(/\s/g, '').length < 400) {
     throw new Error('Generated content is too short to be useful.');
@@ -613,6 +762,38 @@ function assertGeneratedUnitQuality(
       if (!answerIsOption) {
         throw new Error(`Quiz answer for "${question.id}" is not one of its options.`);
       }
+    }
+  }
+
+  if (unit.type === 'project') {
+    if (!project) {
+      throw new Error('Project unit requires project metadata.');
+    }
+
+    if (content.replace(/\s/g, '').length < 700) {
+      throw new Error('Project content is too short for a real project spec.');
+    }
+
+    if (project.deliverables.length < 2) {
+      throw new Error('Project spec needs at least 2 deliverables.');
+    }
+
+    if (project.milestones.length < 3) {
+      throw new Error('Project spec needs at least 3 milestones.');
+    }
+
+    for (const milestone of project.milestones) {
+      if (milestone.learnerTasks.length === 0 || milestone.acceptanceCriteria.length === 0) {
+        throw new Error(`Project milestone "${milestone.id}" needs tasks and acceptance criteria.`);
+      }
+    }
+
+    if (project.files.length < 2) {
+      throw new Error('Project spec needs at least 2 file entries.');
+    }
+
+    if (project.rubric.length < 3) {
+      throw new Error('Project spec needs at least 3 rubric items.');
     }
   }
 }

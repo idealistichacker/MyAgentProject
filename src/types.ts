@@ -61,6 +61,46 @@ export const exerciseSchema = z.object({
 
 export type ExerciseSpec = z.infer<typeof exerciseSchema>;
 
+export const projectMilestoneSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  goal: z.string(),
+  learnerTasks: z.array(z.string()).default([]),
+  acceptanceCriteria: z.array(z.string()).default([]),
+});
+
+export type ProjectMilestone = z.infer<typeof projectMilestoneSchema>;
+
+export const projectFileSchema = z.object({
+  path: z.string(),
+  purpose: z.string(),
+  required: z.boolean().default(true),
+});
+
+export type ProjectFile = z.infer<typeof projectFileSchema>;
+
+export const projectRubricItemSchema = z.object({
+  criterion: z.string(),
+  points: z.number().int().min(1).max(10),
+  evidence: z.string(),
+});
+
+export type ProjectRubricItem = z.infer<typeof projectRubricItemSchema>;
+
+export const projectSpecSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  narrative: z.string(),
+  drivingQuestion: z.string(),
+  deliverables: z.array(z.string()).default([]),
+  milestones: z.array(projectMilestoneSchema).default([]),
+  files: z.array(projectFileSchema).default([]),
+  rubric: z.array(projectRubricItemSchema).default([]),
+  extensionIdeas: z.array(z.string()).default([]),
+});
+
+export type ProjectSpec = z.infer<typeof projectSpecSchema>;
+
 export const seedUnitSchema = z.object({
   id: z.string(),
   type: z.enum(['unit', 'project']).default('unit'),
@@ -72,6 +112,7 @@ export const seedUnitSchema = z.object({
   references: z.array(z.string()).default([]),
   quiz: z.array(quizQuestionSchema).optional(),
   exercise: exerciseSchema.optional(),
+  project: projectSpecSchema.optional(),
   passCriteria: z.object({
     quizMinScore: z.number().int().min(0).default(2),
     exerciseMustPass: z.boolean().default(true),

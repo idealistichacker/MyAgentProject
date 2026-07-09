@@ -17,7 +17,7 @@ graph TD
     E --> F[生成个性化计划 plan.json]
     F --> G[fc start: 激活单元]
     G --> H[FCAgent 3-Pass 课件生成器]
-    H --> I[生成 Lesson.md + Starter Code]
+    H --> I[生成 Lesson.md + Starter Code + 可选 PROJECT.md]
     I --> J[用户编写 solution]
     J --> K[fc submit: 提交评测]
     K --> L[Polyglot Runner 编译/执行沙盒]
@@ -44,6 +44,7 @@ graph TD
 * **功能点**：
   - **大纲规模自适应**：根据用户的 `每周小时数 * 总周数` 自动折算总学时，动态生成 2 到 10 个单元的大纲，告别死板的固定大纲。
   - **实战项目自动穿插**：如果计算出的单元总数 $\ge 4$，规划器会自动在中后期插入一个 `type: "project"` 的关卡（例如大作业），用来熔炼前面所学的所有零碎知识。
+  - **离线 Project 保底**：默认种子课程也包含一个 DSA capstone Project，保证没有 API Key 时仍能体验“单元练习 -> 综合项目”的闭环。
   - **主线故事融合 (Narrative)**：要求生成的单元不仅是知识点的堆砌，更要有一条清晰的“史诗通关剧情”，各普通单元在描述中必须注明“自己是最终 Project 的哪一块拼图”。
 * **底层实现细节**：
   - 由 `generatePlan` 控制。LLM 会被赋予 `CurriculumPlanner` 的角色。
@@ -58,11 +59,12 @@ graph TD
   - **三段式工作流 (3-Pass Loop)**：
     1. **Pass 1: Draft (起草)**：由 `ContentGenerator` 起草纯 Markdown，要求摆脱“机器味”，大量运用幽默比喻。
     2. **Pass 2: Critique (提炼与检查)**：由 `ContentCritic` 对初稿进行“毒辣”的代码细节与人情味审核。如果发现“翻译腔”或缺乏过渡，直接退回重构，确保与最终大作业项目上下文产生强绑定。
-    3. **Pass 3: Polish (纯净化与出题)**：由 `FinalPolisher` 最终格式化，并动态生成配套的场景化选择题（Quiz）以及跟当前剧情背景高度契合的代码练习。输出被拆成 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`，避免把大段代码塞进 JSON 字符串导致转义失败。
+    3. **Pass 3: Polish (纯净化与出题)**：由 `FinalPolisher` 最终格式化，并动态生成配套的场景化选择题（Quiz）以及跟当前剧情背景高度契合的代码练习。输出被拆成 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`，避免把大段代码塞进 JSON 字符串导致转义失败。Project 单元的 JSON 元数据还必须包含 `project` 规格对象。
 * **底层实现细节**：
   - 在 `pipeline.ts` 中实现。生成时会将整个 `LearningPlan` 传入大模型，使大模型获得“上帝视角”，能清晰感知当前处于大纲的第几步、前后文衔接是什么。
   - 自动运行结构化解析器，分别抓取返回的 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`。
-  - 使用 Zod 校验 Quiz 与 Exercise 元数据，并额外检查讲义有效长度、至少 3 个测试用例、至少 2 条 Hint、入口函数存在性，以及非本地语言必须提供 `TEST_CODE`。
+  - 使用 Zod 校验 Quiz、Exercise 与 Project 元数据，并额外检查讲义有效长度、至少 3 个测试用例、至少 2 条 Hint、入口函数存在性，以及非本地语言必须提供 `TEST_CODE`。
+  - `ProjectSpec` 会校验交付物、里程碑、文件清单与 rubric。通过后，CLI 会在 `.fuckcolloge/exercises/<unitId>/PROJECT.md` 写出可读项目规格。
   - 如果最终输出解析失败或质量闸门不通过，系统会请求模型进行一次“结构化修复”，再尝试落盘，降低直接回退到占位练习的概率。
 
 ### 4. 万物皆可编译：多语言沙盒执行器 (Polyglot Runner)
@@ -133,14 +135,14 @@ graph TD
 * **功能点**：
   - **熔断关键字标识**：在遇到严重网络超时时，系统会平滑捕获异常，并为该单元的 `content` 与 `exercise.description` 注入特异性的 `"基础预备版本"` 与 `"占位练习"` 标志。
   - **结构化修复优先**：在最终生成格式坏掉、Quiz/Exercise schema 不合格或内容质量不足时，系统会先尝试一次结构化修复，而不是立即写入占位内容。
-  - **差异扫描与单单元断点重试**：当用户下一次执行生成指令时，CLI 会自动扫描大纲，跳过已生成合格课件的单元，仅过滤出包含 fallback 标识的失败单元重新呼叫 AI 提炼，实现零阻塞的断点续传。
+  - **差异扫描与单单元断点重试**：当用户下一次执行生成指令时，CLI 会自动扫描大纲，跳过已生成合格课件的单元，仅过滤出包含 fallback 标识的失败单元或缺少 `ProjectSpec` 的项目单元重新呼叫 AI 提炼，实现零阻塞的断点续传。
 
 ---
 
 ## 🔒 企业级安全防泄密机制 (Git Secret Exclusion)
 为了方便你在 GitHub 分享自己的作业成果和讲义，我们在版本控制上设计了精细化的追踪机制：
 - **明文凭证安全隔离**：用户的 `apiKey` 存放于 `.fuckcolloge/config.json` 中，该路径已被精准写入 `.gitignore`，绝对不会随着 `git push` 泄露。
-- **进度公开共享**：你的学习轨迹（如 `plan.json`、生成的讲义 `lessons/` 以及你的 solution 源码）不包含任何密钥，可安全推送提交。
+- **进度公开共享**：你的学习轨迹（如 `plan.json`、生成的讲义 `lessons/`、Project 规格以及你的 solution 源码）不包含任何密钥，可安全推送提交。
 
 ---
 

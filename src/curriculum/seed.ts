@@ -353,6 +353,189 @@ export const SEED_CURRICULUM: SeedUnit[] = [
       hints: ['左括号入栈。', '右括号弹出栈顶并检查是否匹配。', '遍历结束后栈必须为空。'],
     },
     passCriteria: { quizMinScore: 2, exerciseMustPass: true },
+    nextIfPassed: 'dsa-project-bracket-dungeon',
+  },
+  {
+    id: 'dsa-project-bracket-dungeon',
+    type: 'project',
+    title: 'Project：括号地牢路线审计器',
+    description: '综合数组、哈希表和栈，构建一个能给嵌套路线判定有效性并计算分数的小型规则引擎。',
+    prerequisites: ['数组与双指针', '哈希表', '栈与括号匹配'],
+    objectives: [
+      '能把项目需求拆成数据模型、规则映射和状态转移',
+      '能使用栈验证嵌套结构并用哈希表表达匹配规则',
+      '能根据测试反馈逐步完成一个小型 CS61A 风格项目',
+    ],
+    content: [
+      '# Project：括号地牢路线审计器',
+      '',
+      '你要写一个小型规则引擎：输入一串由 `()[]{}` 组成的地牢路线，判断路线是否合法，并为每一对成功闭合的房间计分。',
+      '圆括号代表普通房间，计 1 分；方括号代表机关房，计 2 分；花括号代表宝藏房，计 3 分。路线可以嵌套，但每个出口必须匹配最近进入的房间。',
+      '',
+      '## 为什么这是一个 Project 而不是一道题？',
+      '',
+      '因为你不只是在“写括号匹配”。你需要把需求分解成三个小模块：',
+      '',
+      '- **规则表**：用哈希表描述 `)` 应该匹配 `(`，以及每类房间的分数。',
+      '- **状态栈**：用数组模拟进入/离开房间的过程。',
+      '- **审计结果**：用一个稳定的返回对象表达路线是否有效和最终分数。',
+      '',
+      '这个项目的核心不在代码长度，而在设计纪律：每一步都应该能被测试解释。若出现 `([)]`，系统必须发现“出口匹配了错误的最近房间”；若最后栈里还留着 `(`，系统必须判定路线未闭合。',
+      '',
+      '## 推荐实现路线',
+      '',
+      '1. 先建立 `closingToOpening` 和 `openingScores` 两张表。',
+      '2. 遍历字符串，跳过空白字符。',
+      '3. 遇到入口括号就入栈。',
+      '4. 遇到出口括号就检查栈顶是否匹配；匹配则计分，不匹配直接失败。',
+      '5. 遍历结束后，只有栈为空才算合法。',
+      '',
+      '写完后执行 `fc submit dsa-project-bracket-dungeon`，用本地测试检查你的规则引擎。',
+    ].join('\n'),
+    references: ['https://cs61a.org/', 'https://sp26.datastructur.es/'],
+    quiz: [
+      {
+        id: 'q1',
+        type: 'choice',
+        question: '为什么路线 `([)]` 必须被判定为无效？',
+        options: [
+          '因为它包含方括号',
+          '因为右括号必须匹配最近尚未关闭的左括号',
+          '因为所有括号都不能嵌套',
+          '因为圆括号不能计分',
+        ],
+        answer: '因为右括号必须匹配最近尚未关闭的左括号',
+        explanation: '栈顶代表最近尚未关闭的房间，`)` 不能关闭 `[`。',
+      },
+      {
+        id: 'q2',
+        type: 'choice',
+        question: '本项目中哈希表最适合用来表达什么？',
+        options: ['测试结果输出', '括号匹配关系和分数规则', '循环次数', '文件路径'],
+        answer: '括号匹配关系和分数规则',
+        explanation: '规则映射是哈希表最自然的用法。',
+      },
+      {
+        id: 'q3',
+        type: 'short-answer',
+        question: '遍历结束后为什么还要检查栈是否为空？',
+        answer: '因为栈不为空说明还有入口房间没有被正确关闭。',
+        explanation: '例如 `(()` 在遍历过程中没有 mismatch，但仍然是不完整路线。',
+      },
+    ],
+    exercise: {
+      id: 'ex-dsa-project-bracket-dungeon',
+      language: 'typescript',
+      entrypoint: 'gradeBracketDungeon',
+      description: '实现括号地牢路线审计器，返回路线是否合法以及成功闭合房间的总分。',
+      assertionMode: 'return',
+      starterCode: `export interface DungeonAudit {
+  valid: boolean;
+  score: number;
+}
+
+/**
+ * Audit a bracket dungeon route.
+ *
+ * Scoring rules:
+ * - () is worth 1 point
+ * - [] is worth 2 points
+ * - {} is worth 3 points
+ * - Whitespace is ignored
+ * - Any mismatched or unfinished route is invalid and scores 0
+ *
+ * Examples:
+ * >>> gradeBracketDungeon("()[]")
+ * { valid: true, score: 3 }
+ * >>> gradeBracketDungeon("([)]")
+ * { valid: false, score: 0 }
+ */
+export function gradeBracketDungeon(route: string): DungeonAudit {
+  const openingStack: string[] = [];
+  const closingToOpening: Record<string, string> = {
+    ')': '(',
+    ']': '[',
+    '}': '{',
+  };
+  const openingScores: Record<string, number> = {
+    '(': 1,
+    '[': 2,
+    '{': 3,
+  };
+
+  // TODO: Step 1 - keep a running score for every correctly closed room.
+  // TODO: Step 2 - scan each character, ignoring whitespace.
+  // TODO: Step 3 - push opening room markers onto openingStack.
+  // TODO: Step 4 - when you see a closing marker, compare it with the stack top.
+  // TODO: Step 5 - only return valid: true if the stack is empty at the end.
+
+  return { valid: false, score: 0 };
+}
+`,
+      testCases: [
+        { name: 'sequential rooms', input: ['()[]'], expected: { valid: true, score: 3 } },
+        { name: 'deep nested treasure route', input: ['({[]})'], expected: { valid: true, score: 6 } },
+        { name: 'misordered exit', input: ['([)]'], expected: { valid: false, score: 0 } },
+        { name: 'unfinished route', input: ['(()'], expected: { valid: false, score: 0 } },
+        { name: 'whitespace ignored', input: ['( [ ] )'], expected: { valid: true, score: 3 } },
+      ],
+      hints: [
+        '栈顶永远代表最近进入但还没离开的房间。',
+        '遇到关闭括号时，先查 closingToOpening，再和 stack.pop() 的结果比较。',
+        '计分最好根据被成功关闭的 opening bracket 查询 openingScores。',
+      ],
+    },
+    project: {
+      id: 'project-dsa-bracket-dungeon',
+      title: '括号地牢路线审计器',
+      narrative: '你正在为一个文本地牢构建路线审计器：每条路线都必须正确进出房间，系统还要根据房间类型计算奖励分。',
+      drivingQuestion: '如何把一串括号路线拆成规则表、状态栈和可测试的审计结果？',
+      deliverables: [
+        '完成 `gradeBracketDungeon(route)` 的实现',
+        '通过所有本地测试，包括嵌套、错序、未闭合和空白输入',
+        '能用一句话解释哈希表和栈各自承担的职责',
+      ],
+      milestones: [
+        {
+          id: 'phase-1-rule-map',
+          title: 'Phase 1: 建立规则表',
+          goal: '用哈希表清晰表达括号匹配关系和分数规则。',
+          learnerTasks: ['阅读 starter code 中的两张表', '确认每种入口和出口括号的含义'],
+          acceptanceCriteria: ['能解释 `closingToOpening[")"]` 为什么等于 `"("`', '能解释 `{}` 为什么计 3 分'],
+        },
+        {
+          id: 'phase-2-stack-state',
+          title: 'Phase 2: 实现状态栈',
+          goal: '用数组栈追踪最近尚未关闭的房间。',
+          learnerTasks: ['遇到入口括号时 push', '遇到出口括号时 pop 并比较'],
+          acceptanceCriteria: ['`({[]})` 能被判定为有效', '`([)]` 能被判定为无效'],
+        },
+        {
+          id: 'phase-3-audit-result',
+          title: 'Phase 3: 输出稳定审计结果',
+          goal: '把合法性和分数封装成稳定对象，方便后续项目扩展。',
+          learnerTasks: ['只在成功匹配时累加分数', '结束时检查栈是否清空', '保持无效路线返回 `{ valid: false, score: 0 }`'],
+          acceptanceCriteria: ['未闭合路线返回无效', '带空白的合法路线仍能通过'],
+        },
+      ],
+      files: [
+        { path: 'PROJECT.md', purpose: '项目规格、阶段、评分标准和扩展挑战。', required: true },
+        { path: 'solution.ts', purpose: '主实现文件，包含 `gradeBracketDungeon`。', required: true },
+        { path: 'test.ts', purpose: '提交时由本地 runner 生成的测试文件。', required: false },
+      ],
+      rubric: [
+        { criterion: 'Correctness', points: 4, evidence: '所有本地测试通过，尤其是错序和未闭合路线。' },
+        { criterion: 'Design', points: 3, evidence: '规则表、状态栈、返回对象职责清楚。' },
+        { criterion: 'Explanation', points: 3, evidence: '能解释为什么这个项目同时使用哈希表和栈。' },
+      ],
+      extensionIdeas: [
+        '加入普通字符作为地牢路径节点，并忽略它们或把它们计入日志。',
+        '返回第一处错误的位置，帮助玩家定位路线问题。',
+        '把分数规则改成可配置参数，练习更深的接口设计。',
+      ],
+    },
+    passCriteria: { quizMinScore: 2, exerciseMustPass: true },
+    nextIfFailed: 'dsa-project-bracket-dungeon',
   },
 ];
 

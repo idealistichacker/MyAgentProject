@@ -21,10 +21,11 @@ import {
 import {
   getExerciseDir,
   getLessonPath,
+  getProjectSpecPath,
   getSolutionPath,
   getExtensionForLanguage,
 } from './utils/paths.js';
-import type { LearnerProfile, LearningState, QuizQuestion } from './types.js';
+import type { LearnerProfile, LearningState, QuizQuestion, SeedUnit } from './types.js';
 
 const program = new Command();
 
@@ -179,7 +180,7 @@ program.command('plan')
   });
 
 program.command('start [unitId]')
-  .description('Start a learning unit and generate lesson/exercise files')
+  .description('Start a learning unit and generate lesson, exercise, and project files')
   .action(async (unitId?: string) => {
     intro(color.inverse(' 📖 开始学习单元 '));
     ensureProjectDirs();
@@ -192,7 +193,8 @@ program.command('start [unitId]')
 
     let unit = getCurrentUnit(plan, unitId);
     const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
-    if (!unit.content || !unit.exercise || isFallback) {
+    const needsProjectSpec = unit.type === 'project' && !unit.project;
+    if (!unit.content || !unit.exercise || isFallback || needsProjectSpec) {
       const s = spinner();
       s.start(`FCAgent 正在全网检索并生成 [${unit.id}] 的课件与练习...`);
       const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
@@ -207,16 +209,12 @@ program.command('start [unitId]')
       console.log(color.green('✔ 课件已就绪。'));
     }
 
-    const extension = getExtensionForLanguage(unit.exercise?.language ?? 'typescript');
-    writeTextFile(getLessonPath(unit.id), unit.content || '');
-    if (unit.exercise) {
-      writeTextFile(getSolutionPath(unit.id, extension), unit.exercise.starterCode);
-    }
+    const artifacts = writeGeneratedUnitArtifacts(unit);
 
     note(
       `单元: ${unit.id}: ${unit.title}\n` +
-      `讲义: ${getLessonPath(unit.id)}\n` +
-      `练习: ${getSolutionPath(unit.id, extension)}`,
+      `讲义: ${artifacts.lessonPath}\n` +
+      `练习: ${artifacts.solutionPath ?? '未生成'}${artifacts.projectSpecPath ? `\n项目规格: ${artifacts.projectSpecPath}` : ''}`,
       '学习指南'
     );
     
@@ -502,7 +500,7 @@ function pLimit(concurrency: number) {
 }
 
 program.command('generate-all')
-  .description('Pre-generate all lessons and exercise skeletons in the plan for quick offline browsing')
+  .description('Pre-generate all lessons, exercise skeletons, and project specs in the plan')
   .option('--concurrency <number>', 'Max unit generations running at once', '1')
   .option('--stagger-ms <number>', 'Minimum delay between generation starts', '1000')
   .action(async (options) => {
@@ -529,7 +527,8 @@ program.command('generate-all')
       return { unit, index: i };
     }).filter(({ unit }) => {
       const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
-      return !unit.content || !unit.exercise || isFallback;
+      const needsProjectSpec = unit.type === 'project' && !unit.project;
+      return !unit.content || !unit.exercise || isFallback || needsProjectSpec;
     });
 
     if (tasks.length === 0) {
@@ -566,11 +565,7 @@ program.command('generate-all')
         plan.units[index] = updatedUnit;
         savePlan(plan); // savePlan is synchronous writeFileSync, so it's safe
         
-        const extension = getExtensionForLanguage(updatedUnit.exercise?.language ?? 'typescript');
-        writeTextFile(getLessonPath(updatedUnit.id), updatedUnit.content || '');
-        if (updatedUnit.exercise) {
-          writeTextFile(getSolutionPath(updatedUnit.id, extension), updatedUnit.exercise.starterCode);
-        }
+        writeGeneratedUnitArtifacts(updatedUnit);
         
         completed++;
         generatedCount++;
@@ -584,6 +579,99 @@ program.command('generate-all')
   });
 
 program.parseAsync(process.argv);
+
+function writeGeneratedUnitArtifacts(unit: SeedUnit): {
+  lessonPath: string;
+  solutionPath?: string;
+  projectSpecPath?: string;
+} {
+  const lessonPath = getLessonPath(unit.id);
+  writeTextFile(lessonPath, unit.content || '');
+
+  let solutionPath: string | undefined;
+  if (unit.exercise) {
+    const extension = getExtensionForLanguage(unit.exercise.language);
+    solutionPath = getSolutionPath(unit.id, extension);
+    writeTextFile(solutionPath, unit.exercise.starterCode);
+  }
+
+  let projectSpecPath: string | undefined;
+  if (unit.type === 'project' && unit.project) {
+    projectSpecPath = getProjectSpecPath(unit.id);
+    writeTextFile(projectSpecPath, renderProjectSpecMarkdown(unit));
+  }
+
+  return { lessonPath, solutionPath, projectSpecPath };
+}
+
+function renderProjectSpecMarkdown(unit: SeedUnit): string {
+  const project = unit.project;
+  if (!project) {
+    return `# ${unit.title}\n\n${unit.description}\n`;
+  }
+
+  const milestones = project.milestones.map((milestone, index) => [
+    `### ${index + 1}. ${milestone.title}`,
+    '',
+    milestone.goal,
+    '',
+    '**Learner Tasks**',
+    formatMarkdownList(milestone.learnerTasks, '补全这一阶段的核心实现。'),
+    '',
+    '**Acceptance Criteria**',
+    formatMarkdownList(milestone.acceptanceCriteria, '这一阶段可以被本地测试或人工检查验证。'),
+  ].join('\n')).join('\n\n');
+
+  const files = project.files.map((file) =>
+    `- \`${file.path}\` - ${file.purpose}${file.required === false ? ' (optional)' : ''}`
+  ).join('\n');
+
+  const rubric = project.rubric.map((item) =>
+    `- **${item.criterion} (${item.points} pts)**: ${item.evidence}`
+  ).join('\n');
+
+  return [
+    `# ${project.title}`,
+    '',
+    `> ${project.narrative}`,
+    '',
+    '## Driving Question',
+    '',
+    project.drivingQuestion,
+    '',
+    '## Deliverables',
+    '',
+    formatMarkdownList(project.deliverables, '完成 starter code 并通过本地测试。'),
+    '',
+    '## Milestones',
+    '',
+    milestones || '项目阶段待生成。',
+    '',
+    '## Files',
+    '',
+    files || '- `solution.ts` - Main implementation file.',
+    '',
+    '## Local Check',
+    '',
+    unit.exercise
+      ? `Run \`fc submit ${unit.id}\` to execute the generated tests for \`${unit.exercise.entrypoint}\`.`
+      : `Run \`fc submit ${unit.id}\` after the exercise metadata is generated.`,
+    '',
+    '## Rubric',
+    '',
+    rubric || '- **Correctness**: pass the generated tests.',
+    '',
+    '## Extension Ideas',
+    '',
+    formatMarkdownList(project.extensionIdeas, 'Add your own hidden tests after passing the official checks.'),
+    '',
+  ].join('\n');
+}
+
+function formatMarkdownList(items: string[], fallback: string): string {
+  const list = items.length > 0 ? items : [fallback];
+  return list.map((item) => `- ${item}`).join('\n');
+}
 
 async function fillDiagnosisWithPrompts(profile: LearnerProfile, provider?: any): Promise<void> {
   intro(color.inverse(' 👤 画像诊断 (Learner Diagnosis) '));

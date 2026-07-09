@@ -156,3 +156,14 @@
   - **计划缓存与搜索瘦身**：`generatePlan` 针对相同学习画像写入 7 天 L2 缓存；`WebSearchTool` 增加 15 秒超时、结果数限制和 6000 字符截断，避免检索上下文拖慢生成或污染 Prompt。
   - **可配置预生成流控**：`fc generate-all` 新增 `--concurrency` 和 `--stagger-ms` 参数，默认稳健串行、1 秒启动间隔；高额度 API Key 可以安全提高并发。
   - **更聪明的 Provider 重试**：OpenAI-compatible 请求只对网络错误、`429` 和 `5xx` 退避重试，尊重 `Retry-After`，对普通 `4xx` 配置错误快速失败。
+
+---
+
+## 15. 一等 Project 规格、离线 Capstone 与项目落盘 (First-class Project Artifacts)
+* **背景与痛点**：
+  早期 `type: "project"` 主要影响提示词，最终仍落成“讲义 + 单个练习函数”的形状。这样的 Project 缺少交付物、阶段、文件清单和评分标准，学习者很难获得类似 CS61A 大作业的宏观结构。
+* **改进核心**：
+  - **ProjectSpec 数据模型**：在 `types.ts` 中新增项目里程碑、文件清单、rubric 和扩展挑战 schema，并挂到 `SeedUnit.project`。
+  - **Project 质量闸门**：Project 单元生成时必须通过额外校验，包括至少 2 个交付物、3 个里程碑、2 个文件条目和 3 个 rubric 项；坏输出会进入同一套结构化修复流程。
+  - **PROJECT.md 落盘**：`fc start` 与 `fc generate-all` 会把结构化 Project 规格渲染到 `.fuckcolloge/exercises/<unitId>/PROJECT.md`，与 `solution.*` 放在同一练习目录中。
+  - **离线 Capstone 保底**：默认种子课程新增 `dsa-project-bracket-dungeon`，把数组栈、哈希表规则映射和括号匹配整合成可测试的小型项目，即使没有 API Key 也能体验项目式学习闭环。

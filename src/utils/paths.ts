@@ -52,6 +52,10 @@ export function getSolutionPath(unitId: string, extension = '.ts'): string {
   return path.join(getExerciseDir(unitId), `solution${extension}`);
 }
 
+export function getProjectSpecPath(unitId: string): string {
+  return path.join(getExerciseDir(unitId), 'PROJECT.md');
+}
+
 export function getTestPath(unitId: string, extension = '.ts'): string {
   return path.join(getExerciseDir(unitId), `test${extension}`);
 }

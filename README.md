@@ -2,14 +2,14 @@
 
 > **一个受 CS61A 启发的 AI Native 自适应计算机科学 (CS) 自学命令行工具。**
 
-`FCAgent` 旨在打破传统大学僵化、低效的课程体系，利用 AI 代理（FCAgent）根据你当下的知识基础、每周投入时间和偏好，量身定做学习计划。它不仅提供动态联网提炼的高质量课件，还提供支持多语言（TypeScript, Python, Bash）的本地沙盒测试，并配有贴心的 AI 助教为你进行代码和测试的深度诊断。
+`FCAgent` 旨在打破传统大学僵化、低效的课程体系，利用 AI 代理（FCAgent）根据你当下的知识基础、每周投入时间和偏好，量身定做学习计划。它不仅提供动态联网提炼的高质量课件、练习和 CS61A 风格 Project 规格，还提供支持多语言（TypeScript, Python, Bash, Rust）的本地沙盒测试，并配有贴心的 AI 助教为你进行代码和测试的深度诊断。
 
 ---
 
 ## ✨ 核心特性 (Key Features)
 
 1. **个性化诊断与规划 (Diagnose & Plan)**：基于大模型分析你的编程底子、算法基础、**预计总学习时长（周）**及近期目标，生成量身定制的动态课程树（**单元数量可自适应扩展为 2 至 10 个单元**），并在中后期自动混入 **Project 大型项目实战关卡**（类似 CS61A Ants / Scheme 解释器）。
-2. **三阶段高质量课件生成 (3-Pass Learning Loop)**：动态联网检索最新规范（支持 **Wikipedia 免费检索** 与 **Tavily 全网精准 API 检索**），进行 3 次内容重构提炼（Draft -> Critique -> Polish）。最终输出会经过结构化 JSON 元数据解析、Zod 校验、内容质量闸门和一次自动修复，减少 Markdown 污染、坏 JSON、空洞练习和占位降级。
+2. **三阶段高质量课件生成 (3-Pass Learning Loop)**：动态联网检索最新规范（支持 **Wikipedia 免费检索** 与 **Tavily 全网精准 API 检索**），进行 3 次内容重构提炼（Draft -> Critique -> Polish）。最终输出会经过结构化 JSON 元数据解析、Zod 校验、内容质量闸门和一次自动修复，减少 Markdown 污染、坏 JSON、空洞练习和占位降级；Project 单元还会额外生成 `ProjectSpec`，落盘为 `PROJECT.md`，包含里程碑、交付物、文件清单和 rubric。
 3. **多语言执行器沙盒 (Polyglot Runner)**：底层解耦硬编码，基于调度器架构自动运行并验证不同语言的作业代码：
    - **原生本地支持**：TypeScript (`tsx`), Python (`unittest`), Bash (`shell`), Rust (`rustc`) 可直接在本地编译与断言。
    - **Piston 云端引擎支持**：对于 C++, Java, Go, Ruby, Swift 等数十种小众或主流语言，系统会自动生成测试断言代码并无缝投递至 Piston API 沙箱进行云端执行，**实现零本地依赖的万物皆可学**！
@@ -70,7 +70,7 @@ npm run dev -- generate-all
 # 【可选】提高预生成吞吐：最多允许 4 个并发，按启动间隔做限流
 npm run dev -- generate-all --concurrency 2 --stagger-ms 1500
 
-# (在本地编写 solution 文件，阅读 lesson)
+# (在本地编写 solution 文件，阅读 lesson；Project 单元还会生成 PROJECT.md)
 
 # 提交作业（将自动运行本地测试、回答 Quiz 并获得 AI TA 渐进式启发诊断）
 npm run dev -- submit
@@ -92,7 +92,8 @@ npm run dev -- next
 * **当前版本**: `v0.2.0 (Pre-release)`
 * **当前状态**:
   - 多语言 Runner 沙盒框架、3-Pass LLM 联网检索与 AI 助教评估的骨架已开发完成。
-  - 课程与练习生成已加入结构化校验、质量闸门、自动修复、计划缓存和本地 Runner 优先路由。
+  - 课程、练习与 Project 生成已加入结构化校验、质量闸门、自动修复、计划缓存和本地 Runner 优先路由。
+  - 默认离线种子路线包含一个 DSA capstone Project，可在无 API key 时体验项目式学习闭环。
   - 本地状态持久化存储工作正常。
   - 当前由于大模型生成用例和环境差异，部分复杂全栈单元的交互尚处在打磨阶段。欢迎向 GitHub 提交 Issue 或参与共建！
 
@@ -113,7 +114,7 @@ npm run dev -- next
 
 > [!TIP]
 > **关于 `.fuckcolloge/` 其他文件**：
-> 包含你的专属课件讲义 (`lessons/`)、你完成的代码练习 (`exercises/`)、个性化计划大纲 (`plan.json`) 以及诊断记录 (`state.json` 和 `learner.json`)。这些文件已经去除了敏感 key，可以安全地推送到 GitHub 方便你进行进度同步或课后分析！
+> 包含你的专属课件讲义 (`lessons/`)、你完成的代码练习和 Project 规格 (`exercises/`)、个性化计划大纲 (`plan.json`) 以及诊断记录 (`state.json` 和 `learner.json`)。这些文件已经去除了敏感 key，可以安全地推送到 GitHub 方便你进行进度同步或课后分析！
 
 ### 2. 检查你的 Git 忽略状态
 
