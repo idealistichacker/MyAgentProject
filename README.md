@@ -16,8 +16,9 @@
 4. **高性能 L2 分层缓存系统 (Layered L2 Cache)**：针对 LLM 响应慢、易超时及重复检索消耗额度问题，构建了基于 SHA-256 哈希的内存（L1）与磁盘文件（L2）分层缓存系统。对于已发起的网络搜索、相同 Prompt 参数的大模型生成以及相同画像的课程规划，实现 `1ms` 级闪电命中（Cache HIT），节省高达 60% 的 API 费用并彻底解决控制台卡顿。
 5. **交互式 AI 助教批改 (Assessment & TA Reviewer)**：不仅检测代码测试是否通过，还会自动收集并**支持数字/字母/括号多种格式归一化校验**选择题（Quiz）答案。大模型扮演极具共情力与专业度的 AI TA，提供多阶段渐进式 Hints（根据尝试次数提供概念指引、方向锁定、或伪代码提示）以及有温度的诊断反馈。
 6. **自适应补救路线 (Adaptive Remediation)**：当同一单元连续失败到第 2 次时，系统会根据失败测试、Quiz 错题和诊断结果生成一个短小的 `remediation` 补救单元，自动插回学习计划；通关补救单元后会通过 `nextIfPassed` 路由回原单元重新挑战。
-7. **弹性跳过与复习机制 (Skip & Review)**：支持 `fc skip` 跳过太难的关卡（在 submit 连续失败 5 次时系统亦会自动发出友好跳过提示），之后随时通过 `fc review` 唤起复习面板重新挑战，让你保持顺畅的学习心流。
-8. **控频并发预生成与自适应重试 (Generate All & Auto-Retry)**：
+7. **课程质量审计 (Curriculum Audit)**：提供 `fc audit` 本地质量闸门，扫描当前计划里的讲义、Quiz、练习测试、ProjectSpec、Remediation 路由和 fallback 标记，输出质量分与可操作问题清单，也支持 `--json` 接入脚本。
+8. **弹性跳过与复习机制 (Skip & Review)**：支持 `fc skip` 跳过太难的关卡（在 submit 连续失败 5 次时系统亦会自动发出友好跳过提示），之后随时通过 `fc review` 唤起复习面板重新挑战，让你保持顺畅的学习心流。
+9. **控频并发预生成与自适应重试 (Generate All & Auto-Retry)**：
    - **抗 Rate Limit 流控**：支持一键离线预生成命令 `fc generate-all`，底层集成自定义 `pLimit` 并发调度器与可配置启动间隔（默认并发度 `1`、间隔 `1000ms`），既能稳健避开模型提供商连接限流，也能在额度更高时通过参数提速。
    - **断点续传与弹性恢复**：网络或 API 超时导致单个单元降级为占位符时，系统不会锁死状态。重新执行 `generate-all` 或 `start` 时，CLI 会自动扫描并**仅重新触发生成失败的单元**，实现无缝断点续传。
 
@@ -71,6 +72,9 @@ npm run dev -- generate-all
 # 【可选】提高预生成吞吐：最多允许 4 个并发，按启动间隔做限流
 npm run dev -- generate-all --concurrency 2 --stagger-ms 1500
 
+# 【可选】审计当前计划/讲义/练习/Project 的质量
+npm run dev -- audit
+
 # (在本地编写 solution 文件，阅读 lesson；Project 单元还会生成 PROJECT.md)
 
 # 提交作业（将自动运行本地测试、回答 Quiz 并获得 AI TA 渐进式启发诊断）
@@ -95,6 +99,7 @@ npm run dev -- next
   - 多语言 Runner 沙盒框架、3-Pass LLM 联网检索与 AI 助教评估的骨架已开发完成。
   - 课程、练习与 Project 生成已加入结构化校验、质量闸门、自动修复、计划缓存和本地 Runner 优先路由。
   - 提交失败后可自动生成 micro-remediation 补救单元，并通过 `nextIfPassed` 回到原关卡。
+  - `fc audit` 可本地审计课程质量、路由完整性、练习测试覆盖和 Project/Remediation 结构。
   - 默认离线种子路线包含一个 DSA capstone Project，可在无 API key 时体验项目式学习闭环。
   - 本地状态持久化存储工作正常。
   - 当前由于大模型生成用例和环境差异，部分复杂全栈单元的交互尚处在打磨阶段。欢迎向 GitHub 提交 Issue 或参与共建！

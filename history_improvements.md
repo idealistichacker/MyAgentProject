@@ -178,3 +178,13 @@
   - **失败第 2 次自动插入**：`fc submit` 在同一普通/项目单元失败到第 2 次时，会基于失败测试、Quiz 错题、错因分类和诊断结果生成或复用一个 micro-remediation 单元，插入 `plan.json` 并切换当前进度。
   - **Quiz 概念失败也入账**：前置 Quiz 没过时也会生成 `AssessmentResult`，记录为概念缺口，并同样可以触发补救路线。
   - **真实路由字段生效**：`adaptNextUnit` 开始尊重 `nextIfPassed` / `nextIfFailed`。补救单元通过后会回到原失败单元，避免线性 `next` 直接跳过真正需要掌握的内容。
+
+---
+
+## 17. 本地课程质量审计器 (Curriculum Quality Audit)
+* **背景与痛点**：
+  课程生成链路越来越强，但缺少一个不依赖大模型的本地质量门禁。用户很难快速判断当前 `plan.json` 里的讲义、练习、Project 和补救路线是否达到可学习、可评测、可继续推进的状态。
+* **改进核心**：
+  - **新增 `fc audit` 命令**：扫描当前学习计划并输出质量分、错误、警告和信息项，支持 `--json` 与 `--strict`。
+  - **纯函数审计模块**：新增 `src/curriculum/audit.ts`，核心 `auditLearningPlan` 不读写文件，后续可以复用到 CI、`generate-all` 后置检查或可视化面板。
+  - **覆盖关键质量面**：检查重复 unit id、断裂路由、短讲义、坏 Quiz 答案、测试用例不足、缺少边界测试、Project 里程碑/rubric 不足、Remediation 未回跳原单元、fallback 占位内容等问题。

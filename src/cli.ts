@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { intro, outro, spinner, select, text, confirm, isCancel, cancel, note } from '@clack/prompts';
 import color from 'picocolors';
+import { auditLearningPlan, type CurriculumAuditIssue } from './curriculum/audit.js';
 import {
   adaptNextUnit,
   buildAssessment,
@@ -496,6 +497,31 @@ program.command('status')
     }
 
     outro('💪 Keep going!');
+  });
+
+program.command('audit')
+  .description('Audit the current learning plan for content, exercise, project, and routing quality')
+  .option('--json', 'Print the audit report as JSON')
+  .option('--strict', 'Exit with a non-zero code when warnings are present')
+  .action((options) => {
+    ensureProjectDirs();
+    const plan = loadPlan();
+    if (!plan) {
+      cancel('No learning plan found. Run `fc plan` first.');
+      process.exitCode = 1;
+      return;
+    }
+
+    const report = auditLearningPlan(plan);
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      printAuditReport(report);
+    }
+
+    if (!report.passed || (options.strict && report.summary.warnings > 0)) {
+      process.exitCode = 1;
+    }
   });
 
 function pLimit(concurrency: number) {
@@ -1047,6 +1073,44 @@ function printAssessment(
     console.log('\n' + color.bold('标准输出 (Stdout):'));
     console.log(color.gray(stdout));
   }
+}
+
+function printAuditReport(report: ReturnType<typeof auditLearningPlan>): void {
+  const status = report.passed ? color.green('PASS') : color.red('NEEDS ATTENTION');
+  note(
+    `状态: ${status}\n` +
+    `质量分: ${report.score}/100\n` +
+    `单元: ${report.summary.units} | Project: ${report.summary.projects} | Remediation: ${report.summary.remediations}\n` +
+    `错误: ${report.summary.errors} | 警告: ${report.summary.warnings} | 信息: ${report.summary.infos}`,
+    '课程质量审计'
+  );
+
+  if (report.issues.length === 0) {
+    console.log(color.green('No audit issues found.'));
+    return;
+  }
+
+  const visibleIssues = report.issues.slice(0, 20);
+  for (const issue of visibleIssues) {
+    console.log(formatAuditIssue(issue));
+    if (issue.suggestion) {
+      console.log(`  ${color.gray('fix:')} ${issue.suggestion}`);
+    }
+  }
+
+  if (report.issues.length > visibleIssues.length) {
+    console.log(color.gray(`... ${report.issues.length - visibleIssues.length} more issue(s). Use --json for the full report.`));
+  }
+}
+
+function formatAuditIssue(issue: CurriculumAuditIssue): string {
+  const label = issue.severity === 'error'
+    ? color.red('[ERROR]')
+    : issue.severity === 'warning'
+      ? color.yellow('[WARN]')
+      : color.gray('[INFO]');
+  const unit = issue.unitId ? color.cyan(issue.unitId) + ' ' : '';
+  return `${label} ${unit}${color.bold(issue.code)}: ${issue.message}`;
 }
 
 function createProgressBar(current: number, total: number, length = 30) {

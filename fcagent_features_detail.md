@@ -107,7 +107,16 @@ graph TD
   - 所有的关卡推进逻辑完全基于 `LearningState`（包括 `attempts` 次数追踪，已通关 `completedUnitIds`，已跳过 `skippedUnitIds`）控制，数据落盘在 `.fuckcolloge/state.json`。
   - 全课件一键预生成命令 `fc generate-all`，会使用 `Promise.all` 异步处理计划中所有未生成单元的课件渲染，极大优化了学生的快速预览体验。
 
-### 7. Agent Harness 智能体工具装配工程 (Agent Harness & Tool Manager)
+### 7. 课程质量审计器 (Curriculum Quality Auditor)
+* **实现命令**：`fc audit`
+* **功能点**：
+  - **本地质量闸门**：无需调用大模型，直接扫描 `plan.json` 中的课程单元、Quiz、Exercise、ProjectSpec、Remediation 路由与 fallback 标记。
+  - **可操作报告**：输出 0-100 质量分，区分 error / warning / info，并给出修复建议；支持 `--json` 方便接入脚本，支持 `--strict` 把 warning 也视为失败。
+* **底层实现细节**：
+  - 核心纯函数位于 `src/curriculum/audit.ts` 的 `auditLearningPlan`，不读写文件，便于后续接入 CI 或生成流水线。
+  - 审计范围包含重复 unit id、断裂路由、短讲义、坏 Quiz 答案、测试用例不足、缺少边界测试、Project 里程碑/rubric 不足、Remediation 未回跳原单元等。
+
+### 8. Agent Harness 智能体工具装配工程 (Agent Harness & Tool Manager)
 * **功能点**：
   - **动态 Tool Calling 装配**：为大纲规划阶段提供一套安全的、受控的外部动作调用基座（Harness），用于检索课程方向与资料背景。
   - **受控上下文输入**：课件生成阶段不再开放本地文件读写或命令执行工具，而是使用前置联网检索结果、学习画像与课程上下文生成内容，减少工具调用带来的慢速、不可预测和安全风险。
@@ -120,7 +129,7 @@ graph TD
     - `TimeTool`：提供高精度的系统 ISO 时间。
   - `WebSearchTool` 内置 15 秒请求超时、搜索结果截断和结果数限制，避免把过长检索内容塞进 Prompt 导致生成变慢或格式漂移。
 
-### 8. 高性能 L2 缓存与速率极限流控 (L2 Caching & Rate-Limit Concurrency Control)
+### 9. 高性能 L2 缓存与速率极限流控 (L2 Caching & Rate-Limit Concurrency Control)
 * **实现逻辑**：
   在 [`src/utils/cache.ts`](file:///y:/MyAgentProject/src/utils/cache.ts) 中自主实现。
 * **功能点**：
@@ -134,7 +143,7 @@ graph TD
                                                 └── [NO]  ──→ 进入 pLimit 可配置错峰调度 ──→ 发起 HTTP 请求 ──→ 回写 Cache 磁盘
   ```
 
-### 9. 自适应重试与 Fallback 自我修复协议 (Resilient Auto-Retry & Fallback Recovery)
+### 10. 自适应重试与 Fallback 自我修复协议 (Resilient Auto-Retry & Fallback Recovery)
 * **实现逻辑**：
   在 `src/agents/pipeline.ts` 的 `ensureUnitFullyPopulated` 与 `cli.ts` 的 `generate-all` 中配合实现。
 * **功能点**：
