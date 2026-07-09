@@ -584,6 +584,202 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
   }
 }
 
+export async function generateRemediationUnit(
+  failedUnit: SeedUnit,
+  assessment: AssessmentResult,
+  plan: LearningPlan,
+  provider?: LLMProvider
+): Promise<SeedUnit> {
+  const outline = buildRemediationOutline(failedUnit, assessment);
+  if (!provider) {
+    return ensureUnitFullyPopulated(outline);
+  }
+
+  const cacheKey = `remediation:${JSON.stringify({
+    unitId: failedUnit.id,
+    mistakeTypes: assessment.mistakeTypes,
+    failedTests: assessment.testResults.filter((item) => !item.passed).map((item) => item.name),
+    failedQuizzes: assessment.quizResults.filter((item) => !item.passed).map((item) => item.id),
+    learnerLevel: plan.learnerProfile.programmingLevel,
+  })}`;
+  const cachedUnit = await llmCache.get<SeedUnit>(cacheKey);
+  if (cachedUnit) {
+    console.log(color.magenta(`\n⚡ [LLM Cache HIT] 恢复补救单元: ${cachedUnit.title}`));
+    return cachedUnit;
+  }
+
+  const remediationPrompt = `
+You are FCAgent RemediationPlanner, an expert CS teaching assistant.
+Create a compact, high-leverage remediation unit in Chinese for a learner who failed the current unit.
+The remediation must be shorter than a normal unit, but it must be concrete, runnable, and diagnostic.
+
+Learner profile:
+${JSON.stringify(plan.learnerProfile, null, 2)}
+
+Failed unit:
+${JSON.stringify({
+    id: failedUnit.id,
+    title: failedUnit.title,
+    description: failedUnit.description,
+    objectives: failedUnit.objectives,
+    exercise: failedUnit.exercise
+      ? {
+          language: failedUnit.exercise.language,
+          entrypoint: failedUnit.exercise.entrypoint,
+          description: failedUnit.exercise.description,
+        }
+      : undefined,
+  }, null, 2)}
+
+Assessment result:
+${JSON.stringify({
+    score: assessment.score,
+    mistakeTypes: assessment.mistakeTypes,
+    failedTests: assessment.testResults.filter((item) => !item.passed),
+    failedQuizzes: assessment.quizResults.filter((item) => !item.passed),
+    diagnosis: assessment.diagnosis,
+  }, null, 2)}
+
+Design rules:
+- This is a micro-remediation unit, not a replacement for the failed unit.
+- Teach the smallest missing mental model that would unlock the failed unit.
+- Use a fresh drill exercise that is easier than the failed exercise but targets the same misconception.
+- Prefer ${NATIVE_RUNNER_LANGUAGES.join(', ')} so the runner stays local.
+- Include at least 3 testCases and at least 2 hints.
+- Do not include starterCode inside JSON. Put raw starter code only in STARTER_CODE.
+
+Return exactly this format:
+\`\`\`json
+{
+  "quiz": [
+    { "id": "q1", "type": "choice", "question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "..." }
+  ],
+  "exercise": {
+    "id": "ex-${outline.id}",
+    "language": "typescript",
+    "entrypoint": "actualFunctionName",
+    "description": "...",
+    "assertionMode": "return",
+    "testCases": [
+      { "name": "normal case", "input": [], "expected": true },
+      { "name": "edge case", "input": [], "expected": true },
+      { "name": "misconception guard", "input": [], "expected": false }
+    ],
+    "hints": ["...", "..."]
+  }
+}
+\`\`\`
+
+### CONTENT
+# ${outline.title}
+...
+
+### STARTER_CODE
+...
+`.trim();
+
+  try {
+    const response = await provider.chat([
+      { role: 'system', content: 'You generate compact, structured remediation units for CS learners. Return only the requested sections.' },
+      { role: 'user', content: remediationPrompt },
+    ], { temperature: 0.2 });
+
+    const remediationUnit = buildGeneratedUnit(outline, response.content || '');
+    await llmCache.set(cacheKey, remediationUnit);
+    return remediationUnit;
+  } catch (err) {
+    console.warn('Failed to generate remediation unit. Asking for one structured repair...', err);
+    try {
+      const repairedUnit = await repairGeneratedUnit(outline, remediationPrompt, provider);
+      await llmCache.set(cacheKey, repairedUnit);
+      return repairedUnit;
+    } catch (repairErr) {
+      console.warn('Failed to repair remediation unit, falling back to local scaffold.', repairErr);
+      return ensureUnitFullyPopulated(outline);
+    }
+  }
+}
+
+function buildRemediationOutline(failedUnit: SeedUnit, assessment: AssessmentResult): SeedUnit {
+  const remediationId = `remed-${failedUnit.id}`;
+  const failedTestNames = assessment.testResults
+    .filter((item) => !item.passed)
+    .map((item) => item.name);
+  const failedQuizIds = assessment.quizResults
+    .filter((item) => !item.passed)
+    .map((item) => item.id);
+  const focus = [
+    ...assessment.mistakeTypes,
+    ...failedTestNames,
+    ...failedQuizIds,
+  ].filter(Boolean).join('、') || '核心概念和边界条件';
+
+  return {
+    id: remediationId,
+    type: 'remediation',
+    title: `补救单元：${failedUnit.title} 的关键误区拆解`,
+    description: `针对 ${failedUnit.title} 的失败反馈，聚焦 ${focus}，用一个更小的练习补齐关键心智模型。`,
+    prerequisites: [failedUnit.id],
+    objectives: [
+      `复盘 ${failedUnit.title} 中暴露的关键误区`,
+      '用更小的输入规模重建正确的推理步骤',
+      '通过 micro-drill 后回到原单元重新提交',
+    ],
+    references: [],
+    remediationForUnitId: failedUnit.id,
+    nextIfPassed: failedUnit.id,
+    nextIfFailed: remediationId,
+    passCriteria: { quizMinScore: 1, exerciseMustPass: true },
+    content: [
+      `# 补救单元：${failedUnit.title} 的关键误区拆解`,
+      '',
+      `你刚才在《${failedUnit.title}》里遇到了阻力。系统检测到的主要信号是：${focus}。`,
+      '',
+      '这个补救单元不会重复整章内容，而是把问题缩小到一个更容易观察的检查点：先说清楚输入、输出和不变量，再用最小测试证明自己真的理解了规则。',
+      '',
+      '## 复盘方式',
+      '',
+      '1. 先阅读失败测试名和诊断反馈。',
+      '2. 写下你以为代码会返回什么。',
+      '3. 再运行小练习，用测试结果校正推理。',
+      '4. 通过后执行 `fc next` 回到原单元继续挑战。',
+    ].join('\n'),
+    quiz: [
+      {
+        id: 'q1',
+        type: 'choice',
+        question: '补救单元最应该优先修复什么？',
+        options: ['把原题答案背下来', '找出失败测试暴露的最小误区', '跳过所有测试', '只修改输出格式'],
+        answer: '找出失败测试暴露的最小误区',
+        explanation: '补救单元的目标是修复心智模型，而不是记答案。',
+      },
+    ],
+    exercise: {
+      id: `ex-${remediationId}`,
+      language: 'typescript',
+      entrypoint: 'chooseRemediationMove',
+      description: '根据失败信号选择下一步补救动作。',
+      assertionMode: 'return',
+      starterCode: `export function chooseRemediationMove(signal: string): string {
+  // TODO: Step 1 - normalize the signal so casing does not distract you.
+  // TODO: Step 2 - if it mentions a test, inspect the smallest failing input.
+  // TODO: Step 3 - if it mentions a concept, restate the invariant in your own words.
+  return 'restate-invariant';
+}
+`,
+      testCases: [
+        { name: 'test failure asks for smallest input', input: ['failed test: edge case'], expected: 'inspect-smallest-input' },
+        { name: 'concept gap asks for invariant', input: ['concept-gap'], expected: 'restate-invariant' },
+        { name: 'execution error asks for runner signal', input: ['execution-error'], expected: 'read-runner-message' },
+      ],
+      hints: [
+        '失败测试名通常告诉你应该先缩小哪个输入。',
+        '概念错误通常要先重述不变量，再改代码。',
+      ],
+    },
+  };
+}
+
 function buildGeneratedUnit(unit: SeedUnit, responseContent: string): SeedUnit {
   const parsed = generatedUnitMetadataSchema.parse(parseJsonFromText(responseContent));
   const content = extractRequiredSection(responseContent, 'CONTENT');
@@ -983,7 +1179,7 @@ export async function buildAssessment(
     mistakeTypes.add('concept-gap');
   }
 
-  const score = passed ? 5 : exercisePassed ? Math.max(2, quizScore) : quizPassed ? 3 : 1;
+  const score = passed ? 5 : !quizPassed ? Math.max(1, quizScore) : exercisePassed ? 3 : 2;
   let diagnosis = buildFallbackAssessmentDiagnosis(unit, testResults, quizResults, score);
   let nextAction = passed
     ? `通过本单元。建议执行 fc next 进入${unit.nextIfPassed ? ' ' + unit.nextIfPassed : '下一单元'}。`
@@ -1059,10 +1255,21 @@ export function adaptNextUnit(plan: LearningPlan, assessment: AssessmentResult):
   }
 
   if (assessment.passed) {
-    const nextIndex = Math.min(plan.units.length - 1, currentIndex + 1);
+    const routedIndex = plan.units.findIndex((item) => item.id === plan.units[currentIndex]?.nextIfPassed);
+    const nextIndex = routedIndex === -1
+      ? Math.min(plan.units.length - 1, currentIndex + 1)
+      : routedIndex;
     return {
       currentIndex: nextIndex,
-      reason: assessment.passed ? 'Passed current unit.' : 'Need remedial practice.',
+      reason: routedIndex === -1 ? 'Passed current unit.' : `Passed current unit. Routed to ${plan.units[nextIndex]?.id}.`,
+    };
+  }
+
+  const failedRouteIndex = plan.units.findIndex((item) => item.id === plan.units[currentIndex]?.nextIfFailed);
+  if (failedRouteIndex !== -1) {
+    return {
+      currentIndex: failedRouteIndex,
+      reason: `Failed current unit. Routed to ${plan.units[failedRouteIndex]?.id}.`,
     };
   }
 
@@ -1100,7 +1307,9 @@ function buildFallbackAssessmentDiagnosis(
 
   const parts: string[] = [`本单元《${unit.title}》评分：${score}/5。`];
 
-  if (failedTests.length === 0) {
+  if (testResults.length === 0) {
+    parts.push('本次没有运行代码测试，当前反馈主要来自概念小测。');
+  } else if (failedTests.length === 0) {
     parts.push('代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。');
   } else {
     parts.push(`代码测试失败 ${failedTests.length} 个，优先检查：${failedTests.map((item) => item.name).join('、')}。`);

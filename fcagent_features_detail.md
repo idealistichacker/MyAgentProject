@@ -23,6 +23,8 @@ graph TD
     K --> L[Polyglot Runner 编译/执行沙盒]
     L --> M[FCAgent 智能助教诊断]
     M --> N[更新 state.json / 触发 fc next]
+    M --> O[失败第2次: 插入 Remediation 补救单元]
+    O --> G
 ```
 
 ---
@@ -89,9 +91,12 @@ graph TD
     - 第 1 次提交失败：只提供方向与概念提示，不给代码建议。
     - 第 2 次提交失败：指出发生问题的具体代码范围/作用域，并给出修改方向。
     - 第 3+ 次提交失败：直接给出关键伪代码骨架片段。
+  - **自适应补救单元**：同一单元失败到第 2 次时，CLI 会根据失败测试、Quiz 错题和诊断结果生成或复用一个短小的 `remediation` 单元，并自动插入当前学习计划。
   - **共情心与庆祝引擎**：通关时会用非常热情、俏皮的语气疯狂为你庆祝；失败时则提供温和体贴的情绪疏导，鼓励你不要气馁。
 * **底层实现细节**：
   - 详见 `pipeline.ts` 中的 `buildAssessment`。利用用户源码、错题信息和 attempt 计数动态构建 `hintStrategy` 注入 Prompt 中。
+  - `generateRemediationUnit` 会把失败单元、错因、失败测试和错题压缩成 micro-remediation Prompt，生成同样可被 `fc start` / `fc submit` 使用的讲义、Quiz 和练习。
+  - `adaptNextUnit` 现在尊重 `nextIfPassed` / `nextIfFailed` 路由字段，补救单元通关后会回到原失败单元，而不是线性跳过。
 
 ### 6. 弹性跳过与复习状态面板 (Skip & Review Tracker)
 * **实现命令**：`fc skip` 和 `fc review`

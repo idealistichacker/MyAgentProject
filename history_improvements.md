@@ -167,3 +167,14 @@
   - **Project 质量闸门**：Project 单元生成时必须通过额外校验，包括至少 2 个交付物、3 个里程碑、2 个文件条目和 3 个 rubric 项；坏输出会进入同一套结构化修复流程。
   - **PROJECT.md 落盘**：`fc start` 与 `fc generate-all` 会把结构化 Project 规格渲染到 `.fuckcolloge/exercises/<unitId>/PROJECT.md`，与 `solution.*` 放在同一练习目录中。
   - **离线 Capstone 保底**：默认种子课程新增 `dsa-project-bracket-dungeon`，把数组栈、哈希表规则映射和括号匹配整合成可测试的小型项目，即使没有 API Key 也能体验项目式学习闭环。
+
+---
+
+## 16. 失败驱动的自适应补救单元 (Failure-driven Remediation Routing)
+* **背景与痛点**：
+  旧版学习路线基本是线性推进。学习者失败后只能停在原单元反复提交，系统虽然会给诊断和 Hint，但不会主动调整路线，也无法把“你缺的那一小块”变成独立训练单元。
+* **改进核心**：
+  - **Remediation 单元类型**：`SeedUnit.type` 新增 `remediation`，并用 `remediationForUnitId` 记录它服务于哪个原始单元。
+  - **失败第 2 次自动插入**：`fc submit` 在同一普通/项目单元失败到第 2 次时，会基于失败测试、Quiz 错题、错因分类和诊断结果生成或复用一个 micro-remediation 单元，插入 `plan.json` 并切换当前进度。
+  - **Quiz 概念失败也入账**：前置 Quiz 没过时也会生成 `AssessmentResult`，记录为概念缺口，并同样可以触发补救路线。
+  - **真实路由字段生效**：`adaptNextUnit` 开始尊重 `nextIfPassed` / `nextIfFailed`。补救单元通过后会回到原失败单元，避免线性 `next` 直接跳过真正需要掌握的内容。

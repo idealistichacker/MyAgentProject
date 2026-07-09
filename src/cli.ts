@@ -2,8 +2,18 @@
 import { Command } from 'commander';
 import { intro, outro, spinner, select, text, confirm, isCancel, cancel, note } from '@clack/prompts';
 import color from 'picocolors';
-import { buildAssessment, diagnoseLearner, generatePlan, generateUnitContent, getCurrentUnit, gradeQuiz } from './agents/pipeline.js';
+import {
+  adaptNextUnit,
+  buildAssessment,
+  diagnoseLearner,
+  generatePlan,
+  generateRemediationUnit,
+  generateUnitContent,
+  getCurrentUnit,
+  gradeQuiz,
+} from './agents/pipeline.js';
 import { createProvider } from './providers/types.js';
+import type { LLMProvider } from './providers/types.js';
 import fs from 'node:fs';
 import { runExercise } from './runner/runnerFactory.js';
 import {
@@ -25,7 +35,7 @@ import {
   getSolutionPath,
   getExtensionForLanguage,
 } from './utils/paths.js';
-import type { LearnerProfile, LearningState, QuizQuestion, SeedUnit } from './types.js';
+import type { AssessmentResult, LearnerProfile, LearningPlan, LearningState, QuizQuestion, SeedUnit } from './types.js';
 
 const program = new Command();
 
@@ -173,7 +183,7 @@ program.command('plan')
     s.stop(color.green(`✔ 计划生成成功！共计 ${plan.units.length} 个单元。`));
     
     plan.units.forEach(unit => {
-      const typeLabel = unit.type === 'project' ? color.magenta(color.bold(' 🚀 [PROJECT] ')) : '';
+      const typeLabel = formatUnitTypeLabel(unit);
       console.log(`${color.cyan('•')} ${color.bold(unit.id)}:${typeLabel} ${unit.title}`);
     });
     outro(color.gray('执行 `fc start` 开始第一个单元的学习吧！'));
@@ -269,9 +279,27 @@ program.command('submit [unitId]')
     const quizMinScore = unit.passCriteria?.quizMinScore ?? 1;
     const quizScore = quizResults.filter((r) => r.passed).length;
     const quizPassed = quizScore >= quizMinScore;
+    const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
 
     if (!quizPassed) {
+      const assessment = await buildAssessment(unit, [], quizResults, '', provider, attemptCount);
+      state.currentUnitId = unit.id;
+      state.attempts[unit.id] = {
+        count: (state.attempts[unit.id]?.count ?? 0) + 1,
+        lastSubmittedAt: assessment.createdAt,
+      };
+      state.assessments.push(assessment);
+      state.lastAssessmentId = assessment.id;
+      state.updatedAt = assessment.createdAt;
+
+      const remediationNotice = await maybeInsertRemediation(unit, assessment, plan, state, provider, attemptCount);
+      saveState(state);
+      printAssessment(assessment);
+
       console.log(color.yellow('\n⚠️ 有前置知识测试未通过！你需要先完全掌握这些概念才能解锁后续的代码评测哦！\n请复习本单元的讲义后再重新执行 `fc submit` 解锁练习。'));
+      if (remediationNotice) {
+        note(`${remediationNotice}\n执行 ${color.cyan('`fc start`')} 开始针对性补救，通关后会回到原单元。`, '自适应补救路线');
+      }
       process.exitCode = 1;
       return;
     }
@@ -283,7 +311,6 @@ program.command('submit [unitId]')
     s.stop(color.green('✔ 本地测试执行完毕'));
     
     s.start('FCAgent AssessmentReviewer 正在多维分析你的表现...');
-    const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
     let learnerCode = '';
     try {
       const extension = getExtensionForLanguage(unit.exercise.language);
@@ -308,6 +335,8 @@ program.command('submit [unitId]')
         state.completedUnitIds.push(unit.id);
       }
     }
+
+    const remediationNotice = await maybeInsertRemediation(unit, assessment, plan, state, provider, attemptCount);
     saveState(state);
 
     printAssessment(assessment, runResult.stdout, runResult.stderr);
@@ -315,6 +344,9 @@ program.command('submit [unitId]')
     if (assessment.passed) {
       outro(color.green('🎉 恭喜通关本单元！执行 `fc next` 进入下一关！'));
     } else {
+      if (remediationNotice) {
+        note(`${remediationNotice}\n执行 ${color.cyan('`fc start`')} 开始针对性补救，通关后会回到原单元。`, '自适应补救路线');
+      }
       if ((state.attempts[unit.id]?.count ?? 0) >= 5) {
         note(color.yellow(`💡 提示：检测到当前单元已尝试了 ${(state.attempts[unit.id]?.count ?? 0)} 次。如果你感到吃力，可以输入 \`fc skip\` 跳过本地测试与 Quiz，直接进入下一 Unit 的学习。你跳过的单元会被妥善记录在逃课账本中，随时可以回来复习哦！`), '逃课提示');
       }
@@ -354,12 +386,13 @@ program.command('next')
     }
 
     const currentIndex = plan.currentIndex;
-    if (currentIndex + 1 >= plan.units.length) {
+    const routed = adaptNextUnit(plan, latest);
+    if (routed.currentIndex === currentIndex && currentIndex + 1 >= plan.units.length) {
       console.log(color.green(color.bold('🎉 太棒了！你已经打通了本次动态学习计划的全部关卡！')));
       return;
     }
 
-    plan.currentIndex = currentIndex + 1;
+    plan.currentIndex = routed.currentIndex;
     plan.updatedAt = new Date().toISOString();
     savePlan(plan);
 
@@ -450,7 +483,7 @@ program.command('status')
       console.log(color.bold('学习进度: ') + createProgressBar(completedUnits, totalUnits));
       
       const currentUnit = plan.units[plan.currentIndex];
-      const typeLabel = currentUnit?.type === 'project' ? color.magenta(color.bold(' 🚀 [PROJECT] ')) : '';
+      const typeLabel = formatUnitTypeLabel(currentUnit);
       console.log(color.bold('当前单元: ') + color.yellow(currentUnit?.title ?? 'None') + typeLabel);
       
       const passRate = state.assessments.length > 0 
@@ -671,6 +704,64 @@ function renderProjectSpecMarkdown(unit: SeedUnit): string {
 function formatMarkdownList(items: string[], fallback: string): string {
   const list = items.length > 0 ? items : [fallback];
   return list.map((item) => `- ${item}`).join('\n');
+}
+
+async function maybeInsertRemediation(
+  unit: SeedUnit,
+  assessment: AssessmentResult,
+  plan: LearningPlan,
+  state: LearningState,
+  provider: LLMProvider | undefined,
+  attemptCount: number
+): Promise<string> {
+  if (assessment.passed || !shouldOfferRemediation(unit, attemptCount)) {
+    return '';
+  }
+
+  try {
+    const existingRemediationIndex = plan.units.findIndex((item) => item.remediationForUnitId === unit.id);
+    if (existingRemediationIndex !== -1) {
+      plan.currentIndex = existingRemediationIndex;
+      plan.updatedAt = new Date().toISOString();
+      state.currentUnitId = plan.units[existingRemediationIndex].id;
+      state.updatedAt = plan.updatedAt;
+      savePlan(plan);
+      return `已切换到补救单元：${plan.units[existingRemediationIndex].id}`;
+    }
+
+    const remediationSpinner = spinner();
+    remediationSpinner.start('FCAgent 正在为这次失败生成一个短小补救单元...');
+    const remediationUnit = await generateRemediationUnit(unit, assessment, plan, provider);
+    const failedUnitIndex = plan.units.findIndex((item) => item.id === unit.id);
+    const insertIndex = failedUnitIndex === -1 ? plan.currentIndex + 1 : failedUnitIndex + 1;
+    plan.units.splice(insertIndex, 0, remediationUnit);
+    plan.currentIndex = insertIndex;
+    plan.updatedAt = new Date().toISOString();
+    state.currentUnitId = remediationUnit.id;
+    state.updatedAt = plan.updatedAt;
+    savePlan(plan);
+    remediationSpinner.stop(color.green('✔ 补救单元已插入学习路线'));
+    return `已插入补救单元：${remediationUnit.id}`;
+  } catch (err) {
+    console.warn('Failed to insert remediation unit:', err);
+    return '';
+  }
+}
+
+function shouldOfferRemediation(unit: SeedUnit, attemptCount: number): boolean {
+  return unit.type !== 'remediation' && attemptCount >= 2;
+}
+
+function formatUnitTypeLabel(unit?: SeedUnit): string {
+  if (unit?.type === 'project') {
+    return color.magenta(color.bold(' 🚀 [PROJECT] '));
+  }
+
+  if (unit?.type === 'remediation') {
+    return color.yellow(color.bold(' 🧩 [REMEDIATION] '));
+  }
+
+  return '';
 }
 
 async function fillDiagnosisWithPrompts(profile: LearnerProfile, provider?: any): Promise<void> {

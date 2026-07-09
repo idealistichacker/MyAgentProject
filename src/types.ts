@@ -103,7 +103,7 @@ export type ProjectSpec = z.infer<typeof projectSpecSchema>;
 
 export const seedUnitSchema = z.object({
   id: z.string(),
-  type: z.enum(['unit', 'project']).default('unit'),
+  type: z.enum(['unit', 'project', 'remediation']).default('unit'),
   title: z.string(),
   description: z.string(),
   prerequisites: z.array(z.string()).default([]),
@@ -117,6 +117,7 @@ export const seedUnitSchema = z.object({
     quizMinScore: z.number().int().min(0).default(2),
     exerciseMustPass: z.boolean().default(true),
   }).default({ quizMinScore: 2, exerciseMustPass: true }),
+  remediationForUnitId: z.string().optional(),
   nextIfPassed: z.string().optional(),
   nextIfFailed: z.string().optional(),
 });
