@@ -1,11 +1,10 @@
 import { z } from 'zod';
 import { getSeedUnit, SEED_CURRICULUM } from '../curriculum/seed.js';
-import { exerciseSchema, projectSpecSchema, quizQuestionSchema } from '../types.js';
 import type {
   AssessmentResult,
   LearnerProfile,
   LearningPlan,
-  ProjectSpec,
+  LearningState,
   QuizQuestion,
   SeedUnit,
   TestResult,
@@ -14,23 +13,12 @@ import type { LLMProvider, ChatMessage } from '../providers/types.js';
 import { ToolManager, WebSearchTool, TimeTool } from './tools.js';
 import { loadConfig } from '../state/fsState.js';
 import { llmCache } from '../utils/cache.js';
-import color from 'picocolors';
+import { buildMasteryReport } from '../curriculum/mastery.js';
+import { buildFallbackDiagnosis, buildFallbackAssessmentDiagnosis } from './fallbacks.js';
+import { parseJsonFromText, sanitizeJsonString, extractJsonCandidate } from './generatedUnitParser.js';
+export { generateUnitContent, generateRemediationUnit } from './unitGeneration.js';
 
 const nowIso = () => new Date().toISOString();
-
-const NATIVE_RUNNER_LANGUAGES = ['typescript', 'python', 'bash', 'rust'] as const;
-
-const exerciseMetadataSchema = exerciseSchema
-  .omit({ starterCode: true, testCode: true })
-  .extend({
-    testCode: z.string().optional(),
-  });
-
-const generatedUnitMetadataSchema = z.object({
-  quiz: z.array(quizQuestionSchema).min(1).max(5),
-  exercise: exerciseMetadataSchema,
-  project: projectSpecSchema.optional(),
-});
 
 export async function diagnoseLearner(
   rawProfile: LearnerProfile,
@@ -75,9 +63,12 @@ ${JSON.stringify(rawProfile, null, 2)}
   }
 }
 
+import type { MasteryReport } from '../curriculum/mastery.js';
+
 export async function generatePlan(
   learnerProfile: LearnerProfile,
-  provider?: LLMProvider
+  provider?: LLMProvider,
+  masteryReport?: MasteryReport
 ): Promise<LearningPlan> {
   const now = nowIso();
   let units = SEED_CURRICULUM;
@@ -151,6 +142,11 @@ The JSON output MUST be a valid array of objects matching this schema (containin
 Do not include markdown codeblocks (\`\`\`json) in the final string, just the raw JSON array.
 Learner Profile:
 ${JSON.stringify(learnerProfile, null, 2)}
+${masteryReport ? `
+Additionally, the learner needs a REPLAN based on their current progress.
+Current Mastery Status:
+${JSON.stringify(masteryReport.skills, null, 2)}
+Please adjust the curriculum to focus heavily on "needs-practice" skills, and skip "mastered" skills.` : ''}
 `.trim();
 
       const messages: ChatMessage[] = [
@@ -173,7 +169,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
           });
 
           for (const call of response.tool_calls) {
-            // console.log(`\n🔍 FCAgent 正在调用工具: ${call.function.name}...`);
+            // console.log(\`\\n🔍 FCAgent 正在调用工具: \${call.function.name}...\`);
             const result = await toolManager.executeToolCall(call.function.name, call.function.arguments);
             messages.push({
               role: 'tool',
@@ -225,845 +221,6 @@ ${JSON.stringify(learnerProfile, null, 2)}
     createdAt: now,
     updatedAt: now,
   };
-}
-
-function ensureUnitFullyPopulated(unit: SeedUnit): SeedUnit {
-  const seedUnit = getSeedUnit(unit.id);
-  const merged = { ...seedUnit, ...unit };
-  return {
-    ...merged,
-    content: merged.content || `# ${merged.title}\n\n${merged.description}\n\n*（注：当前学习资料为基础预备版本，您可以稍后尝试重新生成以获得大模型提炼的完整内容）*`,
-    quiz: merged.quiz || [
-      {
-        id: 'q1',
-        type: 'choice',
-        question: `关于《${merged.title}》，以下哪个表述是最合适的？`,
-        options: [
-          `它是关于：${merged.description}`,
-          '它没有任何实际用途',
-          '它只适用于初学者',
-          '它完全不需要任何前置知识'
-        ],
-        answer: `它是关于：${merged.description}`,
-        explanation: `根据单元描述，《${merged.title}》的主旨是：${merged.description}`
-      }
-    ],
-    exercise: merged.exercise || {
-      id: `ex-${merged.id}`,
-      language: 'typescript',
-      entrypoint: 'placeholderFunc',
-      description: `针对《${merged.title}》的占位练习。请根据所学内容实现相关逻辑。`,
-      assertionMode: 'return',
-      starterCode: `/**
- * 针对《${merged.title}》的练习函数。
- * 
- * TODO: 请实现对应的逻辑。
- * 
- * 示例:
- * >>> placeholderFunc()
- * true
- */
-export function placeholderFunc(): boolean {
-  // TODO: Step 1 - 实现你的逻辑
-  return true;
-}
-`,
-      testCases: [
-        { name: 'default case', input: [], expected: true }
-      ],
-      hints: ['请先完成核心概念的学习，然后再尝试此练习。']
-    },
-    project: merged.project ?? (merged.type === 'project' ? buildFallbackProjectSpec(merged) : undefined),
-    passCriteria: merged.passCriteria || { quizMinScore: 1, exerciseMustPass: true }
-  };
-}
-
-function buildFallbackProjectSpec(unit: SeedUnit): ProjectSpec {
-  const exercisePath = 'solution.ts';
-
-  return {
-    id: `project-${unit.id}`,
-    title: unit.title,
-    narrative: `${unit.description} 这个项目会把前置单元里的概念串成一个可以运行、可以测试、可以迭代的小系统。`,
-    drivingQuestion: `如何把《${unit.title}》拆成清晰的模块，并用测试证明每个阶段都可靠？`,
-    deliverables: [
-      `完成 ${exercisePath} 中的核心函数`,
-      '通过本项目附带的自动化测试',
-      '在代码注释中解释关键设计取舍',
-    ],
-    milestones: [
-      {
-        id: 'phase-1-core-model',
-        title: 'Phase 1: 建立核心模型',
-        goal: '先写出最小可运行的数据模型和函数签名。',
-        learnerTasks: [
-          '阅读 PROJECT.md 和讲义，标记输入、输出、不变量',
-          '补全 starter code 中的类型和基础分支',
-        ],
-        acceptanceCriteria: [
-          '正常输入能够返回结构正确的结果',
-          '边界输入不会抛出未处理异常',
-        ],
-      },
-      {
-        id: 'phase-2-rules-and-tests',
-        title: 'Phase 2: 落实规则与测试',
-        goal: '把项目规则变成可验证的代码路径。',
-        learnerTasks: [
-          '实现主要算法或状态转移规则',
-          '用本地测试反馈修正误区',
-        ],
-        acceptanceCriteria: [
-          '至少通过 normal、edge、misconception 三类测试',
-          '代码结构能让后续扩展点自然出现',
-        ],
-      },
-    ],
-    files: [
-      { path: exercisePath, purpose: '主要实现文件，由 fc start 自动生成 starter code。', required: true },
-      { path: 'test.ts', purpose: '提交时由本地 runner 生成的验收测试。', required: false },
-      { path: 'PROJECT.md', purpose: '项目规格、里程碑、评分标准和扩展方向。', required: true },
-    ],
-    rubric: [
-      { criterion: 'Correctness', points: 4, evidence: '核心测试全部通过，并正确处理边界情况。' },
-      { criterion: 'Design', points: 3, evidence: '函数边界清晰，状态和数据结构选择能解释。' },
-      { criterion: 'Learning Trace', points: 3, evidence: '注释或提交说明能说明关键误区如何被修正。' },
-    ],
-    extensionIdeas: [
-      '增加一组你自己设计的隐藏测试',
-      '把单函数实现拆成两个更清晰的辅助函数',
-    ],
-  };
-}
-
-export async function generateUnitContent(
-  unit: SeedUnit,
-  plan: LearningPlan,
-  provider?: LLMProvider
-): Promise<SeedUnit> {
-  if (!provider) return ensureUnitFullyPopulated(unit);
-  const learnerProfile = plan.learnerProfile;
-  const projectUnit = plan.units.find(u => u.type === 'project');
-  const projectContext = projectUnit ? `The final project for this curriculum is: ${projectUnit.title} (${projectUnit.description}). Your content MUST build towards this.` : 'Ensure content connects to the overall curriculum goals.';
-
-  const cacheKey = `unit:${unit.id}:${unit.title}:${learnerProfile.target}:${learnerProfile.programmingLevel}`;
-  const cachedUnit = await llmCache.get<SeedUnit>(cacheKey);
-  if (cachedUnit) {
-    console.log(color.magenta(`\n⚡ [LLM Cache HIT] 恢复已生成的单元: ${unit.title}`));
-    return cachedUnit;
-  }
-
-  try {
-    // 1. Web Search
-    let searchResult = 'No search results available.';
-    try {
-      const toolManager = new ToolManager();
-      const config = loadConfig();
-      const webSearch = new WebSearchTool(config.searchProvider, config.tavilyApiKey);
-      const query = `${unit.title} ${unit.objectives?.[0] || ''}`.trim();
-      console.log(`\n🔍 FCAgent ContentGenerator 正在联网检索资料: "${query}"...`);
-      searchResult = await webSearch.execute({ query });
-      console.log(`📥 联网检索资料获取完成 (大小: ${searchResult.length} 字符)。`);
-    } catch (searchErr: any) {
-      console.warn('⚠️ 联网检索失败，将使用 LLM 内部参数化知识。', searchErr.message);
-    }
-
-    // 2. Pass 1: Generate Initial Draft
-    console.log('📝 Pass 1: 生成初稿 (Drafting)...');
-    const isProject = unit.type === 'project';
-    const projectDraftInstruction = isProject ? 'Since this is a PROJECT unit, generate a detailed Project Specification (similar to CS61A Ants/Scheme) detailing the architecture, phases of development, and module interactions instead of a regular conceptual lesson.' : 'Generate a rich, detailed markdown content explanation including technical definitions, examples, and deep explanation.';
-
-    const draftPrompt = `
-You are FCAgent ContentGenerator, an elite, charismatic AI tutor with the rigor of UC Berkeley's CS61A but the humor and storytelling ability of a top-tier science communicator.
-Your task is to write a highly engaging, relatable, and human-like technical course draft in Chinese about the following unit.
-
-Unit Outline:
-- Title: ${unit.title}
-- Type: ${unit.type || 'unit'}
-- Description: ${unit.description}
-- Objectives: ${unit.objectives.join(', ')}
-
-Curriculum Context:
-${projectContext}
-
-Learner Profile:
-- Target: ${learnerProfile.target}
-- Programming Level: ${learnerProfile.programmingLevel}
-- DSA Level: ${learnerProfile.dsaLevel}
-- Learning Style: ${learnerProfile.learningStyle}
-
-Search Results from Web:
-${searchResult}
-
-${projectDraftInstruction} Keep the draft dense and focused (under 1200 words in Chinese).
-Use only the supplied curriculum context, learner profile, and search excerpts. Prioritize technical accuracy, concrete examples, and a clean learning arc. Once you have enough context, return the final draft.
-Do not format as JSON yet, just generate a deep markdown document draft.
-`.trim();
-
-    const draftRes = await provider.chat([
-      { role: 'system', content: 'You are a highly-qualified computer science educator, teaching at the level of CS61A.' },
-      { role: 'user', content: draftPrompt }
-    ], { temperature: 0.45 });
-
-    const draftContent = draftRes.content || '';
-    console.log('✅ Pass 1: 初稿生成完毕。');
-
-    // 3. Pass 2: Critique and Expand (Refinement 1)
-    console.log('🔧 Pass 2: 提炼与深度扩展 (Critique & Expand)...');
-    const projectCritiqueInstruction = isProject ? 'Ensure the Project Spec is detailed, explaining tricky architectural edge cases and providing comprehensive walk-throughs of how different modules interact.' : 'Provide additional insights, explain tricky edge cases, and add comprehensive practical walk-through examples or "gotchas".';
-
-    const critiquePrompt = `
-You are FCAgent ContentCritic. Your task is to critique and significantly expand the course draft below to ensure it meets the rigorous academic and pedagogical standards of UC Berkeley's CS61A.
-Ensure the content is technically deep, impeccably clear, conforms to the learning objectives, and has zero factual errors.
-${projectCritiqueInstruction}
-
-Objectives: ${unit.objectives.join(', ')}
-Search Results Context:
-${searchResult}
-
-Original Draft:
-${draftContent}
-
-Provide the expanded and corrected course content in Chinese. Focus on technical depth and gotchas, keeping the total content rich but under 1500 words in Chinese. Do not format as JSON yet, output the refined Markdown draft.
-`.trim();
-
-    const critiqueRes = await provider.chat([
-      { role: 'system', content: 'You are an elite technical reviewer and educator.' },
-      { role: 'user', content: critiquePrompt }
-    ], { temperature: 0.3 });
-
-    const refinedDraft = critiqueRes.content || '';
-    console.log('✅ Pass 2: 提炼与扩展完成。');
-
-    // 4. Pass 3: Final Polishing, Quiz & Starter Code Generation (Refinement 2)
-    console.log('💎 Pass 3: 格式化与精修 (Format & Polish)...');
-    const projectFinalInstruction = isProject ? `
-CS61A Pedagogical Rules for PROJECT STARTER_CODE:
-- The exercise MUST be a robust multi-phase project skeleton (e.g. Phase 1, Phase 2) with clear TODOs and docstrings.
-- The quiz MUST focus on testing the learner's understanding of the project architecture and module design, rather than isolated syntax.
-- Prefer TypeScript, Python, Bash, or Rust so the local runner can execute the exercise without a cloud dependency.
-- The JSON metadata MUST include a "project" object. Treat it as a real CS61A-style project spec, not a marketing summary.
-- The project object must include:
-  - id, title, narrative, drivingQuestion
-  - at least 2 deliverables
-  - at least 3 milestones with learnerTasks and acceptanceCriteria
-  - files that reference PROJECT.md and the generated solution file
-  - at least 3 rubric items with points and evidence
-  - extensionIdeas for ambitious learners
-` : `
-CS61A Pedagogical Rules for STARTER_CODE:
-- Must include a rich docstring (e.g. TSDoc or Python Docstring) explaining the problem.
-- Must include "doctest" style input/output examples within the comment (e.g. \`>>> funcName(1)\\n2\`).
-- Must use step-by-step TODO comments to scaffold the solution for the learner (e.g. \`// Step 1: Base case...\`, \`# Step 2: Recursive call...\`).
-- Do NOT simply provide an empty function. Give them a robust skeleton!
-`;
-
-    const projectMetadataTemplate = isProject ? `,
-  "project": {
-    "id": "project-unit-id",
-    "title": "Project title",
-    "narrative": "Why this project matters and how it connects the previous units.",
-    "drivingQuestion": "A precise design question the learner must answer.",
-    "deliverables": ["working implementation", "short design note"],
-    "milestones": [
-      {
-        "id": "phase-1",
-        "title": "Phase 1: ...",
-        "goal": "...",
-        "learnerTasks": ["..."],
-        "acceptanceCriteria": ["..."]
-      }
-    ],
-    "files": [
-      { "path": "PROJECT.md", "purpose": "Project spec" },
-      { "path": "solution.ts", "purpose": "Main implementation file" }
-    ],
-    "rubric": [
-      { "criterion": "Correctness", "points": 4, "evidence": "..." }
-    ],
-    "extensionIdeas": ["..."]
-  }` : '';
-
-    const finalPrompt = `
-You are FCAgent FinalPolisher. Format the refined learning materials into the final required output format.
-Ensure the final output reflects the premium quality of CS61A, infused with an engaging, narrative-driven human touch.
-
-You must construct:
-1. A JSON metadata block containing a quiz and programming exercise metadata.
-   - The Quiz MUST be scenario-based and interesting (e.g., helping a character solve a problem), not just dry conceptual questions.
-   - The Exercise Starter Code MUST have thematic variable names and problem descriptions that tie directly into the Curriculum Context (${projectContext}). Make it feel like part of an epic quest.
-   - Prefer one of these locally supported languages unless the objective truly requires otherwise: ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
-   - Do NOT include starterCode inside the JSON. Put raw code only in STARTER_CODE.
-   - If you choose a non-local language, provide raw test code in TEST_CODE. Otherwise omit TEST_CODE and rely on testCases.
-   - Include at least 3 meaningful testCases: a normal case, an edge case, and a misconception-catching case.
-   - For bash exercises, assertionMode should likely be 'stdout'. For others it can be 'return' or 'mutate-and-return'.
-2. The final Markdown CONTENT (using the refined course content). Keep it dense and copy it directly from the refined draft without expanding it with unnecessary verbose prose.
-3. The STARTER_CODE block for the exercise. This must be raw code only.
-4. Optional TEST_CODE block for non-local languages only.
-${projectFinalInstruction}
-
-The output MUST contain these sections, using your generated exercise code and quiz instead of the template examples:
-\`\`\`json
-{
-  "quiz": [
-    {
-      "id": "q1",
-      "type": "choice",
-      "question": "...",
-      "options": ["A", "B", "C", "D"],
-      "answer": "A",
-      "explanation": "..."
-    }
-  ],
-  "exercise": {
-    "id": "ex-1",
-    "language": "python",
-    "entrypoint": "actual_function_name",
-    "description": "...",
-    "assertionMode": "return",
-    "testCases": [
-      { "name": "normal case", "input": ["actual_input"], "expected": "actual_output" },
-      { "name": "edge case", "input": [""], "expected": "" },
-      { "name": "misconception guard", "input": ["tricky_input"], "expected": "correct_output" }
-    ],
-    "hints": ["hint 1", "hint 2"]
-  }${projectMetadataTemplate}
-}
-\`\`\`
-
-### CONTENT
-# Markdown content...
-(Put the final polished and expanded course content here, using clear typography, H2/H3 headers, and bold text)
-
-### STARTER_CODE
-/**
- * Detailed description of the function...
- * 
- * Examples:
- * >>> actualFunctionName("actual_input")
- * "actual_output"
- */
-export function actualFunctionName(args: any): any {
-  // TODO: Step 1 - ...
-  // TODO: Step 2 - ...
-  return null;
-}
-
-### TEST_CODE
-(Only include this section for non-local languages. It must print exactly one JSON line per test case.)
-
-Refined Course Draft:
-${refinedDraft}
-
-Learner Programming Level: ${learnerProfile.programmingLevel}
-Learner DSA Level: ${learnerProfile.dsaLevel}
-`.trim();
-
-    const finalRes = await provider.chat([
-      { role: 'system', content: 'You are a JSON-only curriculum content generator.' },
-      { role: 'user', content: finalPrompt }
-    ], { temperature: 0.2 });
-
-    const responseContent = finalRes.content || '';
-    console.log('✅ Pass 3: 格式精修完成。');
-
-    try {
-      const finalUnit = buildGeneratedUnit(unit, responseContent);
-
-      await llmCache.set(cacheKey, finalUnit);
-      return finalUnit;
-    } catch (parseErr) {
-      console.warn('Response parsing failed. Asking the model for one structured repair...');
-      const repairedUnit = await repairGeneratedUnit(unit, responseContent, provider);
-      await llmCache.set(cacheKey, repairedUnit);
-      return repairedUnit;
-    }
-  } catch (err) {
-    console.warn('Failed to generate dynamic unit content, falling back to basic.', err);
-    return ensureUnitFullyPopulated(unit);
-  }
-}
-
-export async function generateRemediationUnit(
-  failedUnit: SeedUnit,
-  assessment: AssessmentResult,
-  plan: LearningPlan,
-  provider?: LLMProvider
-): Promise<SeedUnit> {
-  const outline = buildRemediationOutline(failedUnit, assessment);
-  if (!provider) {
-    return ensureUnitFullyPopulated(outline);
-  }
-
-  const cacheKey = `remediation:${JSON.stringify({
-    unitId: failedUnit.id,
-    mistakeTypes: assessment.mistakeTypes,
-    failedTests: assessment.testResults.filter((item) => !item.passed).map((item) => item.name),
-    failedQuizzes: assessment.quizResults.filter((item) => !item.passed).map((item) => item.id),
-    learnerLevel: plan.learnerProfile.programmingLevel,
-  })}`;
-  const cachedUnit = await llmCache.get<SeedUnit>(cacheKey);
-  if (cachedUnit) {
-    console.log(color.magenta(`\n⚡ [LLM Cache HIT] 恢复补救单元: ${cachedUnit.title}`));
-    return cachedUnit;
-  }
-
-  const remediationPrompt = `
-You are FCAgent RemediationPlanner, an expert CS teaching assistant.
-Create a compact, high-leverage remediation unit in Chinese for a learner who failed the current unit.
-The remediation must be shorter than a normal unit, but it must be concrete, runnable, and diagnostic.
-
-Learner profile:
-${JSON.stringify(plan.learnerProfile, null, 2)}
-
-Failed unit:
-${JSON.stringify({
-    id: failedUnit.id,
-    title: failedUnit.title,
-    description: failedUnit.description,
-    objectives: failedUnit.objectives,
-    exercise: failedUnit.exercise
-      ? {
-          language: failedUnit.exercise.language,
-          entrypoint: failedUnit.exercise.entrypoint,
-          description: failedUnit.exercise.description,
-        }
-      : undefined,
-  }, null, 2)}
-
-Assessment result:
-${JSON.stringify({
-    score: assessment.score,
-    mistakeTypes: assessment.mistakeTypes,
-    failedTests: assessment.testResults.filter((item) => !item.passed),
-    failedQuizzes: assessment.quizResults.filter((item) => !item.passed),
-    diagnosis: assessment.diagnosis,
-  }, null, 2)}
-
-Design rules:
-- This is a micro-remediation unit, not a replacement for the failed unit.
-- Teach the smallest missing mental model that would unlock the failed unit.
-- Use a fresh drill exercise that is easier than the failed exercise but targets the same misconception.
-- Prefer ${NATIVE_RUNNER_LANGUAGES.join(', ')} so the runner stays local.
-- Include at least 3 testCases and at least 2 hints.
-- Do not include starterCode inside JSON. Put raw starter code only in STARTER_CODE.
-
-Return exactly this format:
-\`\`\`json
-{
-  "quiz": [
-    { "id": "q1", "type": "choice", "question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "..." }
-  ],
-  "exercise": {
-    "id": "ex-${outline.id}",
-    "language": "typescript",
-    "entrypoint": "actualFunctionName",
-    "description": "...",
-    "assertionMode": "return",
-    "testCases": [
-      { "name": "normal case", "input": [], "expected": true },
-      { "name": "edge case", "input": [], "expected": true },
-      { "name": "misconception guard", "input": [], "expected": false }
-    ],
-    "hints": ["...", "..."]
-  }
-}
-\`\`\`
-
-### CONTENT
-# ${outline.title}
-...
-
-### STARTER_CODE
-...
-`.trim();
-
-  try {
-    const response = await provider.chat([
-      { role: 'system', content: 'You generate compact, structured remediation units for CS learners. Return only the requested sections.' },
-      { role: 'user', content: remediationPrompt },
-    ], { temperature: 0.2 });
-
-    const remediationUnit = buildGeneratedUnit(outline, response.content || '');
-    await llmCache.set(cacheKey, remediationUnit);
-    return remediationUnit;
-  } catch (err) {
-    console.warn('Failed to generate remediation unit. Asking for one structured repair...', err);
-    try {
-      const repairedUnit = await repairGeneratedUnit(outline, remediationPrompt, provider);
-      await llmCache.set(cacheKey, repairedUnit);
-      return repairedUnit;
-    } catch (repairErr) {
-      console.warn('Failed to repair remediation unit, falling back to local scaffold.', repairErr);
-      return ensureUnitFullyPopulated(outline);
-    }
-  }
-}
-
-function buildRemediationOutline(failedUnit: SeedUnit, assessment: AssessmentResult): SeedUnit {
-  const remediationId = `remed-${failedUnit.id}`;
-  const failedTestNames = assessment.testResults
-    .filter((item) => !item.passed)
-    .map((item) => item.name);
-  const failedQuizIds = assessment.quizResults
-    .filter((item) => !item.passed)
-    .map((item) => item.id);
-  const focus = [
-    ...assessment.mistakeTypes,
-    ...failedTestNames,
-    ...failedQuizIds,
-  ].filter(Boolean).join('、') || '核心概念和边界条件';
-
-  return {
-    id: remediationId,
-    type: 'remediation',
-    title: `补救单元：${failedUnit.title} 的关键误区拆解`,
-    description: `针对 ${failedUnit.title} 的失败反馈，聚焦 ${focus}，用一个更小的练习补齐关键心智模型。`,
-    prerequisites: [failedUnit.id],
-    objectives: [
-      `复盘 ${failedUnit.title} 中暴露的关键误区`,
-      '用更小的输入规模重建正确的推理步骤',
-      '通过 micro-drill 后回到原单元重新提交',
-    ],
-    references: [],
-    remediationForUnitId: failedUnit.id,
-    nextIfPassed: failedUnit.id,
-    nextIfFailed: remediationId,
-    passCriteria: { quizMinScore: 1, exerciseMustPass: true },
-    content: [
-      `# 补救单元：${failedUnit.title} 的关键误区拆解`,
-      '',
-      `你刚才在《${failedUnit.title}》里遇到了阻力。系统检测到的主要信号是：${focus}。`,
-      '',
-      '这个补救单元不会重复整章内容，而是把问题缩小到一个更容易观察的检查点：先说清楚输入、输出和不变量，再用最小测试证明自己真的理解了规则。',
-      '',
-      '## 复盘方式',
-      '',
-      '1. 先阅读失败测试名和诊断反馈。',
-      '2. 写下你以为代码会返回什么。',
-      '3. 再运行小练习，用测试结果校正推理。',
-      '4. 通过后执行 `fc next` 回到原单元继续挑战。',
-    ].join('\n'),
-    quiz: [
-      {
-        id: 'q1',
-        type: 'choice',
-        question: '补救单元最应该优先修复什么？',
-        options: ['把原题答案背下来', '找出失败测试暴露的最小误区', '跳过所有测试', '只修改输出格式'],
-        answer: '找出失败测试暴露的最小误区',
-        explanation: '补救单元的目标是修复心智模型，而不是记答案。',
-      },
-    ],
-    exercise: {
-      id: `ex-${remediationId}`,
-      language: 'typescript',
-      entrypoint: 'chooseRemediationMove',
-      description: '根据失败信号选择下一步补救动作。',
-      assertionMode: 'return',
-      starterCode: `export function chooseRemediationMove(signal: string): string {
-  // TODO: Step 1 - normalize the signal so casing does not distract you.
-  // TODO: Step 2 - if it mentions a test, inspect the smallest failing input.
-  // TODO: Step 3 - if it mentions a concept, restate the invariant in your own words.
-  return 'restate-invariant';
-}
-`,
-      testCases: [
-        { name: 'test failure asks for smallest input', input: ['failed test: edge case'], expected: 'inspect-smallest-input' },
-        { name: 'concept gap asks for invariant', input: ['concept-gap'], expected: 'restate-invariant' },
-        { name: 'execution error asks for runner signal', input: ['execution-error'], expected: 'read-runner-message' },
-      ],
-      hints: [
-        '失败测试名通常告诉你应该先缩小哪个输入。',
-        '概念错误通常要先重述不变量，再改代码。',
-      ],
-    },
-  };
-}
-
-function buildGeneratedUnit(unit: SeedUnit, responseContent: string): SeedUnit {
-  const parsed = generatedUnitMetadataSchema.parse(parseJsonFromText(responseContent));
-  const content = extractRequiredSection(responseContent, 'CONTENT');
-  const starterCode = stripCodeFence(extractRequiredSection(responseContent, 'STARTER_CODE'));
-  const testCodeSection = extractOptionalSection(responseContent, 'TEST_CODE');
-  const language = normalizeExerciseLanguage(parsed.exercise.language);
-  const isNativeLanguage = NATIVE_RUNNER_LANGUAGES.includes(language as typeof NATIVE_RUNNER_LANGUAGES[number]);
-  const testCode = isNativeLanguage
-    ? undefined
-    : stripCodeFence(parsed.exercise.testCode ?? testCodeSection ?? '');
-
-  const exercise = exerciseSchema.parse({
-    ...parsed.exercise,
-    language,
-    starterCode,
-    testCode: testCode || undefined,
-  });
-  const project = unit.type === 'project'
-    ? projectSpecSchema.parse(parsed.project)
-    : undefined;
-
-  assertGeneratedUnitQuality(unit, content, parsed.quiz, exercise, project);
-
-  return {
-    ...unit,
-    content,
-    quiz: parsed.quiz,
-    exercise,
-    project,
-    passCriteria: unit.passCriteria || { quizMinScore: 1, exerciseMustPass: true },
-  };
-}
-
-async function repairGeneratedUnit(
-  unit: SeedUnit,
-  brokenResponse: string,
-  provider: LLMProvider
-): Promise<SeedUnit> {
-  const projectRepairRules = unit.type === 'project'
-    ? '- Since this is a project unit, JSON must include a project object with at least 2 deliverables, 3 milestones, 2 files, 3 rubric items, and extensionIdeas.'
-    : '';
-  const projectRepairTemplate = unit.type === 'project'
-    ? `,
-  "project": {
-    "id": "project-${unit.id}",
-    "title": "${unit.title}",
-    "narrative": "...",
-    "drivingQuestion": "...",
-    "deliverables": ["...", "..."],
-    "milestones": [
-      {
-        "id": "phase-1",
-        "title": "Phase 1: ...",
-        "goal": "...",
-        "learnerTasks": ["...", "..."],
-        "acceptanceCriteria": ["...", "..."]
-      },
-      {
-        "id": "phase-2",
-        "title": "Phase 2: ...",
-        "goal": "...",
-        "learnerTasks": ["...", "..."],
-        "acceptanceCriteria": ["...", "..."]
-      },
-      {
-        "id": "phase-3",
-        "title": "Phase 3: ...",
-        "goal": "...",
-        "learnerTasks": ["...", "..."],
-        "acceptanceCriteria": ["...", "..."]
-      }
-    ],
-    "files": [
-      { "path": "PROJECT.md", "purpose": "Project spec" },
-      { "path": "solution.ts", "purpose": "Main implementation file" }
-    ],
-    "rubric": [
-      { "criterion": "Correctness", "points": 4, "evidence": "..." },
-      { "criterion": "Design", "points": 3, "evidence": "..." },
-      { "criterion": "Learning Trace", "points": 3, "evidence": "..." }
-    ],
-    "extensionIdeas": ["...", "..."]
-  }`
-    : '';
-
-  const repairPrompt = `
-The previous FCAgent unit generation response could not be parsed or failed quality validation.
-Repair it into the exact required format below. Keep the same educational intent, but make it valid, runnable, and concise.
-
-Rules:
-- Prefer these local runner languages: ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
-- JSON must not include starterCode.
-- Include at least 3 testCases and at least 2 hints.
-- CONTENT must be a useful Chinese markdown lesson, at least 400 Chinese characters.
-- STARTER_CODE must be raw code only and contain the exercise entrypoint.
-- Include TEST_CODE only if the language is not ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
-${projectRepairRules}
-
-Required format:
-\`\`\`json
-{
-  "quiz": [
-    { "id": "q1", "type": "choice", "question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "..." }
-  ],
-  "exercise": {
-    "id": "ex-${unit.id}",
-    "language": "typescript",
-    "entrypoint": "actualFunctionName",
-    "description": "...",
-    "assertionMode": "return",
-    "testCases": [
-      { "name": "normal case", "input": [], "expected": true },
-      { "name": "edge case", "input": [], "expected": true },
-      { "name": "misconception guard", "input": [], "expected": false }
-    ],
-    "hints": ["...", "..."]
-  }${projectRepairTemplate}
-}
-\`\`\`
-
-### CONTENT
-# ${unit.title}
-...
-
-### STARTER_CODE
-...
-
-Broken response:
-${brokenResponse}
-`.trim();
-
-  const repairRes = await provider.chat([
-    { role: 'system', content: 'You repair malformed curriculum generation output. Return only the requested sections.' },
-    { role: 'user', content: repairPrompt },
-  ], { temperature: 0.1 });
-
-  return buildGeneratedUnit(unit, repairRes.content || '');
-}
-
-function assertGeneratedUnitQuality(
-  unit: SeedUnit,
-  content: string,
-  quiz: QuizQuestion[],
-  exercise: NonNullable<SeedUnit['exercise']>,
-  project?: ProjectSpec
-): void {
-  if (content.replace(/\s/g, '').length < 400) {
-    throw new Error('Generated content is too short to be useful.');
-  }
-
-  if (exercise.testCases.length < 3) {
-    throw new Error('Generated exercise needs at least 3 test cases.');
-  }
-
-  if (exercise.hints.length < 2) {
-    throw new Error('Generated exercise needs at least 2 hints.');
-  }
-
-  if (exercise.language !== 'bash' && !exercise.starterCode.includes(exercise.entrypoint)) {
-    throw new Error(`Starter code does not contain entrypoint "${exercise.entrypoint}".`);
-  }
-
-  const isNativeLanguage = NATIVE_RUNNER_LANGUAGES.includes(exercise.language as typeof NATIVE_RUNNER_LANGUAGES[number]);
-  if (!isNativeLanguage && !exercise.testCode) {
-    throw new Error(`Non-local language "${exercise.language}" requires TEST_CODE.`);
-  }
-
-  for (const question of quiz) {
-    if (question.type === 'choice' && question.options?.length) {
-      const normalizedAnswer = normalizeQuizText(question.answer);
-      const answerIsOption = question.options.some((option, index) =>
-        normalizeQuizText(option) === normalizedAnswer ||
-        normalizeQuizText(String(index + 1)) === normalizedAnswer ||
-        normalizeQuizText(String.fromCharCode(65 + index)) === normalizedAnswer
-      );
-      if (!answerIsOption) {
-        throw new Error(`Quiz answer for "${question.id}" is not one of its options.`);
-      }
-    }
-  }
-
-  if (unit.type === 'project') {
-    if (!project) {
-      throw new Error('Project unit requires project metadata.');
-    }
-
-    if (content.replace(/\s/g, '').length < 700) {
-      throw new Error('Project content is too short for a real project spec.');
-    }
-
-    if (project.deliverables.length < 2) {
-      throw new Error('Project spec needs at least 2 deliverables.');
-    }
-
-    if (project.milestones.length < 3) {
-      throw new Error('Project spec needs at least 3 milestones.');
-    }
-
-    for (const milestone of project.milestones) {
-      if (milestone.learnerTasks.length === 0 || milestone.acceptanceCriteria.length === 0) {
-        throw new Error(`Project milestone "${milestone.id}" needs tasks and acceptance criteria.`);
-      }
-    }
-
-    if (project.files.length < 2) {
-      throw new Error('Project spec needs at least 2 file entries.');
-    }
-
-    if (project.rubric.length < 3) {
-      throw new Error('Project spec needs at least 3 rubric items.');
-    }
-  }
-}
-
-function normalizeExerciseLanguage(language: string): string {
-  const normalized = language.trim().toLowerCase();
-  const aliases: Record<string, string> = {
-    ts: 'typescript',
-    js: 'javascript',
-    py: 'python',
-    shell: 'bash',
-    sh: 'bash',
-    rs: 'rust',
-    'c++': 'cpp',
-    golang: 'go',
-  };
-  return aliases[normalized] ?? normalized;
-}
-
-function extractRequiredSection(text: string, heading: string): string {
-  const section = extractOptionalSection(text, heading);
-  if (!section?.trim()) {
-    throw new Error(`Missing ${heading} section.`);
-  }
-  return section.trim();
-}
-
-function extractOptionalSection(text: string, heading: string): string | undefined {
-  const pattern = new RegExp(`(?:^|\\n)###\\s+${heading}\\s*\\n([\\s\\S]*?)(?=\\n###\\s+[A-Z_]+\\s*\\n|$)`, 'i');
-  return text.match(pattern)?.[1]?.trim();
-}
-
-function stripCodeFence(value: string): string {
-  return value
-    .trim()
-    .replace(/^```[a-zA-Z0-9_-]*\s*\n/, '')
-    .replace(/\n```\s*$/, '')
-    .trim();
-}
-
-function parseJsonFromText<T = unknown>(text: string): T {
-  const candidate = extractJsonCandidate(text);
-  try {
-    return JSON.parse(candidate) as T;
-  } catch {
-    return JSON.parse(sanitizeJsonString(candidate)) as T;
-  }
-}
-
-function extractJsonCandidate(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/i);
-  if (fenced?.[1]) {
-    return fenced[1].trim();
-  }
-
-  const firstArray = text.indexOf('[');
-  const firstObject = text.indexOf('{');
-  const starts = [firstArray, firstObject].filter((idx) => idx !== -1);
-  if (starts.length === 0) {
-    throw new Error('No JSON candidate found.');
-  }
-
-  const startIdx = Math.min(...starts);
-  const opensWithArray = text[startIdx] === '[';
-  const endIdx = opensWithArray ? text.lastIndexOf(']') : text.lastIndexOf('}');
-  if (endIdx <= startIdx) {
-    throw new Error('Incomplete JSON candidate.');
-  }
-
-  return text.slice(startIdx, endIdx + 1).trim();
-}
-
-function normalizeQuizText(value: string): string {
-  return value.trim().replace(/[.)。]/g, '').toLowerCase();
 }
 
 export function getCurrentUnit(plan: LearningPlan, unitId?: string): SeedUnit {
@@ -1248,20 +405,31 @@ Return exactly valid JSON ONLY:
   };
 }
 
-export function adaptNextUnit(plan: LearningPlan, assessment: AssessmentResult): { currentIndex: number; reason: string } {
+export function adaptNextUnit(plan: LearningPlan, assessment: AssessmentResult, state: LearningState): { currentIndex: number; reason: string } {
   const currentIndex = plan.units.findIndex((item) => item.id === assessment.unitId);
   if (currentIndex === -1) {
     return { currentIndex: plan.currentIndex, reason: 'Unknown unit.' };
   }
+
+  const mastery = buildMasteryReport(plan, state);
+  const currentUnitMastery = mastery.units.find(u => u.unitId === assessment.unitId);
 
   if (assessment.passed) {
     const routedIndex = plan.units.findIndex((item) => item.id === plan.units[currentIndex]?.nextIfPassed);
     const nextIndex = routedIndex === -1
       ? Math.min(plan.units.length - 1, currentIndex + 1)
       : routedIndex;
+    
+    let reason = routedIndex === -1 ? 'Passed current unit.' : `Passed current unit. Routed to ${plan.units[nextIndex]?.id}.`;
+    
+    // Add explainable mastery data
+    if (currentUnitMastery && currentUnitMastery.status === 'mastered') {
+      reason += ' (Mastery achieved based on assessment score)';
+    }
+
     return {
       currentIndex: nextIndex,
-      reason: routedIndex === -1 ? 'Passed current unit.' : `Passed current unit. Routed to ${plan.units[nextIndex]?.id}.`,
+      reason,
     };
   }
 
@@ -1277,51 +445,6 @@ export function adaptNextUnit(plan: LearningPlan, assessment: AssessmentResult):
     currentIndex,
     reason: 'Failed current unit. Stay on this unit for remedial practice.',
   };
-}
-
-function buildFallbackDiagnosis(profile: LearnerProfile): string {
-  const styleMap: Record<string, string> = {
-    'explain-first': '偏讲解型',
-    'example-first': '偏示例型',
-    'practice-first': '偏练习型',
-    'project-first': '偏项目型',
-  };
-
-  const paceMap: Record<string, string> = {
-    fast: '较快节奏',
-    normal: '正常节奏',
-    steady: '稳扎稳打节奏',
-  };
-
-  return `学习者目标：${profile.target}。当前 编程语言水平：${profile.programmingLevel}；DSA 水平：${profile.dsaLevel}。每周预计投入 ${profile.weeklyHours} 小时，计划总时长 ${profile.totalWeeks} 周，偏好${styleMap[profile.learningStyle] ?? '混合'}学习，节奏为${paceMap[profile.pace] ?? '正常'}。`;
-}
-
-function buildFallbackAssessmentDiagnosis(
-  unit: SeedUnit,
-  testResults: TestResult[],
-  quizResults: AssessmentResult['quizResults'],
-  score: number
-): string {
-  const failedTests = testResults.filter((result) => !result.passed);
-  const failedQuizzes = quizResults.filter((result) => !result.passed);
-
-  const parts: string[] = [`本单元《${unit.title}》评分：${score}/5。`];
-
-  if (testResults.length === 0) {
-    parts.push('本次没有运行代码测试，当前反馈主要来自概念小测。');
-  } else if (failedTests.length === 0) {
-    parts.push('代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。');
-  } else {
-    parts.push(`代码测试失败 ${failedTests.length} 个，优先检查：${failedTests.map((item) => item.name).join('、')}。`);
-  }
-
-  if (failedQuizzes.length === 0) {
-    parts.push('概念小测通过，说明核心概念掌握较稳定。');
-  } else {
-    parts.push(`概念小测失败 ${failedQuizzes.length} 个，建议回看对应知识点并用自己的话解释错因。`);
-  }
-
-  return parts.join('');
 }
 
 export const assessmentSchema = z.object({
@@ -1353,54 +476,3 @@ export const assessmentSchema = z.object({
   nextAction: z.string(),
   createdAt: z.string().datetime(),
 });
-
-export function sanitizeJsonString(jsonStr: string): string {
-  let result = '';
-  let inString = false;
-  let escapeNext = false;
-
-  for (let i = 0; i < jsonStr.length; i++) {
-    const char = jsonStr[i];
-
-    if (escapeNext) {
-      result += char;
-      escapeNext = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      result += char;
-      if (inString) {
-        escapeNext = true;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      if (!inString) {
-        inString = true;
-        result += char;
-      } else {
-        let nextNonWhitespace = '';
-        for (let j = i + 1; j < jsonStr.length; j++) {
-          if (!/\s/.test(jsonStr[j])) {
-            nextNonWhitespace = jsonStr[j];
-            break;
-          }
-        }
-
-        if (nextNonWhitespace === ':' || nextNonWhitespace === ',' || nextNonWhitespace === '}' || nextNonWhitespace === ']') {
-          inString = false;
-          result += char;
-        } else {
-          result += '\\"';
-        }
-      }
-      continue;
-    }
-
-    result += char;
-  }
-
-  return result;
-}

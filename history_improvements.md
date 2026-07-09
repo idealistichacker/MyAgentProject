@@ -188,3 +188,31 @@
   - **新增 `fc audit` 命令**：扫描当前学习计划并输出质量分、错误、警告和信息项，支持 `--json` 与 `--strict`。
   - **纯函数审计模块**：新增 `src/curriculum/audit.ts`，核心 `auditLearningPlan` 不读写文件，后续可以复用到 CI、`generate-all` 后置检查或可视化面板。
   - **覆盖关键质量面**：检查重复 unit id、断裂路由、短讲义、坏 Quiz 答案、测试用例不足、缺少边界测试、Project 里程碑/rubric 不足、Remediation 未回跳原单元、fallback 占位内容等问题。
+
+---
+
+## 18. 多维学习掌握度报告体系 (Multi-dimensional Mastery Report)
+* **背景与痛点**：
+  学习者在打通一系列关卡后，往往无法直观地知道自己的知识漏洞在哪里，也缺乏全局的学习评分，无法量化自己的成长。
+* **改进核心**：
+  - **引入 `fc mastery` CLI**：通过聚合本地 `state.json` 中的所有的 Assessment 数据，给出明确的全局评分（0-100）。
+  - **挖掘薄弱技能**：自动归类哪些目标/技能是 `needs-practice`，为学习者指明重点复习方向。
+  - **纯函数实现机制**：通过 `src/curriculum/mastery.ts` 暴露纯函数模型，支持 CLI 参数化调取单元明细，并向后兼容未来基于此报告实现的自适应重规划算法。
+
+---
+
+## 19. 基于掌握度的自适应重规划 (Mastery-Driven Curriculum Replanning)
+* **背景与痛点**：
+  在长期学习过程中，初始生成的大纲可能因学习者在特定领域（如并发控制、算法思维）的停滞而不再适用。之前的重规划只能完全覆盖旧计划，无法感知学习者已经掌握的知识，导致无效复习。
+* **改进核心**：
+  - **`fc plan --replan` 支持**：利用 `MasteryReport` 的历史学习轨迹，将学习者的真实薄弱项 (`needs-practice`) 和优势项作为上下文传入大模型。
+  - **智能裁剪与强化**：重规划时会智能裁剪已经精通的单元概念，并为薄弱技能点增加专门的强化单元或扩展项目的深度，让后续路线真正“自适应”。
+
+---
+
+## 20. 仓库卫生与安全审计防护 (Repo Hygiene & Git Security Auditor)
+* **背景与痛点**：
+  虽然在文档中提供了详细的防泄密说明并配了默认 `.gitignore`，但在实际使用中，仍有学习者因误删 `.gitignore` 或配置环境不当，意外把包含 API Key 的 `config.json` 或大量的 `.fuckcolloge/cache/` 等本地状态与文件推送到了 GitHub 公开仓库。
+* **改进核心**：
+  - **引入 `fc doctor` 环境诊断**：提供本地仓库卫生扫描指令，不仅检测 Node.js 运行环境，还深度解析当前项目的 Git ignore 配置状态。
+  - **主动拦截与警告**：明确检测并警告如果 `.fuckcolloge/config.json`, `.fuckcolloge/cache/` 等敏感及高冗余目录没有被 Git 忽略，并在控制台以红色强警报方式提示用户修复，防止企业级和个人隐私泄露灾难。

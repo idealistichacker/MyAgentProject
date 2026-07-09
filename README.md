@@ -21,6 +21,37 @@
 9. **控频并发预生成与自适应重试 (Generate All & Auto-Retry)**：
    - **抗 Rate Limit 流控**：支持一键离线预生成命令 `fc generate-all`，底层集成自定义 `pLimit` 并发调度器与可配置启动间隔（默认并发度 `1`、间隔 `1000ms`），既能稳健避开模型提供商连接限流，也能在额度更高时通过参数提速。
    - **断点续传与弹性恢复**：网络或 API 超时导致单个单元降级为占位符时，系统不会锁死状态。重新执行 `generate-all` 或 `start` 时，CLI 会自动扫描并**仅重新触发生成失败的单元**，实现无缝断点续传。
+10. **学习掌握度报告与重规划 (Mastery & Replan)**：支持 `fc mastery` 命令输出学习状态、掌握度统计、弱项技能与建议。并提供 `fc plan --replan` 基于当前真实掌握度重新规划剩余课程。
+11. **仓库卫生与安全审计 (Repo Hygiene)**：提供 `fc doctor` 命令检测你的 `.gitignore` 配置，防止敏感信息或缓存文件泄露。
+
+---
+
+## 🛠️ 快速上手 (Quick Start)
+
+> [!TIP]
+> **相关文档链接**：
+>
+> - 📄 **[从零上手与 CLI 命令指南 (GETTING_STARTED.md)](file:///y:/MyAgentProject/GETTING_STARTED.md)**：包含正式版 `fc` 命令链接、诊断追问模式、以及最全的参数手册。
+> - 🧠 **[FCAgent 功能全景与技术实现细节 (fcagent_features_detail.md)](file:///y:/MyAgentProject/fcagent_features_detail.md)**：关于大模型诊断、大纲生成、三阶段课件渲染及多语言 Runner 的技术原理深度剖析文档。✨
+
+确保你的本地环境已安装 [Node.js (v18+)](https://nodejs.org/)。
+
+### 1. 安装依赖
+
+```bash
+npm install
+```
+
+### 2. 初始化配置 (配置 AI 密钥与检索源)
+
+```bash
+# 初始化大模型配置（默认使用 wikipedia 免费检索）
+npm run dev -- init --api-key "你的API_KEY" --base-url "接口BaseURL" --model "模型名称"
+
+# （可选）配置使用 Tavily API 进行更精准的全网开发者文档检索
+npm run dev -- init --api-key "你的API_KEY" --base-url "接口BaseURL" --model "模型名称" --search-provider "tavily" --tavily-api-key "你的TAVILY_KEY"
+```
+
 
 ---
 
@@ -58,6 +89,9 @@ npm run dev -- diagnose
 
 # 生成个性化学习规划大纲（中后期自动加入实战 Project 大作业）
 npm run dev -- plan
+
+# 基于当前掌握度报告，重构剩余学习规划
+npm run dev -- plan --replan
 ```
 
 ### 4. 学习、提交与跳过
@@ -75,34 +109,14 @@ npm run dev -- generate-all --concurrency 2 --stagger-ms 1500
 # 【可选】审计当前计划/讲义/练习/Project 的质量
 npm run dev -- audit
 
+# 查看当前学习掌握度报告
+npm run dev -- mastery
+
+# 运行仓库环境诊断
+npm run dev -- doctor
+
 # (在本地编写 solution 文件，阅读 lesson；Project 单元还会生成 PROJECT.md)
-
-# 提交作业（将自动运行本地测试、回答 Quiz 并获得 AI TA 渐进式启发诊断）
-npm run dev -- submit
-
-# 【可选】主动跳过当前死磕的单元（尝试失败 5 次后，系统也会引导你跳过）
-npm run dev -- skip
-
-# 【可选】调出复习面板，重新挑战曾经跳过并保留进度的关卡
-npm run dev -- review
-
-# 通过后，解锁并进入下一关
-npm run dev -- next
 ```
-
----
-
-## 📅 当前版本状态 (Current Status)
-
-* **当前版本**: `v0.2.0 (Pre-release)`
-* **当前状态**:
-  - 多语言 Runner 沙盒框架、3-Pass LLM 联网检索与 AI 助教评估的骨架已开发完成。
-  - 课程、练习与 Project 生成已加入结构化校验、质量闸门、自动修复、计划缓存和本地 Runner 优先路由。
-  - 提交失败后可自动生成 micro-remediation 补救单元，并通过 `nextIfPassed` 回到原关卡。
-  - `fc audit` 可本地审计课程质量、路由完整性、练习测试覆盖和 Project/Remediation 结构。
-  - 默认离线种子路线包含一个 DSA capstone Project，可在无 API key 时体验项目式学习闭环。
-  - 本地状态持久化存储工作正常。
-  - 当前由于大模型生成用例和环境差异，部分复杂全栈单元的交互尚处在打磨阶段。欢迎向 GitHub 提交 Issue 或参与共建！
 
 ---
 
@@ -120,8 +134,8 @@ npm run dev -- next
   - 标准依赖和编译输出文件夹，应保持干净。
 
 > [!TIP]
-> **关于 `.fuckcolloge/` 其他文件**：
-> 包含你的专属课件讲义 (`lessons/`)、你完成的代码练习和 Project 规格 (`exercises/`)、个性化计划大纲 (`plan.json`) 以及诊断记录 (`state.json` 和 `learner.json`)。这些文件已经去除了敏感 key，可以安全地推送到 GitHub 方便你进行进度同步或课后分析！
+> **关于 `.fuckcolloge/` 文件夹**：
+> 默认配置下，`.fuckcolloge/config.json` (含 API Key)、`.fuckcolloge/cache/` (大体积生成缓存)、`.fuckcolloge/state.json` 和 `learner.json` (个人学习进度) 以及生成的课件与练习文件都不会被提交。只建议同步 `plan.json` 或项目级配置文件。
 
 ### 2. 检查你的 Git 忽略状态
 
@@ -136,6 +150,11 @@ tests/cmd.txt
 .env
 .env.*
 .fuckcolloge/config.json
+.fuckcolloge/cache/
+.fuckcolloge/state.json
+.fuckcolloge/learner.json
+.fuckcolloge/lessons/
+.fuckcolloge/exercises/
 ```
 
 你可以通过在命令行运行 `git status` 来确保上述敏感文件处于 **Untracked/Ignored** 状态，防止被错误提交。

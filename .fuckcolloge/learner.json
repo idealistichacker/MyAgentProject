@@ -1,14 +1,14 @@
 {
-  "target": "最终学习目标：**用 Python 实现一个 Scheme 子集编译器，借助 LLVM 生成可直接运行的 .exe 文件。**",
+  "target": "最终学习目标：掌握 LLM Agent 的核心机制（如 ReAct 和 Function Calling），并使用 Python 从零实现一个能够根据需求自动生成代码文件、执行测试、捕获报错并自我修复迭代的全自动编程 Agent。接下来我会为你生成专属学习路线，准备好了吗？",
   "programmingLevel": "basic",
   "dsaLevel": "heard",
   "weeklyHours": "2-5",
   "totalWeeks": "5-8",
-  "learningStyle": "example-first",
+  "learningStyle": "project-first",
   "codePractice": "yes",
-  "pace": "steady",
+  "pace": "normal",
   "nearTermGoal": "无",
   "rawAnswers": {},
-  "summary": "你是一位手握 Python 却心怀编译原理的“魔法学徒”——基础编程已入门，数据结构与算法还只是“江湖传说”，但居然想用 LLVM 把 Scheme 子集炼成 .exe，这胆识我先给满分！你偏爱从实例中摸爬滚打，每周 2-5 小时稳扎稳打，5-8 周内就要让编译器跑起来，简直是“时间管理大师”兼“项目驱动型冒险家”。别怕 DSA 底子薄，咱们就用代码当砖块，边砌编译器边补内功，我保证这段旅程既有挑战又有满满的成就感。欢迎入坑，你的自制编译器正在未来向你招手呢！",
+  "summary": "你是一位刚摸到 Python 门把手就敢挑战\"造 Agent\"的狠人——基础编程刚上路、数据结构还停留在\"听说过\"阶段，却要在 5-8 周内用 ReAct 和 Function Calling 搓出一个能自动写码、跑测试、抓报错、自我修复的全自动编程 Agent，这野心我respect！你是典型的\"项目先行派\"，喜欢在实战中摸爬滚打，每周 2-5 小时的投入虽然不算多，但只要方向对，够用。DSA 底子薄不是事儿，Agent 本身就是\"用工程补算法\"的最佳练兵场——边造边学，你的代码会替你补内功。欢迎正式入坑，你那个会自我修复的 Agent 正在未来等你给它写第一行灵魂代码呢！🔥",
   "createdAt": "2026-06-11T08:32:49.081Z"
 }

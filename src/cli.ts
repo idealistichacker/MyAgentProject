@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { intro, outro, spinner, select, text, confirm, isCancel, cancel, note } from '@clack/prompts';
 import color from 'picocolors';
 import { auditLearningPlan, type CurriculumAuditIssue } from './curriculum/audit.js';
+import { buildMasteryReport } from './curriculum/mastery.js';
 import {
   adaptNextUnit,
   buildAssessment,
@@ -138,6 +139,107 @@ program.command('diagnose')
       ...(existing ?? {}),
       target: options.target ?? existing?.target ?? '数据结构与算法入门',
       programmingLevel: (options.programmingLevel ?? existing?.programmingLevel ?? 'basic') as LearnerProfile['programmingLevel'],
+
+const program = new Command();
+
+program
+  .name('fc')
+  .description('FuckColloge CLI MVP: AI Native self-learning agent for CS/programming.')
+  .version('0.1.0');
+
+program.command('init')
+  .description('Initialize FuckColloge project state')
+  .option('--base-url <url>', 'OpenAI-compatible API base URL')
+  .option('--model <model>', 'Model name')
+  .option('--api-key <key>', 'API key')
+  .option('--search-provider <provider>', 'Search provider: wikipedia | tavily')
+  .option('--tavily-api-key <key>', 'Tavily API key')
+  .action(async (options) => {
+    intro(color.inverse(' 🚀 初始化 FuckColloge '));
+    ensureProjectDirs();
+    const config = loadConfig();
+
+    let searchProvider = options.searchProvider ?? config.searchProvider;
+    if (!options.searchProvider) {
+      const providerSelection = await select({
+        message: '选择搜索引擎 (Search Provider)',
+        options: [
+          { value: 'wikipedia', label: 'Wikipedia (免费自带)' },
+          { value: 'tavily', label: 'Tavily (需要 TAVILY_API_KEY)' },
+        ],
+        initialValue: config.searchProvider,
+      });
+      if (!isCancel(providerSelection)) {
+        searchProvider = providerSelection as 'wikipedia' | 'tavily';
+      }
+    }
+
+    let tavilyApiKey = options.tavilyApiKey ?? config.tavilyApiKey;
+    if (searchProvider === 'tavily' && !tavilyApiKey) {
+      const keyInput = await text({
+        message: '请输入你的 Tavily API Key:',
+        placeholder: 'tvly-...',
+      });
+      if (!isCancel(keyInput)) {
+        tavilyApiKey = keyInput as string;
+      }
+    }
+
+    const next = {
+      ...config,
+      baseUrl: options.baseUrl ?? config.baseUrl,
+      model: options.model ?? config.model,
+      apiKey: options.apiKey ?? config.apiKey,
+      searchProvider,
+      tavilyApiKey,
+    };
+    saveConfig(next);
+    note(
+      `Provider: ${next.provider}\n` +
+      `Base URL: ${next.baseUrl}\n` +
+      `Model: ${next.model}\n` +
+      `API key configured: ${next.apiKey ? 'yes' : 'no'}\n` +
+      `Search Provider: ${next.searchProvider}\n` +
+      `Tavily API key configured: ${next.tavilyApiKey ? 'yes' : 'no'}`,
+      'Config Info'
+    );
+    outro(color.green('✔ FuckColloge initialized at .fuckcolloge/'));
+  });
+
+program.command('config')
+  .description('Show current FCAgent provider config')
+  .action(() => {
+    const config = loadConfig();
+    console.log(JSON.stringify({
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      apiKeyConfigured: Boolean(config.apiKey),
+      temperature: config.temperature,
+      searchProvider: config.searchProvider,
+      tavilyApiKeyConfigured: Boolean(config.tavilyApiKey),
+    }, null, 2));
+  });
+
+program.command('diagnose')
+  .description('Create or update learner profile')
+  .option('--target <text>', 'Learning target')
+  .option('--programming-level <level>', 'zero | basic | small-projects | comfortable')
+  .option('--dsa-level <level>', 'none | heard | some-practice | systematic')
+  .option('--weekly-hours <hours>', '<2 | 2-5 | 5-10 | 10+')
+  .option('--total-weeks <weeks>', '1-4 | 5-8 | 9-12 | 12+')
+  .option('--learning-style <style>', 'explain-first | example-first | practice-first | project-first')
+  .option('--code-practice <value>', 'yes | sometimes | no')
+  .option('--pace <pace>', 'fast | normal | steady')
+  .option('--goal <text>', 'Near-term goal')
+  .action(async (options) => {
+    ensureProjectDirs();
+
+    const existing = loadLearner();
+    const rawProfile: LearnerProfile = {
+      ...(existing ?? {}),
+      target: options.target ?? existing?.target ?? '数据结构与算法入门',
+      programmingLevel: (options.programmingLevel ?? existing?.programmingLevel ?? 'basic') as LearnerProfile['programmingLevel'],
       dsaLevel: (options.dsaLevel ?? existing?.dsaLevel ?? 'none') as LearnerProfile['dsaLevel'],
       weeklyHours: (options.weeklyHours ?? existing?.weeklyHours ?? '2-5') as LearnerProfile['weeklyHours'],
       totalWeeks: (options.totalWeeks ?? existing?.totalWeeks ?? '5-8') as LearnerProfile['totalWeeks'],
@@ -166,7 +268,8 @@ program.command('diagnose')
 
 program.command('plan')
   .description('Generate learning plan from learner profile')
-  .action(async () => {
+  .option('--replan', 'Replan based on current mastery')
+  .action(async (options) => {
     intro(color.inverse(' 📅 生成学习计划 '));
     ensureProjectDirs();
     const learner = loadLearner();
@@ -176,10 +279,21 @@ program.command('plan')
       return;
     }
 
+    let masteryReport;
+    if (options.replan) {
+      const state = loadState();
+      const plan = loadPlan();
+      if (state && plan) {
+        masteryReport = buildMasteryReport(plan, state);
+      } else {
+        console.log(color.yellow('No existing plan or state to replan from. Proceeding with initial plan.'));
+      }
+    }
+
     const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
     const s = spinner();
     s.start('FCAgent CurriculumPlanner 正在为你生成定制化大纲...');
-    const plan = await generatePlan(learner, provider);
+    const plan = await generatePlan(learner, provider, masteryReport);
     savePlan(plan);
     s.stop(color.green(`✔ 计划生成成功！共计 ${plan.units.length} 个单元。`));
     
@@ -330,6 +444,19 @@ program.command('submit [unitId]')
     state.assessments.push(assessment);
     state.lastAssessmentId = assessment.id;
     state.updatedAt = assessment.createdAt;
+
+    const objectives = unit.objectives.length > 0 ? unit.objectives : [unit.title];
+    for (const obj of objectives) {
+      if (!state.skillEvidence[obj]) {
+        state.skillEvidence[obj] = [];
+      }
+      state.skillEvidence[obj].push({
+        unitId: unit.id,
+        assessmentId: assessment.id || 'unknown',
+        score: assessment.score,
+        timestamp: assessment.createdAt,
+      });
+    }
     
     if (assessment.passed) {
       if (!state.completedUnitIds.includes(unit.id)) {
@@ -387,7 +514,7 @@ program.command('next')
     }
 
     const currentIndex = plan.currentIndex;
-    const routed = adaptNextUnit(plan, latest);
+    const routed = adaptNextUnit(plan, latest, state);
     if (routed.currentIndex === currentIndex && currentIndex + 1 >= plan.units.length) {
       console.log(color.green(color.bold('🎉 太棒了！你已经打通了本次动态学习计划的全部关卡！')));
       return;
@@ -499,6 +626,56 @@ program.command('status')
     outro('💪 Keep going!');
   });
 
+program.command('mastery')
+  .description('Show learning mastery report')
+  .option('--json', 'Print report as JSON')
+  .option('--top <n>', 'Show top N weakest skills', '3')
+  .option('--units', 'Show unit-level mastery')
+  .action((options) => {
+    const plan = loadPlan();
+    const state = loadState();
+    if (!plan) {
+      console.error(color.red('No learning plan found. Run `fc plan` first.'));
+      process.exitCode = 1;
+      return;
+    }
+
+    const report = buildMasteryReport(plan, state);
+
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+
+    intro(color.inverse(' 🏆 学习掌握度报告 (Mastery Report) '));
+    
+    console.log(color.bold(`总评分: `) + color.cyan(`${report.overallScore}`) + ` (状态: ${report.status})`);
+    
+    const topN = parseInt(options.top, 10) || 3;
+    const weakestSkills = report.skills.filter(s => s.status !== 'mastered').slice(0, topN);
+    
+    if (weakestSkills.length > 0) {
+      console.log(color.bold(`\n⚠️ 最需要练习的技能 (Top ${topN}):`));
+      weakestSkills.forEach(s => {
+        console.log(`- ${s.skill}: ${s.score}分 (${s.status})`);
+      });
+    }
+
+    if (options.units) {
+      console.log(color.bold('\n📚 单元掌握度:'));
+      report.units.forEach(u => {
+        const lastResult = u.latestAssessment ? (u.latestAssessment.passed ? '通过' : '未通过') : '未尝试';
+        console.log(`- [${u.unitId}] ${u.title}: ${u.score}分 (${u.status}), 尝试 ${u.attempts} 次, 最近: ${lastResult}`);
+      });
+    }
+
+    if (report.recommendations.length > 0) {
+      note(report.recommendations.map(r => `• ${r}`).join('\n'), '下一步建议 (Recommendations)');
+    }
+
+    outro('继续加油！');
+  });
+
 program.command('audit')
   .description('Audit the current learning plan for content, exercise, project, and routing quality')
   .option('--json', 'Print the audit report as JSON')
@@ -562,6 +739,8 @@ program.command('generate-all')
   .description('Pre-generate all lessons, exercise skeletons, and project specs in the plan')
   .option('--concurrency <number>', 'Max unit generations running at once', '1')
   .option('--stagger-ms <number>', 'Minimum delay between generation starts', '1000')
+  .option('--force', 'Force regenerate all units even if already populated')
+  .option('--only-missing', 'Only generate units that are missing content (default)')
   .action(async (options) => {
     intro(color.inverse(' 🚀 全量课件并发预生成 (Generate All - Optimized) '));
     ensureProjectDirs();
@@ -585,6 +764,7 @@ program.command('generate-all')
     const tasks = plan.units.map((unit, i) => {
       return { unit, index: i };
     }).filter(({ unit }) => {
+      if (options.force) return true;
       const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
       const needsProjectSpec = unit.type === 'project' && !unit.project;
       return !unit.content || !unit.exercise || isFallback || needsProjectSpec;
@@ -632,9 +812,41 @@ program.command('generate-all')
       });
     });
 
+    const startTime = Date.now();
     await Promise.all(promises);
-    console.log(color.green(`\n✔ 预生成完毕！本次共生成 ${generatedCount} 个新单元。`));
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(color.green(`\n✔ 预生成完毕！耗时 ${elapsedSec}s，本次共生成 ${generatedCount} 个新单元。`));
     outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
+  });
+
+program.command('doctor')
+  .description('Check repository hygiene and warn about sensitive files')
+  .action(() => {
+    intro(color.inverse(' 🩺 运行环境诊断 (Doctor) '));
+    const issues: string[] = [];
+
+    try {
+      const gitignore = fs.readFileSync('.gitignore', 'utf8');
+      if (!gitignore.includes('.fuckcolloge/cache/')) {
+        issues.push('.gitignore 缺少 .fuckcolloge/cache/，可能导致大文件被误提交。');
+      }
+      if (!gitignore.includes('.fuckcolloge/state.json')) {
+        issues.push('.gitignore 缺少 .fuckcolloge/state.json，学习进度不应提交到公共仓库。');
+      }
+      if (!gitignore.includes('.fuckcolloge/learner.json')) {
+        issues.push('.gitignore 缺少 .fuckcolloge/learner.json，学习画像不应提交到公共仓库。');
+      }
+    } catch (e) {
+      issues.push('未找到 .gitignore 文件，请确保工作区配置了 Git 忽略规则。');
+    }
+
+    if (issues.length > 0) {
+      issues.forEach(msg => console.log(color.yellow(`⚠️  ${msg}`)));
+      outro(color.red('❌ 诊断发现了一些问题，请修复它们以保持仓库整洁！'));
+      process.exitCode = 1;
+    } else {
+      outro(color.green('✔ 一切正常，你的环境非常干净！'));
+    }
   });
 
 program.parseAsync(process.argv);

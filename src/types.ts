@@ -57,6 +57,10 @@ export const exerciseSchema = z.object({
     })
   ),
   hints: z.array(z.string()).default([]),
+  difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+  conceptTags: z.array(z.string()).default([]),
+  commonPitfalls: z.array(z.string()).default([]),
+  estimatedMinutes: z.number().int().min(1).default(15),
 });
 
 export type ExerciseSpec = z.infer<typeof exerciseSchema>;
@@ -97,6 +101,7 @@ export const projectSpecSchema = z.object({
   files: z.array(projectFileSchema).default([]),
   rubric: z.array(projectRubricItemSchema).default([]),
   extensionIdeas: z.array(z.string()).default([]),
+  checkpointQuestions: z.array(z.string()).default([]),
 });
 
 export type ProjectSpec = z.infer<typeof projectSpecSchema>;
@@ -161,7 +166,6 @@ export const assessmentSchema = z.object({
     })
   ).default([]),
   mistakeTypes: z.array(z.string()).default([]),
-  diagnosis: z.string(),
   nextAction: z.string(),
   createdAt: z.string().datetime(),
 });
@@ -180,6 +184,14 @@ export const stateSchema = z.object({
   ).default({}),
   assessments: z.array(assessmentSchema).default([]),
   lastAssessmentId: z.string().optional(),
+  skillEvidence: z.record(
+    z.array(z.object({
+      unitId: z.string(),
+      assessmentId: z.string(),
+      score: z.number().int().min(0).max(5),
+      timestamp: z.string().datetime(),
+    }))
+  ).default({}),
   updatedAt: z.string().datetime(),
 });
 

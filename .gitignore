@@ -5,3 +5,8 @@ tests/cmd.txt
 .env
 .env.*
 .fuckcolloge/config.json
+.fuckcolloge/cache/
+.fuckcolloge/state.json
+.fuckcolloge/learner.json
+.fuckcolloge/lessons/
+.fuckcolloge/exercises/

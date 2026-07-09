@@ -122,6 +122,41 @@ fc next
   * `--programming-level <level>`：当前编程水平（`zero` \| `basic` \| `small-projects` \| `comfortable`）。
   * `--dsa-level <level>`：DSA 水平（`none` \| `heard` \| `some-practice` \| `systematic`）。
   * `--weekly-hours <hours>`：每周计划投入时间（`<2` \| `2-5` \| `5-10` \| `10+`）。
+
+### Step 9: 晋级下一关
+评估通过后，直接输入以下命令解锁下一关：
+```powershell
+fc next
+```
+开启你的下一轮循环（再次 `fc start`）吧！如果本关实在卡住了，也可以任性地通过 `fc skip` 跳关，之后随时使用 `fc review` 查看你曾经跳过的内容。
+
+---
+
+## 📋 第二部分：全部 CLI 命令参考手册 (CLI Reference)
+
+所有的指令都支持在两种模式下运行：
+* **开发模式**：`npm run dev -- <command> [options]`
+* **正式模式**：`fc <command> [options]` (或 `node dist/cli.js <command> [options]`)
+
+### 1. `init` — 初始化配置
+* **描述**：设置 API URL、大模型密钥及搜索引擎。
+* **参数选项**：
+  * `--base-url <url>`：兼容 OpenAI 的 API 请求基底地址。
+  * `--model <model>`：推理与评估选用的大模型名称。
+  * `--api-key <key>`：API Key。
+  * `--search-provider <provider>`：设置搜索引擎类型，可选 `wikipedia` \| `tavily`。
+  * `--tavily-api-key <key>`：Tavily 搜索引擎专属 API Key。
+
+### 2. `config` — 查看配置信息
+* **描述**：打印出当前环境的大模型接口设置与状态。
+
+### 3. `diagnose` — 画像诊断
+* **描述**：通过命令行选项或导师 grill 追问，确立学习者的实际编程底子、每周可用时间及节奏偏好。
+* **参数选项**：
+  * `--target <text>`：设定学习目标（如 `想用 Go 开发高并发 Web`）。
+  * `--programming-level <level>`：当前编程水平（`zero` \| `basic` \| `small-projects` \| `comfortable`）。
+  * `--dsa-level <level>`：DSA 水平（`none` \| `heard` \| `some-practice` \| `systematic`）。
+  * `--weekly-hours <hours>`：每周计划投入时间（`<2` \| `2-5` \| `5-10` \| `10+`）。
   * `--total-weeks <weeks>`：预计总周数（`1-4` \| `5-8` \| `9-12` \| `12+`）。
   * `--learning-style <style>`：学习偏好（`explain-first` \| `example-first` \| `practice-first` \| `project-first`）。
   * `--code-practice <value>`：做题意愿（`yes` \| `sometimes` \| `no`）。
@@ -130,6 +165,8 @@ fc next
 
 ### 4. `plan` — 生成定制大纲计划
 * **描述**：为当前用户画像生成动态学习计划路线图，确定包含的单元和类型。
+* **参数选项**：
+  * `--replan`：基于当前真实掌握度报告 (Mastery) 重新规划剩余课程。
 
 ### 5. `start [unitId]` — 解锁或拉取指定单元
 * **描述**：加载指定单元。若该单元为首次加载，将从网上爬取最新的标准规范（如 MDN、W3C 规范），并在后台重构 2-3 次自动生成专属课件与测试用例文件。生成结果会经过结构化解析、Zod 校验、内容长度/测试用例/Hint/入口函数等质量检查；如果模型输出格式不合格，系统会自动请求一次结构化修复后再落盘。Project 关卡会额外校验 `ProjectSpec`，并写出 `PROJECT.md`。
@@ -180,6 +217,20 @@ fc next
   fc generate-all --concurrency 2 --stagger-ms 1500
   ```
 
+### 15. `mastery` — 掌握度报告
+* **描述**：输出多维度的学习掌握度报告，展示总评分、最需要练习的技能 (Top N) 以及各个单元的掌握程度。
+* **参数选项**：
+  * `--json`：输出 JSON 格式的报告数据。
+  * `--top <n>`：指定显示多少个最薄弱的技能，默认 3 个。
+  * `--units`：同时打印出所有单元的具体掌握度详情。
+* **示例**：
+  ```powershell
+  fc mastery --units
+  ```
+
+### 16. `doctor` — 运行环境诊断
+* **描述**：检测代码仓库的卫生情况，检查 `.gitignore` 是否正确配置以防止个人的 `plan.json`, `state.json`, `learner.json` 及缓存被误推送到公开仓库。
+
 ---
 
 ## ❓ 常见问题 FAQ
@@ -191,7 +242,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 #### Q2: 如何重新诊断和制定计划？
-如果你学完了一门课，或者想换个方向，只需依次运行 `fc diagnose` 和 `fc plan`。它会根据新的选择覆盖旧 of 的计划大纲。如果你想连同以往的通关状态和做过的题一并清空，可以直接手动删掉项目中的 `.fuckcolloge/` 隐藏文件夹。
+如果你学完了一门课，或者想换个方向，只需依次运行 `fc diagnose` 和 `fc plan`。它会根据新的选择覆盖旧的计划大纲。如果你想连同以往的通关状态和做过的题一并清空，可以直接手动删掉项目中的 `.fuckcolloge/` 隐藏文件夹。
 
 #### Q3: 运行 `fc submit` 提示 "有前置知识测试未通过"？
 这是因为我们的讲义中包含重点提炼的小测验，如果你没有正确理解讲义，直接强行提交是不行哒！请回到 `.fuckcolloge/lessons/` 下仔细阅读你的专属讲义，找出关键点，然后在交互界面中选择正确答案。

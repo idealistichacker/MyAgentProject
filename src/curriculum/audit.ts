@@ -321,6 +321,14 @@ function auditExercise(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
     );
   }
 
+  if (exercise.conceptTags.length === 0) {
+    addIssue(issues, unit, 'warning', 'unit.exercise.conceptTags.missing', 'Exercise has no concept tags.');
+  }
+
+  if (exercise.commonPitfalls.length === 0) {
+    addIssue(issues, unit, 'warning', 'unit.exercise.commonPitfalls.missing', 'Exercise has no common pitfalls documented.');
+  }
+
   auditExerciseTestShape(unit, exercise, issues);
 }
 
@@ -404,6 +412,10 @@ function auditProject(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
 
   if (unit.project.rubric.length < 3) {
     addIssue(issues, unit, 'warning', 'unit.project.rubric.tooFew', 'Project needs at least 3 rubric items.');
+  }
+
+  if (unit.project.checkpointQuestions.length === 0) {
+    addIssue(issues, unit, 'warning', 'unit.project.checkpointQuestions.missing', 'Project needs at least 1 checkpoint question.');
   }
 }
 

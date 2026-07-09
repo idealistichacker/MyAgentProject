@@ -116,7 +116,17 @@ graph TD
   - 核心纯函数位于 `src/curriculum/audit.ts` 的 `auditLearningPlan`，不读写文件，便于后续接入 CI 或生成流水线。
   - 审计范围包含重复 unit id、断裂路由、短讲义、坏 Quiz 答案、测试用例不足、缺少边界测试、Project 里程碑/rubric 不足、Remediation 未回跳原单元等。
 
-### 8. Agent Harness 智能体工具装配工程 (Agent Harness & Tool Manager)
+### 8. 学习掌握度雷达与单元报告 (Mastery Report)
+* **实现命令**：`fc mastery`
+* **功能点**：
+  - **多维度评分**：汇总学习计划和本地状态（`state.json`），为学习者计算全局总评分（0-100）。
+  - **技能薄弱点挖掘**：细化到目标技能（Skills）的掌握度分析（如 `mastered`, `progressing`, `needs-practice`），输出 Top N 最需要练习的薄弱技能。
+  - **单元级追踪**：可配置展开各个学习单元的详细尝试次数和最近的测试/测验结果。
+* **底层实现细节**：
+  - 通过 `buildMasteryReport` 纯函数在 `src/curriculum/mastery.ts` 实现，将 `assessments` 归类聚合。
+  - 提供 CLI JSON 结构化输出能力，便于第三方平台或可视化 UI 直接消费学习报告。
+
+### 9. Agent Harness 智能体工具装配工程 (Agent Harness & Tool Manager)
 * **功能点**：
   - **动态 Tool Calling 装配**：为大纲规划阶段提供一套安全的、受控的外部动作调用基座（Harness），用于检索课程方向与资料背景。
   - **受控上下文输入**：课件生成阶段不再开放本地文件读写或命令执行工具，而是使用前置联网检索结果、学习画像与课程上下文生成内容，减少工具调用带来的慢速、不可预测和安全风险。
@@ -156,7 +166,9 @@ graph TD
 ## 🔒 企业级安全防泄密机制 (Git Secret Exclusion)
 为了方便你在 GitHub 分享自己的作业成果和讲义，我们在版本控制上设计了精细化的追踪机制：
 - **明文凭证安全隔离**：用户的 `apiKey` 存放于 `.fuckcolloge/config.json` 中，该路径已被精准写入 `.gitignore`，绝对不会随着 `git push` 泄露。
-- **进度公开共享**：你的学习轨迹（如 `plan.json`、生成的讲义 `lessons/`、Project 规格以及你的 solution 源码）不包含任何密钥，可安全推送提交。
+- **仓库防污染隔离**：个人的学习状态 `state.json`，个人画像 `learner.json`，大量且频繁修改的生成的讲义 `lessons/`、练习代码 `exercises/`，以及本地大体积的 LLM 缓存 `.fuckcolloge/cache/` 默认全部在 `.gitignore` 内屏蔽，保持公开仓库极致整洁。
+- **计划大纲共享**：只有个性化大纲 `plan.json` 可以选择推送至 GitHub 方便与他人分享学习曲线。
+- **环境健康检查**：提供了 `fc doctor` 命令扫描，如若本地缺失安全防范的 Git 过滤机制，会自动发出警报！
 
 ---
 
