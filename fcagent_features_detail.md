@@ -48,7 +48,8 @@ graph TD
 * **底层实现细节**：
   - 由 `generatePlan` 控制。LLM 会被赋予 `CurriculumPlanner` 的角色。
   - 规划器内置了 `ToolManager`，在生成大纲前，AI 会先自动调用 `WebSearchTool` (默认 Wikipedia，若有 Tavily API Key 则使用 Tavily) 检索相关方向的优秀课程大纲或最新资料。
-  - 生成的内容经由 `sanitizeJsonString` 规避 JSON 转义引号的语法崩溃问题。
+  - 相同画像的大纲会写入 L2 LLM 缓存，重复执行 `fc plan` 时可以直接复用已生成的单元列表。
+  - 生成的内容会先通过 `parseJsonFromText` 提取 JSON 候选，再由 `sanitizeJsonString` 兜底规避 JSON 转义引号的语法崩溃问题。
 
 ### 3. 三阶段联网课件生成 (3-Pass Cohesive Generator)
 * **实现命令**：`fc start` 或 `fc generate-all`
@@ -57,10 +58,12 @@ graph TD
   - **三段式工作流 (3-Pass Loop)**：
     1. **Pass 1: Draft (起草)**：由 `ContentGenerator` 起草纯 Markdown，要求摆脱“机器味”，大量运用幽默比喻。
     2. **Pass 2: Critique (提炼与检查)**：由 `ContentCritic` 对初稿进行“毒辣”的代码细节与人情味审核。如果发现“翻译腔”或缺乏过渡，直接退回重构，确保与最终大作业项目上下文产生强绑定。
-    3. **Pass 3: Polish (纯净化与出题)**：由 `FinalPolisher` 最终格式化，并动态生成配套的场景化选择题（Quiz）以及跟当前剧情背景高度契合的代码练习（Starter Code & testCode 脚本）。
+    3. **Pass 3: Polish (纯净化与出题)**：由 `FinalPolisher` 最终格式化，并动态生成配套的场景化选择题（Quiz）以及跟当前剧情背景高度契合的代码练习。输出被拆成 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`，避免把大段代码塞进 JSON 字符串导致转义失败。
 * **底层实现细节**：
   - 在 `pipeline.ts` 中实现。生成时会将整个 `LearningPlan` 传入大模型，使大模型获得“上帝视角”，能清晰感知当前处于大纲的第几步、前后文衔接是什么。
-  - 自动运行正则表达式分流器，分别抓取返回的 `### CONTENT`、`### STARTER_CODE` 以及 JSON 配置。
+  - 自动运行结构化解析器，分别抓取返回的 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`。
+  - 使用 Zod 校验 Quiz 与 Exercise 元数据，并额外检查讲义有效长度、至少 3 个测试用例、至少 2 条 Hint、入口函数存在性，以及非本地语言必须提供 `TEST_CODE`。
+  - 如果最终输出解析失败或质量闸门不通过，系统会请求模型进行一次“结构化修复”，再尝试落盘，降低直接回退到占位练习的概率。
 
 ### 4. 万物皆可编译：多语言沙盒执行器 (Polyglot Runner)
 * **实现命令**：`fc submit` (底层自动路由)
@@ -72,6 +75,7 @@ graph TD
     - `pythonRunner.ts`：通过动态组装 Python 代码并注入 `unittest` 库执行，捕获其标准输出。
     - `rustRunner.ts`：利用 Node.js `spawn` 调用系统的 `rustc` 进行静态编译，再运行生成的 Binary，截获断言。
     - `pistonRunner.ts`：使用 `http_client` 将用户代码与断言通过 POST 请求提交给公共沙箱服务，并过滤 stdout 中的 JSON 行。
+  - Runner Factory 现在会优先让 TypeScript/Python/Bash/Rust 始终走本地 Runner；只有本地没有实现的语言才会进入 Piston，避免因为大模型生成了 `testCode` 就把本地可执行题目绕到云端。
   - **测试断言要求**：生成的测试脚本在运行时，必须按行打印指定 JSON 格式：`{"name": "...", "passed": true/false}`，评测调度器会解析此输出汇总统计。
 
 ### 5. 情绪价值满格的 AI 智能助教 (Empathetic AI TA)
@@ -98,28 +102,29 @@ graph TD
 
 ### 7. Agent Harness 智能体工具装配工程 (Agent Harness & Tool Manager)
 * **功能点**：
-  - **动态 Tool Calling 装配**：为大模型决策环（CurriculumPlanner 与 ContentGenerator）提供了一套安全的、受控的外部动作调用基座（Harness）。
-  - **动作沙盒自检**：允许大模型在课件生成的“Pass 1 Drafting 阶段”以及“大纲规划阶段”，利用工具实时拉取最新网络信息、获取当前时间、读取本地文件、乃至**在本地子进程中静默运行 node 脚本**来对生成的代码片段进行自检验证，从而确保生成的教学内容具有 **ZERO 事实性错误**。
+  - **动态 Tool Calling 装配**：为大纲规划阶段提供一套安全的、受控的外部动作调用基座（Harness），用于检索课程方向与资料背景。
+  - **受控上下文输入**：课件生成阶段不再开放本地文件读写或命令执行工具，而是使用前置联网检索结果、学习画像与课程上下文生成内容，减少工具调用带来的慢速、不可预测和安全风险。
 * **底层实现细节**：
   - 代码在 `src/agents/tools.ts` 中实现。核心包含 `Tool` 接口规范以及 `ToolManager` 控制器。
   - **动态映射与参数反序列化**：`ToolManager` 负责将 LLM 生成的 JSON 工具调用（Tool Call Arguments）解析为具体的强类型参数结构，并路由分发到相应的工具类。若外部工具在执行时抛出异常，Harness 会自动将其捕获并优雅降级为错误消息字符串（如 `Error executing tool...`）返回给大模型的 Context，防止流程崩溃。
+  - `ToolManager` 兼容字符串参数和对象参数，避免不同 OpenAI-compatible 服务商返回工具参数格式略有差异时直接失败。
   - **动作测试组件库 (Harness Tools)**：
     - `WebSearchTool`：负责 Wikipedia / Tavily 的联网检索。
     - `TimeTool`：提供高精度的系统 ISO 时间。
-    - `FileReadTool` / `FileWriteTool`：赋予 Agent 读写特定代码模板和配置的能力。
-    - `ExecuteCommandTool`：基于 Node.js `exec` 异步子进程接口，限制最大 10 秒执行超时。AI 可以运行本地编译命令、校验测试用例是否生成正确，从而在输出课件前完成自我纠错。
+  - `WebSearchTool` 内置 15 秒请求超时、搜索结果截断和结果数限制，避免把过长检索内容塞进 Prompt 导致生成变慢或格式漂移。
 
 ### 8. 高性能 L2 缓存与速率极限流控 (L2 Caching & Rate-Limit Concurrency Control)
 * **实现逻辑**：
   在 [`src/utils/cache.ts`](file:///y:/MyAgentProject/src/utils/cache.ts) 中自主实现。
 * **功能点**：
   - **SHA-256 分层哈希映射**：为了实现极速响应并最大程度节约 Token 消耗，我们构建了以 LRU 算法为主的 L1 内存和 `.fuckcolloge/cache/` 磁盘文件的 L2 级持久化存储。将检索词、提示词和状态参数结合进行 SHA-256 签名作为 Cache Key。命中时 `1ms` 瞬间重现，未命中时在写入磁盘的同时进行双向读写同步。
-  - **Staggered 错峰串行流控**：针对课件一键生成接口在大并发下极易触发三方 API 服务商速率超限（Rate Limit Exceeded）及 Socket 连接重置的痛点，我们在 CLI 层面设计了 `pLimit(1)`（串行稳健调度器），并辅以每个任务 3 秒的 staggered delay 错峰偏移启动时间，完美熨平了 HTTP 瞬时连接的突发波峰。
+  - **Staggered 可配置流控**：针对课件一键生成接口在大并发下极易触发三方 API 服务商速率超限（Rate Limit Exceeded）及 Socket 连接重置的痛点，我们在 CLI 层面设计了 `pLimit` 调度器，并暴露 `--concurrency` 与 `--stagger-ms` 参数。默认并发度为 `1`、启动间隔为 `1000ms`，兼顾稳健性；高额度 API Key 可适当提高并发。
+  - **Provider 自适应重试**：OpenAI-compatible Provider 现在只对网络错误、`429` 和 `5xx` 进行指数退避重试，并尊重 `Retry-After` 响应头；普通 `4xx` 配置错误会快速失败，避免无意义等待。
 * **流程数据流图**：
   ```text
   [LLM / Search 请求] ──→ 计算 SHA-256 散列 ──→ 命中 L1 / L2 缓存？
                                                 ├── [YES] ──→ 1ms 极速返回 (Cache HIT)
-                                                └── [NO]  ──→ 进入 pLimit(1) 错峰调度 ──→ 发起 HTTP 请求 ──→ 回写 Cache 磁盘
+                                                └── [NO]  ──→ 进入 pLimit 可配置错峰调度 ──→ 发起 HTTP 请求 ──→ 回写 Cache 磁盘
   ```
 
 ### 9. 自适应重试与 Fallback 自我修复协议 (Resilient Auto-Retry & Fallback Recovery)
@@ -127,6 +132,7 @@ graph TD
   在 `src/agents/pipeline.ts` 的 `ensureUnitFullyPopulated` 与 `cli.ts` 的 `generate-all` 中配合实现。
 * **功能点**：
   - **熔断关键字标识**：在遇到严重网络超时时，系统会平滑捕获异常，并为该单元的 `content` 与 `exercise.description` 注入特异性的 `"基础预备版本"` 与 `"占位练习"` 标志。
+  - **结构化修复优先**：在最终生成格式坏掉、Quiz/Exercise schema 不合格或内容质量不足时，系统会先尝试一次结构化修复，而不是立即写入占位内容。
   - **差异扫描与单单元断点重试**：当用户下一次执行生成指令时，CLI 会自动扫描大纲，跳过已生成合格课件的单元，仅过滤出包含 fallback 标识的失败单元重新呼叫 AI 提炼，实现零阻塞的断点续传。
 
 ---

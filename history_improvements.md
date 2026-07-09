@@ -139,6 +139,20 @@
   在生成大型单元（特别是 Project 实战单元）时，由于输出 Token 较长且伴随多轮 Function Calling 联网搜索，非常容易触发大模型服务商（如 SiliconFlow）的连接超时（Timeout Error）或 Socket 重置（`ECONNRESET`）。此外，如果在生成中途因超时崩溃降级，物理目录下的文件（如 Pass 1 写入的 `solution.py`）与 `plan.json` 里的占位元数据（通常默认降级为 TypeScript / `placeholderFunc`）会产生严重错配，导致本地 `fc submit` 命令行测试崩溃或判分无法进行。
 * **改进核心**：
   - **L2 分层缓存层 (L2 Layered Cache)**：在 [`src/utils/cache.ts`](file:///y:/MyAgentProject/src/utils/cache.ts) 中实现基于 SHA-256 哈希的内存与磁盘二级存储。在发起联网搜索或大模型课件生成前，优先计算上下文哈希，如果命中直接以 `1ms` 级返回，完美节约 API 资源消耗并消除界面卡顿。
-  - **抗 Rate Limit 的控频调度 (Staggered Concurrency Controller)**：在 `generate-all` 全量生成命令中，将并发度限制重构为 `pLimit(1)`（串行稳健生成），并在循环中引入 3 秒错峰延迟启动（Staggered Delay Offset），以拉长网络握手间隔，消除由大量请求同时发起导致的网络中断与套接字重置。
+  - **抗 Rate Limit 的控频调度 (Staggered Concurrency Controller)**：早期版本在 `generate-all` 全量生成命令中将并发度限制重构为 `pLimit(1)`（串行稳健生成），并引入错峰延迟启动，以拉长网络握手间隔，消除由大量请求同时发起导致的网络中断与套接字重置。当前版本已进一步升级为可配置并发与启动间隔，详见第 14 节。
   - **断点续传感知与重试 (Resilient Auto-Retry & Recovery)**：当生成超时熔断并写入 basic 占位内容时，系统会自动在 `plan.json` 的 content 和 exercise 中打上 `"基础预备版本"` 与 `"占位练习"` 的标签。用户再次执行 `generate-all` 或 `start` 时，CLI 会自动扫描这些未完成的单元并重新向 AI 申请动态生成，实现断点续传。
   - **Scheme Sandbox 实战评测对齐**：针对 Unit 4 的动态 Scheme 解释器项目，手动纠正了其 `plan.json` 配置与物理文件的错配，将语言类型修正为 `python`、入口函数对齐为 `eval_scheme`，并额外植入了 8 个覆盖前缀运算、if 短路求值、Lambda 作用域链、词法闭包与尾递归阶乘的真实物理集成测试用例，保证 `fc submit` 的真实评测闭环。
+
+---
+
+## 14. 结构化课程生成校验、可配置预生成流控与本地 Runner 优先 (Structured Generation Hardening)
+* **背景与痛点**：
+  3-Pass 生成链路虽然能显著提高讲义质量，但最终阶段需要同时产出 JSON、Markdown 讲义、Starter Code 和测试代码。旧实现主要依赖正则抓取单个 JSON 代码块，并把 `testCode` 作为 JSON 字符串嵌入，容易因为引号转义、代码块污染或字段缺失导致解析失败。一旦失败，系统会直接回退到占位练习，用户看到的课程质量会突然断崖式下降。同时，`generate-all` 的固定 3 秒累加错峰会让后面的任务白白等待，部分本地可运行语言也会因为存在 `testCode` 被绕到 Piston 云端，增加延迟和不稳定性。
+* **改进核心**：
+  - **分段输出协议**：FinalPolisher 输出被规范为 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE` 四段。Starter Code 不再塞进 JSON 字符串，从源头降低转义失败概率。
+  - **Zod Schema 与质量闸门**：生成结果会通过 `quizQuestionSchema`、`exerciseSchema` 以及额外质量检查，确保讲义有足够有效内容、练习至少包含 3 个测试用例和 2 条 Hint、入口函数存在，非本地语言必须提供 `TEST_CODE`。
+  - **一次结构化自动修复**：如果模型输出解析失败或质量检查不通过，系统会带着坏输出请求模型进行一次精确修复，再尝试构造最终单元；只有修复仍失败时才进入基础 fallback。
+  - **本地 Runner 优先路由**：`runnerFactory` 现在让 TypeScript、Python、Bash、Rust 始终走本地执行器，只有没有本地 Runner 的语言才交给 Piston，降低网络依赖并提升提交速度。
+  - **计划缓存与搜索瘦身**：`generatePlan` 针对相同学习画像写入 7 天 L2 缓存；`WebSearchTool` 增加 15 秒超时、结果数限制和 6000 字符截断，避免检索上下文拖慢生成或污染 Prompt。
+  - **可配置预生成流控**：`fc generate-all` 新增 `--concurrency` 和 `--stagger-ms` 参数，默认稳健串行、1 秒启动间隔；高额度 API Key 可以安全提高并发。
+  - **更聪明的 Provider 重试**：OpenAI-compatible 请求只对网络错误、`429` 和 `5xx` 退避重试，尊重 `Retry-After`，对普通 `4xx` 配置错误快速失败。
