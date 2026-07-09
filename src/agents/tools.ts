@@ -7,6 +7,9 @@ import { searchCache } from '../utils/cache.js';
 import color from 'picocolors';
 
 const execAsync = promisify(exec);
+const SEARCH_TIMEOUT_MS = 15000;
+const MAX_SEARCH_RESULT_CHARS = 6000;
+
 export interface Tool {
   name: string;
   description: string;
@@ -36,13 +39,13 @@ export class ToolManager {
     }));
   }
 
-  async executeToolCall(name: string, argsStr: string): Promise<string> {
+  async executeToolCall(name: string, argsStr: string | Record<string, any>): Promise<string> {
     const tool = this.tools.get(name);
     if (!tool) {
       return `Error: Tool ${name} not found.`;
     }
     try {
-      const args = JSON.parse(argsStr);
+      const args = typeof argsStr === 'string' ? JSON.parse(argsStr || '{}') : argsStr;
       return await tool.execute(args);
     } catch (err: any) {
       return `Error executing tool ${name}: ${err.message}`;
@@ -98,8 +101,9 @@ export class WebSearchTool implements Tool {
             query: query,
             search_depth: 'basic',
             include_answer: false,
-            max_results: 5
-          })
+            max_results: 3
+          }),
+          signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
         });
         if (!response.ok) {
           return `Tavily Search failed with status ${response.status}`;
@@ -120,7 +124,7 @@ export class WebSearchTool implements Tool {
       // Default to Wikipedia
       try {
         const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json`;
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
         if (!response.ok) {
           return `Search failed with status ${response.status}`;
         }
@@ -130,7 +134,7 @@ export class WebSearchTool implements Tool {
           finalResult = 'No results found.';
         } else {
           // Convert search results to text
-          const output = results.slice(0, 5).map((r: any) => {
+          const output = results.slice(0, 3).map((r: any) => {
             const snippet = r.snippet.replace(/<[^>]*>?/gm, ''); // Remove HTML tags
             return `Title: ${r.title}\nSnippet: ${snippet}\n`;
           }).join('\n');
@@ -143,6 +147,9 @@ export class WebSearchTool implements Tool {
     }
 
     // Save to Cache
+    if (finalResult.length > MAX_SEARCH_RESULT_CHARS) {
+      finalResult = `${finalResult.slice(0, MAX_SEARCH_RESULT_CHARS)}\n\n[Search result truncated for prompt stability]`;
+    }
     await searchCache.set(cacheKey, finalResult);
     return finalResult;
   }

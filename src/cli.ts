@@ -503,7 +503,9 @@ function pLimit(concurrency: number) {
 
 program.command('generate-all')
   .description('Pre-generate all lessons and exercise skeletons in the plan for quick offline browsing')
-  .action(async () => {
+  .option('--concurrency <number>', 'Max unit generations running at once', '1')
+  .option('--stagger-ms <number>', 'Minimum delay between generation starts', '1000')
+  .action(async (options) => {
     intro(color.inverse(' 🚀 全量课件并发预生成 (Generate All - Optimized) '));
     ensureProjectDirs();
     const plan = loadPlan();
@@ -536,15 +538,27 @@ program.command('generate-all')
       return;
     }
 
-    s.stop(`需要生成 ${tasks.length} 个单元。受限于模型提供商并发控制，降级为单线程稳健生成 (并发度: 1)...`);
+    const concurrency = Math.max(1, Math.min(4, Number.parseInt(options.concurrency, 10) || 1));
+    const staggerMs = Math.max(0, Math.min(10000, Number.parseInt(options.staggerMs, 10) || 0));
+    s.stop(`需要生成 ${tasks.length} 个单元。启动节流: 并发度 ${concurrency}, 间隔 ${staggerMs}ms。`);
 
-    const limit = pLimit(1); // 允许最大并发数为 1 避免 ECONNRESET
+    const limit = pLimit(concurrency);
     let completed = 0;
+    let nextStartAt = Date.now();
 
-    const promises = tasks.map(({ unit, index }, taskNum) => {
+    const waitForStartSlot = async () => {
+      if (staggerMs === 0) return;
+      const now = Date.now();
+      const waitMs = Math.max(0, nextStartAt - now);
+      nextStartAt = Math.max(now, nextStartAt) + staggerMs;
+      if (waitMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+    };
+
+    const promises = tasks.map(({ unit, index }) => {
       return limit(async () => {
-        // 错峰启动，避免一开始全部触发请求
-        await new Promise(r => setTimeout(r, taskNum * 3000));
+        await waitForStartSlot();
         
         console.log(color.cyan(`⏳ [${unit.id}] 开始生成...`));
         const updatedUnit = await generateUnitContent(unit, plan, provider);
@@ -565,7 +579,7 @@ program.command('generate-all')
     });
 
     await Promise.all(promises);
-    console.log(color.green(`\n✔ 预生成完毕！本次共并发生成 ${generatedCount} 个新单元。`));
+    console.log(color.green(`\n✔ 预生成完毕！本次共生成 ${generatedCount} 个新单元。`));
     outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
   });
 

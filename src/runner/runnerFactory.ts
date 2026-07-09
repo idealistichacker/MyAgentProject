@@ -11,9 +11,9 @@ export async function runExercise(
   exercise: ExerciseSpec,
   exerciseDir: string
 ): Promise<ExerciseRunResult> {
-  // If the exercise has LLM-generated testCode, or if it's not a natively supported local language,
-  // we route it to the Piston API runner (Cloud Execution).
-  if (exercise.testCode || !['typescript', 'python', 'bash', 'rust'].includes(exercise.language)) {
+  // Keep local languages on local runners for speed and stability. Piston is only
+  // needed when the generated language has no native runner in this project.
+  if (!['typescript', 'python', 'bash', 'rust'].includes(exercise.language)) {
     return runPistonExercise(unitId, exercise, exerciseDir);
   }
 

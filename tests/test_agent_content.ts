@@ -1,8 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { createProvider } from './src/providers/types.js';
-import { generateUnitContent } from './src/agents/pipeline.js';
-import type { LearnerProfile, SeedUnit } from './src/types.js';
+import { createProvider } from '../src/providers/types.js';
+import { generateUnitContent } from '../src/agents/pipeline.js';
+import type { LearnerProfile, LearningPlan, SeedUnit } from '../src/types.js';
 
 async function testContentGeneration() {
   try {
@@ -15,9 +15,10 @@ async function testContentGeneration() {
 
     const mockProfile: LearnerProfile = {
       target: '深入掌握前端状态管理机制',
-      jsLevel: 'advanced',
-      dsaLevel: 'intermediate',
+      programmingLevel: 'comfortable',
+      dsaLevel: 'systematic',
       weeklyHours: '10+',
+      totalWeeks: '5-8',
       learningStyle: 'project-first',
       codePractice: 'yes',
       pace: 'fast',
@@ -35,8 +36,16 @@ async function testContentGeneration() {
       objectives: ['理解 Hook 的闭包陷阱', '理解 Fiber 树中状态的存储']
     };
 
+    const mockPlan: LearningPlan = {
+      learnerProfile: mockProfile,
+      units: [mockUnit],
+      currentIndex: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
     console.log('\n🧠 FCAgent is generating unit content using the 3-pass loop...');
-    const generatedUnit = await generateUnitContent(mockUnit, mockProfile, provider);
+    const generatedUnit = await generateUnitContent(mockUnit, mockPlan, provider);
     
     console.log('\n✨ Generation completed!');
     console.log(`\n=== CONTENT ===\n${(generatedUnit.content || '').substring(0, 300)}...\n`);

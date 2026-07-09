@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getSeedUnit, SEED_CURRICULUM } from '../curriculum/seed.js';
+import { exerciseSchema, quizQuestionSchema } from '../types.js';
 import type {
   AssessmentResult,
   LearnerProfile,
@@ -9,10 +10,25 @@ import type {
   TestResult,
 } from '../types.js';
 import type { LLMProvider, ChatMessage } from '../providers/types.js';
-import { ToolManager, WebSearchTool, TimeTool, ExecuteCommandTool, FileReadTool, FileWriteTool } from './tools.js';
+import { ToolManager, WebSearchTool, TimeTool } from './tools.js';
 import { loadConfig } from '../state/fsState.js';
+import { llmCache } from '../utils/cache.js';
+import color from 'picocolors';
 
 const nowIso = () => new Date().toISOString();
+
+const NATIVE_RUNNER_LANGUAGES = ['typescript', 'python', 'bash', 'rust'] as const;
+
+const exerciseMetadataSchema = exerciseSchema
+  .omit({ starterCode: true, testCode: true })
+  .extend({
+    testCode: z.string().optional(),
+  });
+
+const generatedUnitMetadataSchema = z.object({
+  quiz: z.array(quizQuestionSchema).min(1).max(5),
+  exercise: exerciseMetadataSchema,
+});
 
 export async function diagnoseLearner(
   rawProfile: LearnerProfile,
@@ -66,6 +82,28 @@ export async function generatePlan(
 
   if (provider) {
     try {
+      const cacheKey = `plan:${JSON.stringify({
+        target: learnerProfile.target,
+        programmingLevel: learnerProfile.programmingLevel,
+        dsaLevel: learnerProfile.dsaLevel,
+        weeklyHours: learnerProfile.weeklyHours,
+        totalWeeks: learnerProfile.totalWeeks,
+        learningStyle: learnerProfile.learningStyle,
+        codePractice: learnerProfile.codePractice,
+        pace: learnerProfile.pace,
+        nearTermGoal: learnerProfile.nearTermGoal,
+      })}`;
+      const cachedUnits = await llmCache.get<SeedUnit[]>(cacheKey);
+      if (cachedUnits?.length) {
+        return {
+          learnerProfile,
+          units: cachedUnits,
+          currentIndex: 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+      }
+
       const toolManager = new ToolManager();
       const config = loadConfig();
       toolManager.register(new WebSearchTool(config.searchProvider, config.tavilyApiKey));
@@ -148,28 +186,14 @@ ${JSON.stringify(learnerProfile, null, 2)}
         }
       }
       
-      let cleanContent = finalContent;
-      const jsonBlockMatch = finalContent.match(/```json\n([\s\S]*?)\n```/);
-      if (jsonBlockMatch) {
-        cleanContent = jsonBlockMatch[1];
-      } else {
-        const startIdx = cleanContent.indexOf('[');
-        const endIdx = cleanContent.lastIndexOf(']');
-        if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
-          cleanContent = cleanContent.substring(startIdx, endIdx + 1);
-        } else {
-          cleanContent = cleanContent.replace(/^[\s\S]*?```json\n?/, '').replace(/\n?```[\s\S]*?$/, '').trim();
-        }
-      }
-
       let parsed: any;
       try {
-        parsed = JSON.parse(cleanContent);
+        parsed = parseJsonFromText(finalContent);
       } catch (firstErr) {
         try {
-          parsed = JSON.parse(sanitizeJsonString(cleanContent));
+          parsed = JSON.parse(sanitizeJsonString(extractJsonCandidate(finalContent)));
         } catch (secondErr) {
-          console.warn('\n⚠️ Failed to parse JSON from LLM:\n', cleanContent);
+          console.warn('\n⚠️ Failed to parse JSON from LLM:\n', finalContent);
           throw firstErr;
         }
       }
@@ -185,6 +209,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
           objectives: u.objectives || [],
           passCriteria: { quizMinScore: 1, exerciseMustPass: true },
         })) as SeedUnit[];
+        await llmCache.set(cacheKey, units, { ttlMs: 7 * 24 * 60 * 60 * 1000 });
       }
     } catch (err) {
       console.warn('Failed to generate dynamic plan, falling back to seed.', err);
@@ -250,9 +275,6 @@ export function placeholderFunc(): boolean {
   };
 }
 
-import { llmCache } from '../utils/cache.js';
-import color from 'picocolors';
-
 export async function generateUnitContent(
   unit: SeedUnit,
   plan: LearningPlan,
@@ -285,16 +307,8 @@ export async function generateUnitContent(
       console.warn('⚠️ 联网检索失败，将使用 LLM 内部参数化知识。', searchErr.message);
     }
 
-    // 2. Pass 1: Generate Initial Draft (with Tool Support)
+    // 2. Pass 1: Generate Initial Draft
     console.log('📝 Pass 1: 生成初稿 (Drafting)...');
-    const toolManager = new ToolManager();
-    const config = loadConfig();
-    toolManager.register(new WebSearchTool(config.searchProvider, config.tavilyApiKey));
-    toolManager.register(new TimeTool());
-    toolManager.register(new ExecuteCommandTool());
-    toolManager.register(new FileReadTool());
-    toolManager.register(new FileWriteTool());
-
     const isProject = unit.type === 'project';
     const projectDraftInstruction = isProject ? 'Since this is a PROJECT unit, generate a detailed Project Specification (similar to CS61A Ants/Scheme) detailing the architecture, phases of development, and module interactions instead of a regular conceptual lesson.' : 'Generate a rich, detailed markdown content explanation including technical definitions, examples, and deep explanation.';
 
@@ -321,44 +335,16 @@ Search Results from Web:
 ${searchResult}
 
 ${projectDraftInstruction} Keep the draft dense and focused (under 1200 words in Chinese).
-Feel free to use tools to execute quick node scripts, read existing files, or do web searches to ensure absolute technical accuracy and ZERO factual errors. Once you have enough context, return the final draft.
+Use only the supplied curriculum context, learner profile, and search excerpts. Prioritize technical accuracy, concrete examples, and a clean learning arc. Once you have enough context, return the final draft.
 Do not format as JSON yet, just generate a deep markdown document draft.
 `.trim();
 
-    const messages: ChatMessage[] = [
+    const draftRes = await provider.chat([
       { role: 'system', content: 'You are a highly-qualified computer science educator, teaching at the level of CS61A.' },
       { role: 'user', content: draftPrompt }
-    ];
+    ], { temperature: 0.45 });
 
-    let draftContent = '';
-    for (let i = 0; i < 5; i++) {
-      const draftRes = await provider.chat(messages, { 
-        temperature: 0.5,
-        tools: toolManager.getToolsDefinitions()
-      });
-
-      if (draftRes.tool_calls && draftRes.tool_calls.length > 0) {
-        messages.push({
-          role: 'assistant',
-          content: draftRes.content,
-          tool_calls: draftRes.tool_calls
-        });
-
-        for (const call of draftRes.tool_calls) {
-          console.log(`\n🔍 FCAgent ContentGenerator 正在调用工具: ${call.function.name}...`);
-          const result = await toolManager.executeToolCall(call.function.name, call.function.arguments);
-          messages.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            name: call.function.name,
-            content: result
-          });
-        }
-      } else {
-        draftContent = draftRes.content || '';
-        break;
-      }
-    }
+    const draftContent = draftRes.content || '';
     console.log('✅ Pass 1: 初稿生成完毕。');
 
     // 3. Pass 2: Critique and Expand (Refinement 1)
@@ -394,7 +380,7 @@ Provide the expanded and corrected course content in Chinese. Focus on technical
 CS61A Pedagogical Rules for PROJECT STARTER_CODE:
 - The exercise MUST be a robust multi-phase project skeleton (e.g. Phase 1, Phase 2) with clear TODOs and docstrings.
 - The quiz MUST focus on testing the learner's understanding of the project architecture and module design, rather than isolated syntax.
-- The \`testCode\` MUST be a comprehensive integration test that runs tests across the project skeleton.
+- Prefer TypeScript, Python, Bash, or Rust so the local runner can execute the exercise without a cloud dependency.
 ` : `
 CS61A Pedagogical Rules for STARTER_CODE:
 - Must include a rich docstring (e.g. TSDoc or Python Docstring) explaining the problem.
@@ -404,21 +390,24 @@ CS61A Pedagogical Rules for STARTER_CODE:
 `;
 
     const finalPrompt = `
-You are FCAgent FinalPolisher. Format the refined learning materials into the final required three-part output format.
+You are FCAgent FinalPolisher. Format the refined learning materials into the final required output format.
 Ensure the final output reflects the premium quality of CS61A, infused with an engaging, narrative-driven human touch.
 
 You must construct:
-1. A JSON block containing a quiz and a programming exercise.
+1. A JSON metadata block containing a quiz and programming exercise metadata.
    - The Quiz MUST be scenario-based and interesting (e.g., helping a character solve a problem), not just dry conceptual questions.
    - The Exercise Starter Code MUST have thematic variable names and problem descriptions that tie directly into the Curriculum Context (${projectContext}). Make it feel like part of an epic quest.
-   - Choose ANY programming language that best fits the learning objective (e.g. 'typescript', 'python', 'bash', 'rust', 'cpp', 'java', 'go', etc.).
-   - You MUST also provide a \`testCode\` field in the exercise JSON. This code will be compiled/executed remotely along with the user's \`starterCode\`. The \`testCode\` must import/call the user's entrypoint, run the test cases, and print exactly one JSON line per test case in the format: \`{"name": "test name", "passed": true/false, "message": "optional error message", "expected": "...", "actual": "..."}\`.
+   - Prefer one of these locally supported languages unless the objective truly requires otherwise: ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
+   - Do NOT include starterCode inside the JSON. Put raw code only in STARTER_CODE.
+   - If you choose a non-local language, provide raw test code in TEST_CODE. Otherwise omit TEST_CODE and rely on testCases.
+   - Include at least 3 meaningful testCases: a normal case, an edge case, and a misconception-catching case.
    - For bash exercises, assertionMode should likely be 'stdout'. For others it can be 'return' or 'mutate-and-return'.
 2. The final Markdown CONTENT (using the refined course content). Keep it dense and copy it directly from the refined draft without expanding it with unnecessary verbose prose.
-3. The STARTER_CODE block for the exercise. This must be the raw code for the exercise.
+3. The STARTER_CODE block for the exercise. This must be raw code only.
+4. Optional TEST_CODE block for non-local languages only.
 ${projectFinalInstruction}
 
-The output MUST contain exactly these three sections, using your generated exercise code and quiz instead of the template examples:
+The output MUST contain these sections, using your generated exercise code and quiz instead of the template examples:
 \`\`\`json
 {
   "quiz": [
@@ -438,10 +427,11 @@ The output MUST contain exactly these three sections, using your generated exerc
     "description": "...",
     "assertionMode": "return",
     "testCases": [
-      { "name": "test 1", "input": ["actual_input"], "expected": "actual_output" }
+      { "name": "normal case", "input": ["actual_input"], "expected": "actual_output" },
+      { "name": "edge case", "input": [""], "expected": "" },
+      { "name": "misconception guard", "input": ["tricky_input"], "expected": "correct_output" }
     ],
-    "hints": ["hint 1"],
-    "testCode": "import json\\nfrom solution import actual_function_name\\n...print(json.dumps({'name': 'test 1', 'passed': True}))"
+    "hints": ["hint 1", "hint 2"]
   }
 }
 \`\`\`
@@ -464,6 +454,9 @@ export function actualFunctionName(args: any): any {
   return null;
 }
 
+### TEST_CODE
+(Only include this section for non-local languages. It must print exactly one JSON line per test case.)
+
 Refined Course Draft:
 ${refinedDraft}
 
@@ -480,45 +473,220 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
     console.log('✅ Pass 3: 格式精修完成。');
 
     try {
-      const jsonMatch = responseContent.match(/```json\n([\s\S]*?)\n```/);
-      const contentMatch = responseContent.match(/### CONTENT\n([\s\S]*?)(?=\n### STARTER_CODE|$)/);
-      const starterCodeMatch = responseContent.match(/### STARTER_CODE\n([\s\S]*)$/);
-
-      if (!jsonMatch) throw new Error('Missing JSON block');
-      const rawJson = jsonMatch[1].trim();
-      let parsed: any;
-      try {
-        parsed = JSON.parse(rawJson);
-      } catch (firstErr) {
-        try {
-          parsed = JSON.parse(sanitizeJsonString(rawJson));
-        } catch (secondErr) {
-          throw firstErr;
-        }
-      }
-      
-      const content = contentMatch ? contentMatch[1].trim() : '';
-      let starterCode = starterCodeMatch ? starterCodeMatch[1].trim() : '';
-      starterCode = starterCode.replace(/```[a-zA-Z]*\n?/g, '').replace(/```\n?/g, '').trim();
-
-      const finalUnit = {
-        ...unit,
-        content: content || unit.content || '',
-        quiz: parsed.quiz || unit.quiz || [],
-        exercise: parsed.exercise ? { ...parsed.exercise, starterCode } : unit.exercise,
-        passCriteria: unit.passCriteria || { quizMinScore: 1, exerciseMustPass: true },
-      };
+      const finalUnit = buildGeneratedUnit(unit, responseContent);
 
       await llmCache.set(cacheKey, finalUnit);
       return finalUnit;
     } catch (parseErr) {
-      console.warn('Response parsing failed. Raw response was:', responseContent);
-      throw parseErr;
+      console.warn('Response parsing failed. Asking the model for one structured repair...');
+      const repairedUnit = await repairGeneratedUnit(unit, responseContent, provider);
+      await llmCache.set(cacheKey, repairedUnit);
+      return repairedUnit;
     }
   } catch (err) {
     console.warn('Failed to generate dynamic unit content, falling back to basic.', err);
     return ensureUnitFullyPopulated(unit);
   }
+}
+
+function buildGeneratedUnit(unit: SeedUnit, responseContent: string): SeedUnit {
+  const parsed = generatedUnitMetadataSchema.parse(parseJsonFromText(responseContent));
+  const content = extractRequiredSection(responseContent, 'CONTENT');
+  const starterCode = stripCodeFence(extractRequiredSection(responseContent, 'STARTER_CODE'));
+  const testCodeSection = extractOptionalSection(responseContent, 'TEST_CODE');
+  const language = normalizeExerciseLanguage(parsed.exercise.language);
+  const isNativeLanguage = NATIVE_RUNNER_LANGUAGES.includes(language as typeof NATIVE_RUNNER_LANGUAGES[number]);
+  const testCode = isNativeLanguage
+    ? undefined
+    : stripCodeFence(parsed.exercise.testCode ?? testCodeSection ?? '');
+
+  const exercise = exerciseSchema.parse({
+    ...parsed.exercise,
+    language,
+    starterCode,
+    testCode: testCode || undefined,
+  });
+
+  assertGeneratedUnitQuality(content, parsed.quiz, exercise);
+
+  return {
+    ...unit,
+    content,
+    quiz: parsed.quiz,
+    exercise,
+    passCriteria: unit.passCriteria || { quizMinScore: 1, exerciseMustPass: true },
+  };
+}
+
+async function repairGeneratedUnit(
+  unit: SeedUnit,
+  brokenResponse: string,
+  provider: LLMProvider
+): Promise<SeedUnit> {
+  const repairPrompt = `
+The previous FCAgent unit generation response could not be parsed or failed quality validation.
+Repair it into the exact required format below. Keep the same educational intent, but make it valid, runnable, and concise.
+
+Rules:
+- Prefer these local runner languages: ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
+- JSON must not include starterCode.
+- Include at least 3 testCases and at least 2 hints.
+- CONTENT must be a useful Chinese markdown lesson, at least 400 Chinese characters.
+- STARTER_CODE must be raw code only and contain the exercise entrypoint.
+- Include TEST_CODE only if the language is not ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
+
+Required format:
+\`\`\`json
+{
+  "quiz": [
+    { "id": "q1", "type": "choice", "question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "..." }
+  ],
+  "exercise": {
+    "id": "ex-${unit.id}",
+    "language": "typescript",
+    "entrypoint": "actualFunctionName",
+    "description": "...",
+    "assertionMode": "return",
+    "testCases": [
+      { "name": "normal case", "input": [], "expected": true },
+      { "name": "edge case", "input": [], "expected": true },
+      { "name": "misconception guard", "input": [], "expected": false }
+    ],
+    "hints": ["...", "..."]
+  }
+}
+\`\`\`
+
+### CONTENT
+# ${unit.title}
+...
+
+### STARTER_CODE
+...
+
+Broken response:
+${brokenResponse}
+`.trim();
+
+  const repairRes = await provider.chat([
+    { role: 'system', content: 'You repair malformed curriculum generation output. Return only the requested sections.' },
+    { role: 'user', content: repairPrompt },
+  ], { temperature: 0.1 });
+
+  return buildGeneratedUnit(unit, repairRes.content || '');
+}
+
+function assertGeneratedUnitQuality(
+  content: string,
+  quiz: QuizQuestion[],
+  exercise: NonNullable<SeedUnit['exercise']>
+): void {
+  if (content.replace(/\s/g, '').length < 400) {
+    throw new Error('Generated content is too short to be useful.');
+  }
+
+  if (exercise.testCases.length < 3) {
+    throw new Error('Generated exercise needs at least 3 test cases.');
+  }
+
+  if (exercise.hints.length < 2) {
+    throw new Error('Generated exercise needs at least 2 hints.');
+  }
+
+  if (exercise.language !== 'bash' && !exercise.starterCode.includes(exercise.entrypoint)) {
+    throw new Error(`Starter code does not contain entrypoint "${exercise.entrypoint}".`);
+  }
+
+  const isNativeLanguage = NATIVE_RUNNER_LANGUAGES.includes(exercise.language as typeof NATIVE_RUNNER_LANGUAGES[number]);
+  if (!isNativeLanguage && !exercise.testCode) {
+    throw new Error(`Non-local language "${exercise.language}" requires TEST_CODE.`);
+  }
+
+  for (const question of quiz) {
+    if (question.type === 'choice' && question.options?.length) {
+      const normalizedAnswer = normalizeQuizText(question.answer);
+      const answerIsOption = question.options.some((option, index) =>
+        normalizeQuizText(option) === normalizedAnswer ||
+        normalizeQuizText(String(index + 1)) === normalizedAnswer ||
+        normalizeQuizText(String.fromCharCode(65 + index)) === normalizedAnswer
+      );
+      if (!answerIsOption) {
+        throw new Error(`Quiz answer for "${question.id}" is not one of its options.`);
+      }
+    }
+  }
+}
+
+function normalizeExerciseLanguage(language: string): string {
+  const normalized = language.trim().toLowerCase();
+  const aliases: Record<string, string> = {
+    ts: 'typescript',
+    js: 'javascript',
+    py: 'python',
+    shell: 'bash',
+    sh: 'bash',
+    rs: 'rust',
+    'c++': 'cpp',
+    golang: 'go',
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function extractRequiredSection(text: string, heading: string): string {
+  const section = extractOptionalSection(text, heading);
+  if (!section?.trim()) {
+    throw new Error(`Missing ${heading} section.`);
+  }
+  return section.trim();
+}
+
+function extractOptionalSection(text: string, heading: string): string | undefined {
+  const pattern = new RegExp(`(?:^|\\n)###\\s+${heading}\\s*\\n([\\s\\S]*?)(?=\\n###\\s+[A-Z_]+\\s*\\n|$)`, 'i');
+  return text.match(pattern)?.[1]?.trim();
+}
+
+function stripCodeFence(value: string): string {
+  return value
+    .trim()
+    .replace(/^```[a-zA-Z0-9_-]*\s*\n/, '')
+    .replace(/\n```\s*$/, '')
+    .trim();
+}
+
+function parseJsonFromText<T = unknown>(text: string): T {
+  const candidate = extractJsonCandidate(text);
+  try {
+    return JSON.parse(candidate) as T;
+  } catch {
+    return JSON.parse(sanitizeJsonString(candidate)) as T;
+  }
+}
+
+function extractJsonCandidate(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const firstArray = text.indexOf('[');
+  const firstObject = text.indexOf('{');
+  const starts = [firstArray, firstObject].filter((idx) => idx !== -1);
+  if (starts.length === 0) {
+    throw new Error('No JSON candidate found.');
+  }
+
+  const startIdx = Math.min(...starts);
+  const opensWithArray = text[startIdx] === '[';
+  const endIdx = opensWithArray ? text.lastIndexOf(']') : text.lastIndexOf('}');
+  if (endIdx <= startIdx) {
+    throw new Error('Incomplete JSON candidate.');
+  }
+
+  return text.slice(startIdx, endIdx + 1).trim();
+}
+
+function normalizeQuizText(value: string): string {
+  return value.trim().replace(/[.)。]/g, '').toLowerCase();
 }
 
 export function getCurrentUnit(plan: LearningPlan, unitId?: string): SeedUnit {
@@ -680,7 +848,7 @@ Return exactly valid JSON ONLY:
       ], { temperature: 0.2 });
       
       const responseContent = response.content || '';
-      const parsed = JSON.parse(responseContent.replace(/^[\s\S]*?```json\n?/, '').replace(/\n?```[\s\S]*?$/, '').trim());
+      const parsed = parseJsonFromText<{ diagnosis?: string; nextAction?: string }>(responseContent);
       if (parsed.diagnosis) diagnosis = parsed.diagnosis;
       if (parsed.nextAction) nextAction = parsed.nextAction;
     } catch (err) {

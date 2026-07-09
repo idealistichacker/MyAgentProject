@@ -37,7 +37,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
         if (!response.ok) {
           const text = await response.text();
-          throw new Error(`OpenAI-compatible provider request failed: ${response.status} ${response.statusText}\n${text}`);
+          const error = new Error(`OpenAI-compatible provider request failed: ${response.status} ${response.statusText}\n${text}`) as Error & {
+            status?: number;
+            retryAfterMs?: number;
+          };
+          error.status = response.status;
+          const retryAfter = response.headers.get('retry-after');
+          if (retryAfter) {
+            const retryAfterSeconds = Number.parseFloat(retryAfter);
+            if (!Number.isNaN(retryAfterSeconds)) {
+              error.retryAfterMs = retryAfterSeconds * 1000;
+            }
+          }
+          throw error;
         }
 
         const json = (await response.json()) as {
@@ -56,8 +68,16 @@ export class OpenAICompatibleProvider implements LLMProvider {
         };
       } catch (err: any) {
         lastError = err;
+        const status = typeof err.status === 'number' ? err.status : undefined;
+        const shouldRetry = !status || status === 429 || status >= 500;
+        if (!shouldRetry) {
+          throw err;
+        }
+
         if (attempt < maxAttempts) {
-          const delay = Math.pow(2, attempt - 1) * 3000; // 3s, 6s, 12s, 24s
+          const baseDelay = Math.pow(2, attempt - 1) * 2000;
+          const jitter = Math.floor(Math.random() * 500);
+          const delay = Math.min(err.retryAfterMs ?? (baseDelay + jitter), 30000);
           console.warn(`⚠️ API attempt ${attempt} failed: ${err.message}. Retrying in ${delay / 1000}s...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
         } else {
