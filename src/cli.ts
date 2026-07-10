@@ -9,10 +9,12 @@ import {
   diagnoseLearner,
   generatePlan,
   generateRemediationUnit,
-  generateUnitContent,
   getCurrentUnit,
   gradeQuiz,
 } from './agents/pipeline.js';
+import { generateAndPublishUnit } from './generation/orchestrator.js';
+import { loadArtifactManifest, loadGenerationJob } from './generation/publisher.js';
+import { GenerationScheduler } from './generation/scheduler.js';
 import { createProvider } from './providers/types.js';
 import type { LLMProvider } from './providers/types.js';
 import fs from 'node:fs';
@@ -27,13 +29,13 @@ import {
   saveLearner,
   savePlan,
   saveState,
-  writeTextFile,
 } from './state/fsState.js';
 import {
   getExerciseDir,
   getLessonPath,
   getProjectSpecPath,
   getSolutionPath,
+  getStarterPath,
   getExtensionForLanguage,
 } from './utils/paths.js';
 import type { AssessmentResult, LearnerProfile, LearningPlan, LearningState, QuizQuestion, SeedUnit } from './types.js';
@@ -179,9 +181,18 @@ program.command('plan')
     const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
     const s = spinner();
     s.start('FCAgent CurriculumPlanner 正在为你生成定制化大纲...');
-    const plan = await generatePlan(learner, provider);
-    savePlan(plan);
-    s.stop(color.green(`✔ 计划生成成功！共计 ${plan.units.length} 个单元。`));
+    let plan: LearningPlan;
+    try {
+      plan = await generatePlan(learner, provider);
+      savePlan(plan);
+    } catch (error) {
+      s.stop(color.red('✖ 计划未保存，现有计划保持不变。'));
+      cancel(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+      return;
+    }
+    const originLabel = plan.origin === 'offline' ? '（离线种子课程）' : '';
+    s.stop(color.green('✔ 计划生成成功！共计 ' + plan.units.length + ' 个单元。' + originLabel));
     
     plan.units.forEach(unit => {
       const typeLabel = formatUnitTypeLabel(unit);
@@ -192,7 +203,9 @@ program.command('plan')
 
 program.command('start [unitId]')
   .description('Start a learning unit and generate lesson, exercise, and project files')
-  .action(async (unitId?: string) => {
+  .option('--reset-solution', 'Replace an existing learner solution with the current starter template')
+  .option('--yes', 'Confirm destructive solution reset without prompting')
+  .action(async (unitId: string | undefined, options) => {
     intro(color.inverse(' 📖 开始学习单元 '));
     ensureProjectDirs();
     const plan = loadPlan();
@@ -203,24 +216,36 @@ program.command('start [unitId]')
     }
 
     let unit = getCurrentUnit(plan, unitId);
-    const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
-    const needsProjectSpec = unit.type === 'project' && !unit.project;
-    if (!unit.content || !unit.exercise || isFallback || needsProjectSpec) {
-      const s = spinner();
-      s.start(`FCAgent 正在全网检索并生成 [${unit.id}] 的课件与练习...`);
-      const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
-      unit = await generateUnitContent(unit, plan, provider);
-      const index = plan.units.findIndex(u => u.id === unit.id);
-      if (index !== -1) {
-        plan.units[index] = unit;
-        savePlan(plan);
-      }
-      s.stop(color.green('✔ 课件与练习生成完毕！'));
-    } else {
-      console.log(color.green('✔ 课件已就绪。'));
+    if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
+      return;
     }
-
-    const artifacts = writeGeneratedUnitArtifacts(unit);
+    const existingManifest = loadArtifactManifest(unit.id);
+    let artifacts = existingArtifacts(unit);
+    if (!isPublishedManifest(existingManifest) || options.resetSolution) {
+      const s = spinner();
+      s.start(`FCAgent 正在准备 [${unit.id}] 的课件与练习...`);
+      const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+      try {
+        const result = await generateAndPublishUnit(unit.id, {
+          provider,
+          resetSolution: options.resetSolution,
+        });
+        unit = result.unit;
+        artifacts = result.artifacts;
+        s.stop(color.green(
+          result.artifacts.solutionPreserved
+            ? '✔ 课件已发布，已保留现有学习者答案。'
+            : '✔ 课件与练习已安全发布。'
+        ));
+      } catch (error) {
+        s.stop(color.red('✖ 课件未发布，已保存可恢复的失败作业。'));
+        cancel(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+        return;
+      }
+    } else {
+      console.log(color.green(`✔ 课件已就绪（${existingManifest?.status ?? 'unknown'}）。`));
+    }
 
     note(
       `单元: ${unit.id}: ${unit.title}\n` +
@@ -524,44 +549,13 @@ program.command('audit')
     }
   });
 
-function pLimit(concurrency: number) {
-  const queue: (() => void)[] = [];
-  let activeCount = 0;
-
-  const next = () => {
-    activeCount--;
-    if (queue.length > 0) {
-      queue.shift()!();
-    }
-  };
-
-  return <T>(fn: () => Promise<T>): Promise<T> => {
-    return new Promise<T>((resolve, reject) => {
-      const run = async () => {
-        activeCount++;
-        try {
-          const result = await fn();
-          resolve(result);
-        } catch (err) {
-          reject(err);
-        } finally {
-          next();
-        }
-      };
-
-      if (activeCount < concurrency) {
-        run();
-      } else {
-        queue.push(run);
-      }
-    });
-  };
-}
-
 program.command('generate-all')
   .description('Pre-generate all lessons, exercise skeletons, and project specs in the plan')
   .option('--concurrency <number>', 'Max unit generations running at once', '1')
   .option('--stagger-ms <number>', 'Minimum delay between generation starts', '1000')
+  .option('--reset-solution', 'Replace existing learner solutions with starter templates')
+  .option('--yes', 'Confirm destructive solution reset without prompting')
+  .option('--force', 'Re-publish units that already have a complete artifact manifest')
   .action(async (options) => {
     intro(color.inverse(' 🚀 全量课件并发预生成 (Generate All - Optimized) '));
     ensureProjectDirs();
@@ -572,9 +566,7 @@ program.command('generate-all')
       return;
     }
     const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
-    if (!provider) {
-      cancel('Provider not configured. Run `fc init` and set an API key.');
-      process.exitCode = 1;
+    if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
       return;
     }
 
@@ -582,13 +574,7 @@ program.command('generate-all')
     let generatedCount = 0;
     s.start(`正在检查需生成的单元...`);
 
-    const tasks = plan.units.map((unit, i) => {
-      return { unit, index: i };
-    }).filter(({ unit }) => {
-      const isFallback = unit.content?.includes('基础预备版本') || unit.exercise?.description?.includes('占位练习');
-      const needsProjectSpec = unit.type === 'project' && !unit.project;
-      return !unit.content || !unit.exercise || isFallback || needsProjectSpec;
-    });
+    const tasks = plan.units.filter((unit) => options.force || !isPublishedManifest(loadArtifactManifest(unit.id)));
 
     if (tasks.length === 0) {
       s.stop(color.green('✔ 所有单元已生成完毕，无需重复生成！'));
@@ -600,137 +586,83 @@ program.command('generate-all')
     const staggerMs = Math.max(0, Math.min(10000, Number.parseInt(options.staggerMs, 10) || 0));
     s.stop(`需要生成 ${tasks.length} 个单元。启动节流: 并发度 ${concurrency}, 间隔 ${staggerMs}ms。`);
 
-    const limit = pLimit(concurrency);
+    const scheduler = new GenerationScheduler({
+      concurrency,
+      minStartIntervalMs: staggerMs,
+    });
     let completed = 0;
-    let nextStartAt = Date.now();
 
-    const waitForStartSlot = async () => {
-      if (staggerMs === 0) return;
-      const now = Date.now();
-      const waitMs = Math.max(0, nextStartAt - now);
-      nextStartAt = Math.max(now, nextStartAt) + staggerMs;
-      if (waitMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, waitMs));
-      }
-    };
-
-    const promises = tasks.map(({ unit, index }) => {
-      return limit(async () => {
-        await waitForStartSlot();
-        
+    const promises = tasks.map((unit) => {
+      return scheduler.schedule(unit.id, async () => {
         console.log(color.cyan(`⏳ [${unit.id}] 开始生成...`));
-        const updatedUnit = await generateUnitContent(unit, plan, provider);
-        
-        plan.units[index] = updatedUnit;
-        savePlan(plan); // savePlan is synchronous writeFileSync, so it's safe
-        
-        writeGeneratedUnitArtifacts(updatedUnit);
-        
+        const result = await generateAndPublishUnit(unit.id, {
+          provider,
+          resetSolution: options.resetSolution,
+        });
         completed++;
         generatedCount++;
-        console.log(color.green(`✅ [${updatedUnit.id}] 生成完毕 (${completed}/${tasks.length})`));
+        const answerMessage = result.artifacts.solutionPreserved ? '，已保留学习者答案' : '';
+        console.log(color.green(`✅ [${result.unit.id}] 发布完成 (${completed}/${tasks.length})${answerMessage}`));
       });
     });
 
-    await Promise.all(promises);
-    console.log(color.green(`\n✔ 预生成完毕！本次共生成 ${generatedCount} 个新单元。`));
+    const results = await Promise.allSettled(promises);
+    const failures = results.filter((result) => result.status === 'rejected');
+    if (failures.length > 0) {
+      for (const failure of failures) {
+        console.error(color.red(`✖ 单元未发布：${String(failure.reason)}`));
+      }
+      process.exitCode = 1;
+    }
+    const metrics = scheduler.snapshot();
+    console.log(color.green(`\n✔ 批量生成结束：${generatedCount} 个已发布，${failures.length} 个失败。`));
+    console.log(color.gray(`调度指标：p50 ${metrics.p50Ms}ms，p95 ${metrics.p95Ms}ms。`));
     outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
   });
 
+const generationCommand = program.command('generation')
+  .description('Inspect and recover durable generation jobs');
+
+generationCommand.command('status <jobId>')
+  .description('Show a generation job and its quality result')
+  .action((jobId: string) => {
+    const job = loadGenerationJob(jobId);
+    if (!job) {
+      console.error(`Generation job "${jobId}" was not found.`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(JSON.stringify(job, null, 2));
+  });
+
+generationCommand.command('retry <jobId>')
+  .description('Retry a failed or degraded job using its unit id')
+  .option('--reset-solution', 'Replace an existing learner solution with the starter template')
+  .option('--yes', 'Confirm destructive solution reset without prompting')
+  .action(async (jobId: string, options) => {
+    const job = loadGenerationJob(jobId);
+    if (!job) {
+      console.error(`Generation job "${jobId}" was not found.`);
+      process.exitCode = 1;
+      return;
+    }
+    if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
+      return;
+    }
+    try {
+      const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+      const result = await generateAndPublishUnit(job.unitId, {
+        provider,
+        resetSolution: options.resetSolution,
+      });
+      console.log(`Generation job ${result.job.id} completed with status ${result.job.status}.`);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  });
+
 program.parseAsync(process.argv);
-
-function writeGeneratedUnitArtifacts(unit: SeedUnit): {
-  lessonPath: string;
-  solutionPath?: string;
-  projectSpecPath?: string;
-} {
-  const lessonPath = getLessonPath(unit.id);
-  writeTextFile(lessonPath, unit.content || '');
-
-  let solutionPath: string | undefined;
-  if (unit.exercise) {
-    const extension = getExtensionForLanguage(unit.exercise.language);
-    solutionPath = getSolutionPath(unit.id, extension);
-    writeTextFile(solutionPath, unit.exercise.starterCode);
-  }
-
-  let projectSpecPath: string | undefined;
-  if (unit.type === 'project' && unit.project) {
-    projectSpecPath = getProjectSpecPath(unit.id);
-    writeTextFile(projectSpecPath, renderProjectSpecMarkdown(unit));
-  }
-
-  return { lessonPath, solutionPath, projectSpecPath };
-}
-
-function renderProjectSpecMarkdown(unit: SeedUnit): string {
-  const project = unit.project;
-  if (!project) {
-    return `# ${unit.title}\n\n${unit.description}\n`;
-  }
-
-  const milestones = project.milestones.map((milestone, index) => [
-    `### ${index + 1}. ${milestone.title}`,
-    '',
-    milestone.goal,
-    '',
-    '**Learner Tasks**',
-    formatMarkdownList(milestone.learnerTasks, '补全这一阶段的核心实现。'),
-    '',
-    '**Acceptance Criteria**',
-    formatMarkdownList(milestone.acceptanceCriteria, '这一阶段可以被本地测试或人工检查验证。'),
-  ].join('\n')).join('\n\n');
-
-  const files = project.files.map((file) =>
-    `- \`${file.path}\` - ${file.purpose}${file.required === false ? ' (optional)' : ''}`
-  ).join('\n');
-
-  const rubric = project.rubric.map((item) =>
-    `- **${item.criterion} (${item.points} pts)**: ${item.evidence}`
-  ).join('\n');
-
-  return [
-    `# ${project.title}`,
-    '',
-    `> ${project.narrative}`,
-    '',
-    '## Driving Question',
-    '',
-    project.drivingQuestion,
-    '',
-    '## Deliverables',
-    '',
-    formatMarkdownList(project.deliverables, '完成 starter code 并通过本地测试。'),
-    '',
-    '## Milestones',
-    '',
-    milestones || '项目阶段待生成。',
-    '',
-    '## Files',
-    '',
-    files || '- `solution.ts` - Main implementation file.',
-    '',
-    '## Local Check',
-    '',
-    unit.exercise
-      ? `Run \`fc submit ${unit.id}\` to execute the generated tests for \`${unit.exercise.entrypoint}\`.`
-      : `Run \`fc submit ${unit.id}\` after the exercise metadata is generated.`,
-    '',
-    '## Rubric',
-    '',
-    rubric || '- **Correctness**: pass the generated tests.',
-    '',
-    '## Extension Ideas',
-    '',
-    formatMarkdownList(project.extensionIdeas, 'Add your own hidden tests after passing the official checks.'),
-    '',
-  ].join('\n');
-}
-
-function formatMarkdownList(items: string[], fallback: string): string {
-  const list = items.length > 0 ? items : [fallback];
-  return list.map((item) => `- ${item}`).join('\n');
-}
 
 async function maybeInsertRemediation(
   unit: SeedUnit,
@@ -788,6 +720,42 @@ function formatUnitTypeLabel(unit?: SeedUnit): string {
   }
 
   return '';
+}
+
+function isPublishedManifest(manifest: ReturnType<typeof loadArtifactManifest>): boolean {
+  return manifest?.status === 'published' || manifest?.status === 'offline';
+}
+
+function existingArtifacts(unit: SeedUnit): {
+  lessonPath: string;
+  starterPath?: string;
+  solutionPath?: string;
+  projectSpecPath?: string;
+  solutionPreserved: boolean;
+} {
+  const extension = unit.exercise ? getExtensionForLanguage(unit.exercise.language) : undefined;
+  return {
+    lessonPath: getLessonPath(unit.id),
+    starterPath: extension ? getStarterPath(unit.id, extension) : undefined,
+    solutionPath: extension ? getSolutionPath(unit.id, extension) : undefined,
+    projectSpecPath: unit.type === 'project' ? getProjectSpecPath(unit.id) : undefined,
+    solutionPreserved: true,
+  };
+}
+
+async function confirmSolutionReset(assumeYes?: boolean): Promise<boolean> {
+  if (assumeYes) {
+    return true;
+  }
+  const approved = await confirm({
+    message: '这会覆盖已有 solution.*。确定继续吗？',
+    initialValue: false,
+  });
+  if (isCancel(approved) || !approved) {
+    cancel('已取消覆盖学习者答案。');
+    return false;
+  }
+  return true;
 }
 
 async function fillDiagnosisWithPrompts(profile: LearnerProfile, provider?: any): Promise<void> {

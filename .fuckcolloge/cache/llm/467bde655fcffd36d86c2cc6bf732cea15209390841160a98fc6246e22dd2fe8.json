@@ -1,0 +1,135 @@
+{
+  "data": {
+    "id": "unit-1-api-foundations",
+    "type": "unit",
+    "title": "驯服你的第一只 API 神兽",
+    "description": "一切伟大的 Agent 都从'会说话'开始。本单元你将掌握 Python 中与外部世界沟通的核心技能：用 requests 库发起 HTTP 请求、解析 JSON 响应、读写文件、以及用 try/except 捕获异常。这些看似基础的技能，正是未来全自动编程 Agent 的'嘴巴'和'耳朵'——Agent 需要通过 API 与 LLM 对话、将生成的代码写入文件、读取测试结果。没有它们，后面的 Function Calling 和 ReAct 循环都无从谈起。本单元为最终项目'铁甲钢拳'打下最底层的通信地基。",
+    "prerequisites": [
+      "Python 基本语法（变量、条件、循环）"
+    ],
+    "objectives": [
+      "使用 requests 库发起 GET/POST 请求并处理响应",
+      "解析和构造 JSON 数据结构",
+      "使用 Python 文件 I/O 读写代码文件",
+      "用 try/except 捕获和处理网络与文件异常",
+      "理解 API Key 认证机制与环境变量管理"
+    ],
+    "references": [],
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    },
+    "content": "# 驯服你的第一只 API 神兽\n\n欢迎来到 Agent 造物主的第一车间。在接下来的几周里，我们将打造一个名为\"铁甲钢拳\"的全自动编程 Agent。但罗马不是一天建成的，Agent 也不是一出生就能自己写代码、跑测试、改 Bug 的。\n\n在 Agent 学会\"思考\"（ReAct 循环）和\"使用工具\"（Function Calling）之前，它必须先学会**沟通**。本单元，我们将赋予 Agent 它的\"嘴巴\"、\"耳朵\"和\"记忆\"——掌握 Python 与外部世界沟通的四大法宝：`requests`、`JSON`、文件 I/O 和异常处理。\n\n---\n\n## 1. HTTP 与 requests：Agent 的\"嘴巴\"与\"耳朵\"\n\n要让 Agent 调用 LLM，本质上是向 LLM 的服务器发送一个 HTTP 请求。HTTP 是一种基于请求-响应模型的协议：客户端发起请求，服务器返回响应。\n\n### GET 与 POST 的本质区别\n\n- **GET**：参数附加在 URL 查询字符串中（`?name=value&age=3`），有长度限制，语义为\"读取资源\"。用 `params` 参数传递。\n- **POST**：数据放在请求体中，无长度限制，语义为\"提交数据\"。用 `json` 或 `data` 参数传递。\n\n```python\nimport requests\n\n# GET 请求：params 会被自动拼接到 URL\nresponse = requests.get(\n    \"https://api.example.com/search\",\n    params={\"q\": \"python tutorial\", \"page\": 1},\n    timeout=10  # 务必设置超时！否则网络挂起时程序会永久阻塞\n)\n# 实际请求 URL: https://api.example.com/search?q=python+tutorial&page=1\n\n# POST 请求：json 参数会自动序列化为 JSON 并设置 Content-Type 头\npayload = {\"prompt\": \"写一个贪吃蛇游戏的Python代码\", \"max_tokens\": 2048}\nresponse = requests.post(\"https://api.example-llm.com/v1/chat\", json=payload, timeout=30)\n```\n\n> **Gotcha**：`json=payload` 和 `data=payload` 的区别至关重要。`json=` 会自动调用 `json.dumps()` 序列化数据并设置 `Content-Type: application/json`；而 `data=` 发送的是表单数据（`application/x-www-form-urlencoded`）。混用会导致服务器返回 415 Unsupported Media Type。\n\n### 响应对象的三种读取方式\n\n```python\nresponse = requests.post(url, json=payload, timeout=30)\n\n# 1. response.text —— 返回字符串（自动推测编码，偶尔会乱码）\n# 2. response.json() —— 将响应体解析为 Python 字典/列表（内部调用 json.loads）\n# 3. response.content —— 返回原始 bytes（用于下载图片等二进制数据）\n\n# 状态码家族：2xx 成功 | 3xx 重定向 | 4xx 客户端错误 | 5xx 服务器错误\nif response.status_code == 200:\n    data = response.json()  # 如果响应体不是合法 JSON，这里会抛出 json.JSONDecodeError\n    print(data[\"choices\"][0][\"message\"][\"content\"])\n```\n\n> **Gotcha**：`response.json()` 不会自动检查状态码。即使服务器返回 500 错误，只要响应体碰巧是合法 JSON，它也不会报错。务必先检查 `response.status_code` 或调用 `response.raise_for_status()`。\n\n---\n\n## 2. JSON：数字世界的\"世界语\"\n\nJSON 是 Agent 与 LLM 之间的数据交换格式。理解 JSON 与 Python 类型之间的映射关系是基本功：\n\n| JSON 类型 | Python 类型 | 注意事项 |\n|-----------|------------|---------|\n| object `{}` | `dict` | JSON 键必须是字符串 |\n| array `[]` | `list` | — |\n| string | `str` | JSON 不支持单引号 |\n| number | `int` / `float` | — |\n| boolean | `bool` | JSON 中是小写 `true`/`false` |\n| null | `None` | — |\n\n> **关键限制**：JSON 不支持 Python 的 `tuple`、`set`、`datetime`、`bytes`。`json.dumps((1, 2))` 会将元组转为 JSON 数组 `[1, 2]`，反序列化后变成列表，类型信息丢失。\n\n```python\nimport json\n\n# 解析：JSON 字符串 -> Python 对象\nllm_response_text = '{\"action\": \"write_file\", \"filename\": \"snake.py\", \"code\": \"print(1)\"}'\ntry:\n    parsed = json.loads(llm_response_text)\n    # 链式索引提取嵌套数据——这是后续从 LLM 响应中提取代码的核心技能\n    code = parsed[\"code\"]\nexcept json.JSONDecodeError as e:\n    print(f\"LLM 返回的不是合法 JSON: {e}\")\n\n# 序列化：Python 对象 -> JSON 字符串\nmy_data = {\"test_result\": \"failed\", \"error_log\": \"NameError on line 10\"}\n# ensure_ascii=False 允许输出中文；indent=2 使输出带缩进、可读\njson_string = json.dumps(my_data, ensure_ascii=False, indent=2)\n```\n\n> **Gotcha**：默认 `json.dumps()` 会将中文字符转义为 `\\uXXXX`。处理含中文的 LLM 响应时，务必加 `ensure_ascii=False`，否则日志和调试输出会变成乱码。\n\n---\n\n## 3. 文件 I/O：给 Agent 发一支\"笔\"\n\nLLM 在内存里生成的代码，如果不持久化到硬盘，程序结束就灰飞烟灭。Python 的 `with` 语句（上下文管理器）是文件操作的标准范式——它保证无论中间是否抛异常，`__exit__` 都会被调用，文件句柄必然关闭。\n\n```python\n# 写入：'w' 覆盖写入 | 'a' 追加写入 | 'r' 只读 | 'b' 二进制模式\ncode_content = \"print('Hello, Agent!')\"\nwith open(\"agent_output.py\", \"w\", encoding=\"utf-8\") as f:\n    f.write(code_content)\n\n# 读取\nwith open(\"agent_output.py\", \"r\", encoding=\"utf-8\") as f:\n    content = f.read()  # 一次性读取全部内容\n```\n\n> **Gotcha 1**：永远显式指定 `encoding=\"utf-8\"`。Windows 默认编码是 GBK，Linux/macOS 是 UTF-8。不指定编码会导致同一份代码在不同系统上运行时抛出 `UnicodeDecodeError`。\n\n> **Gotcha 2**：`'w'` 模式会在打开瞬间清空文件。如果 Agent 在写入过程中崩溃，原文件内容已经丢失。安全做法是先写入临时文件，再 `os.replace()` 原子替换。\n\n> **Gotcha 3**：`f.read()` 一次性将整个文件载入内存。处理大日志文件时，用 `for line in f:` 逐行迭代更安全。\n\n现代 Python 推荐使用 `pathlib.Path` 替代 `os.path`，它提供了更优雅的面向对象接口：\n\n```python\nfrom pathlib import Path\n\noutput_dir = Path(\"output\")\noutput_dir.mkdir(exist_ok=True)  # 目录不存在则创建，已存在不报错\n(output_dir / \"snake.py\").write_text(code_content, encoding=\"utf-8\")\n```\n\n---\n\n## 4. 异常处理：给 Agent 穿上\"防弹衣\"\n\n网络会断开，API Key 会过期，文件路径会写错。`try/except` 让程序在遇到错误时不崩溃，而是执行备用逻辑。理解 Python 异常继承层次是精准捕获的前提：\n\n```\nBaseException\n├── SystemExit / KeyboardInterrupt  （不要捕获这些）\n└── Exception\n    ├── ValueError / TypeError / KeyError / FileNotFoundError ...\n    └── requests.exceptions.RequestException\n        ├── ConnectionError\n        ├── Timeout\n        ├── HTTPError\n        └── TooManyRedirects\n```\n\n```python\nimport requests\n\ntry:\n    response = requests.post(url, json=payload, timeout=10)\n    response.raise_for_status()  # 4xx/5xx 时抛出 HTTPError\n    data = response.json()\nexcept requests.exceptions.Timeout:\n    print(\"请求超时，Agent 决定稍后重试...\")\nexcept requests.exceptions.ConnectionError:\n    print(\"网络连接失败，请检查网络或 DNS\")\nexcept requests.exceptions.HTTPError as e:\n    # 4xx: 客户端错误（如 401 未授权、429 限流）| 5xx: 服务器错误\n    print(f\"HTTP 错误 {e.response.status_code}: {e}\")\nexcept json.JSONDecodeError:\n    print(\"响应体不是合法 JSON，LLM 可能返回了错误页面\")\nexcept Exception as e:\n    # 兜底：捕获所有未预料到的异常，避免 Agent 静默崩溃\n    print(f\"未预期错误: {type(e).__name__}: {e}\")\nelse:\n    # try 块没有抛出任何异常时才执行\n    print(\"请求成功，开始处理数据...\")\nfinally:\n    # 无论是否异常都会执行（适合清理资源）\n    print(\"本次请求流程结束\")\n```\n\n> **Gotcha**：异常捕获顺序必须**从具体到宽泛**。`Timeout` 是 `RequestException` 的子类，如果先写 `except RequestException`，`Timeout` 永远不会被捕获到。把 `Exception` 放最后做兜底。\n\n> **CS61A 深度提示**：在\"铁甲钢拳\"的 ReAct 循环中，Agent 执行代码时抛出的异常会被捕获，其 `stderr` 作为上下文喂回 LLM 进行自我修复。没有 `try/except`，Agent 跑一次就死机，根本谈不上\"迭代\"。\n\n---\n\n## 5. API Key 认证：别把家门钥匙藏在门口地垫下\n\n调用 LLM API 是要花钱的，服务商要求提供 API Key 验证身份。新手常犯的致命错误：把 Key 硬编码在代码里。一旦推送到 GitHub，爬虫会在数秒内盗刷你的余额。\n\n**正确做法：使用环境变量。** 环境变量存在于操作系统进程中，代码只读取引用，不携带明文。\n\n```python\nimport os\n\n# 方式一：os.environ.get() —— Key 不存在时返回 None（或指定的默认值），不崩溃\napi_key = os.environ.get(\"MY_LLM_API_KEY\")\nif not api_key:\n    raise RuntimeError(\"找不到 API Key！请在终端执行: export MY_LLM_API_KEY='sk-xxx'\")\n\n# 方式二：os.environ[] —— Key 不存在时直接抛出 KeyError（fail fast）\napi_key = os.environ[\"MY_LLM_API_KEY\"]\n\n# 带上认证头发起请求\nheaders = {\"Authorization\": f\"Bearer {api_key}\"}\nresponse = requests.post(url, json=payload, headers=headers, timeout=30)\n```\n\n> **Gotcha**：`os.environ.get(\"KEY\")` 返回 `None` 时，`if not api_key` 能正确捕获。但若环境变量设为空字符串 `\"\"`，`os.environ.get()` 返回 `\"\"`，`if not api_key` 同样为 `True`——这正是我们想要的，因为空字符串不是合法 Key。\n\n### 项目级管理：.env 文件与 python-dotenv\n\n在团队协作中，更规范的做法是将环境变量写入项目根目录的 `.env` 文件（**务必加入 `.gitignore`**），再用 `python-dotenv` 库加载：\n\n```python\n# .env 文件内容（不要提交到 Git！）\n# MY_LLM_API_KEY=sk-xxxxxxxxxxxx\n\nfrom dotenv import load_dotenv\nload_dotenv()  # 将 .env 文件中的变量加载到 os.environ\napi_key = os.environ[\"MY_LLM_API_KEY\"]\n```\n\n---\n\n## 结语：通信地基已打好\n\n你已掌握 Agent 与世界交互的全部底层协议：用 `requests` 发起 HTTP 对话，用 `JSON` 编解码通信语言，用文件 I/O 持久化记忆，用 `try/except` 抵御意外，用环境变量保护密钥。这些看似基础的语法，正是构建\"铁甲钢拳\"的通信地基。下一单元，我们将在此基础上给 Agent 装上\"大脑\"——Function Calling，让它学会主动调用这些技能！",
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "铁甲钢拳 Agent 第一次尝试调用 LLM API 生成贪吃蛇代码。你写了这样的请求：\n\nresponse = requests.post(url, data={\"prompt\": \"写贪吃蛇\"}, timeout=30)\n\n服务器返回 415 Unsupported Media Type。最可能的原因是什么？",
+        "options": [
+          "A. 超时时间 30 秒太短，服务器还没来得及处理",
+          "B. data= 发送的是表单格式（application/x-www-form-urlencoded），而服务器期望 JSON 格式",
+          "C. API Key 缺失，服务器拒绝处理请求",
+          "D. URL 中缺少查询字符串参数"
+        ],
+        "answer": "B",
+        "explanation": "data= 会将数据编码为表单格式，Content-Type 为 application/x-www-form-urlencoded。而 LLM API 通常期望 application/json。应使用 json=payload，它会自动调用 json.dumps() 序列化并设置正确的 Content-Type 头。"
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "Agent 在网络不稳定的环境下运行，你写了如下异常处理代码：\n\ntry:\n    response = requests.post(url, json=payload, timeout=10)\nexcept requests.exceptions.RequestException:\n    print(\"请求异常\")\nexcept requests.exceptions.Timeout:\n    print(\"超时，准备重试\")\n\n当请求超时时，\"超时，准备重试\" 永远不会被打印。为什么？",
+        "options": [
+          "A. timeout=10 参数不会触发 Timeout 异常",
+          "B. Timeout 是 RequestException 的子类，已被前面的 except 捕获，后面的分支永远不会执行",
+          "C. 超时不会抛出异常，而是返回 None",
+          "D. 应该用 except requests.exceptions.ConnectTimeout 代替"
+        ],
+        "answer": "B",
+        "explanation": "Python 异常捕获遵循从具体到宽泛的顺序。Timeout 继承自 RequestException，所以 except RequestException 会先匹配到 Timeout 异常，后面的 except Timeout 永远不会被执行。正确做法是将更具体的 Timeout 放在 RequestException 之前。"
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "Agent 用以下代码处理 LLM 的响应：\n\nresponse = requests.post(url, json=payload, timeout=30)\ndata = response.json()\nprint(data[\"choices\"][0][\"message\"][\"content\"])\n\n服务器返回 HTTP 500，响应体为 {\"error\": \"Internal Server Error\"}。程序会怎样？",
+        "options": [
+          "A. response.json() 抛出异常，因为状态码不是 200",
+          "B. requests 自动重试请求直到成功",
+          "C. response.json() 成功解析 JSON，但 data[\"choices\"] 抛出 KeyError，因为响应体中没有 choices 键",
+          "D. 程序正常打印出 Internal Server Error"
+        ],
+        "answer": "C",
+        "explanation": "response.json() 只负责解析响应体为 Python 对象，它不检查 HTTP 状态码。即使返回 500，只要响应体是合法 JSON，json() 就会成功解析。但由于响应体是 {\"error\": ...} 而非 {\"choices\": ...}，访问 data[\"choices\"] 会抛出 KeyError。应先调用 response.raise_for_status() 或检查 status_code。"
+      },
+      {
+        "id": "q4",
+        "type": "choice",
+        "question": "Agent 将含中文的测试报错信息序列化为 JSON 喂回 LLM 进行自我修复：\n\nlog = {\"error\": \"NameError: 名字 'snake' 未定义\"}\njson_str = json.dumps(log)\n\n打印 json_str 时发现中文变成了 \\u540d\\u5b57 这样的乱码。如何修复？",
+        "options": [
+          "A. 改用 json.loads() 代替 json.dumps()",
+          "B. 添加 ensure_ascii=False 参数：json.dumps(log, ensure_ascii=False)",
+          "C. 添加 indent=2 参数：json.dumps(log, indent=2)",
+          "D. 将中文翻译为英文后再序列化"
+        ],
+        "answer": "B",
+        "explanation": "json.dumps() 默认 ensure_ascii=True，会将所有非 ASCII 字符转义为 \\uXXXX 形式。设置 ensure_ascii=False 后，中文字符会原样输出，便于调试和日志阅读。这在处理 LLM 的中文响应时尤为重要。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "agent_parse_and_validate",
+      "description": "铁甲钢拳 Agent 的「眼睛」：解析并校验 LLM 返回的工具调用指令。Agent 收到 LLM 的原始 JSON 响应字符串后，需要安全地解析它、校验必需字段，并返回结构化的结果。这是 ReAct 循环中「思考→行动」的关键桥梁——如果解析失败，Agent 就像个听不懂指令的士兵，寸步难行。",
+      "starterCode": "import json\n\n\ndef agent_parse_and_validate(raw_response: str) -> dict:\n    \"\"\"Parse and validate an LLM response for the 铁甲钢拳 autonomous coding agent.\n\n    The LLM returns a JSON string describing an action for the agent to perform.\n    This function is the agent's \"eyes\" — it reads what the LLM \"says\" and checks\n    whether the instructions are complete before executing them.\n\n    In the final 铁甲钢拳 project, this function sits at the heart of the ReAct\n    loop: Think → Act → Observe → Repeat. If parsing fails here, the entire loop\n    breaks and the agent is paralyzed.\n\n    Valid actions and their required fields:\n        - \"write_file\": requires \"filename\" (str) and \"code\" (str)\n        - \"run_test\":   requires \"test_command\" (str)\n        - \"finish\":     no additional required fields\n\n    Args:\n        raw_response: A raw JSON string from the LLM, e.g.:\n            '{\"action\": \"write_file\", \"filename\": \"snake.py\", \"code\": \"print(1)\"}'\n\n    Returns:\n        A dict with one of two structures:\n        - On success: {\"status\": \"success\", \"action\": str, \"payload\": dict}\n          where `payload` contains only the action-specific fields.\n        - On error:   {\"status\": \"error\", \"message\": str}\n\n    Examples:\n        >>> agent_parse_and_validate('{\"action\": \"write_file\", \"filename\": \"snake.py\", \"code\": \"print(1)\"}')\n        {'status': 'success', 'action': 'write_file', 'payload': {'filename': 'snake.py', 'code': 'print(1)'}}\n\n        >>> agent_parse_and_validate('')\n        {'status': 'error', 'message': 'Empty response from LLM'}\n\n        >>> agent_parse_and_validate('{\"action\": \"write_file\", \"filename\": \"snake.py\"}')\n        {'status': 'error', 'message': \"Missing required field 'code' for action 'write_file'\"}\n\n        >>> agent_parse_and_validate('{\"action\": \"finish\"}')\n        {'status': 'success', 'action': 'finish', 'payload': {}}\n    \"\"\"\n    # TODO: Step 1 — Guard against empty or whitespace-only input.\n    #       If raw_response is falsy or only whitespace (use .strip()),\n    #       return {\"status\": \"error\", \"message\": \"Empty response from LLM\"}.\n\n    # TODO: Step 2 — Parse the JSON string using json.loads().\n    #       Wrap this in a try/except block to catch json.JSONDecodeError.\n    #       On failure, return:\n    #         {\"status\": \"error\", \"message\": \"Failed to parse LLM response as JSON\"}\n\n    # TODO: Step 3 — Extract and validate the \"action\" field.\n    #       If \"action\" key is missing from the parsed dict, return:\n    #         {\"status\": \"error\", \"message\": \"Missing required field: action\"}\n    #       If the action value is not one of {\"write_file\", \"run_test\", \"finish\"},\n    #       return:\n    #         {\"status\": \"error\", \"message\": f\"Unknown action: {action}\"}\n\n    # TODO: Step 4 — Validate action-specific required fields.\n    #       Define a mapping: action -> list of required field names.\n    #         \"write_file\" needs [\"filename\", \"code\"]\n    #         \"run_test\"   needs [\"test_command\"]\n    #         \"finish\"     needs []\n    #       For each required field, check if it exists in the parsed data.\n    #       If any is missing, return:\n    #         {\"status\": \"error\",\n    #          \"message\": f\"Missing required field '{field}' for action '{action}'\"}\n\n    # TODO: Step 5 — Build the success result.\n    #       Create a payload dict containing ONLY the action-specific fields\n    #       (copy them from the parsed data, not the entire parsed dict).\n    #       Return:\n    #         {\"status\": \"success\", \"action\": action, \"payload\": payload}\n\n    pass",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "normal case - write_file action with all required fields",
+          "input": [
+            "{\"action\": \"write_file\", \"filename\": \"snake.py\", \"code\": \"print(1)\"}"
+          ],
+          "expected": "{\"status\": \"success\", \"action\": \"write_file\", \"payload\": {\"filename\": \"snake.py\", \"code\": \"print(1)\"}}"
+        },
+        {
+          "name": "edge case - empty response string",
+          "input": [
+            ""
+          ],
+          "expected": "{\"status\": \"error\", \"message\": \"Empty response from LLM\"}"
+        },
+        {
+          "name": "misconception guard - valid JSON but missing required 'code' field",
+          "input": [
+            "{\"action\": \"write_file\", \"filename\": \"snake.py\"}"
+          ],
+          "expected": "{\"status\": \"error\", \"message\": \"Missing required field 'code' for action 'write_file'\"}"
+        },
+        {
+          "name": "normal case - finish action with no extra fields",
+          "input": [
+            "{\"action\": \"finish\"}"
+          ],
+          "expected": "{\"status\": \"success\", \"action\": \"finish\", \"payload\": {}}"
+        }
+      ],
+      "hints": [
+        "先用 if not raw_response or not raw_response.strip() 检查空输入，再尝试解析 JSON。",
+        "用 json.loads() 解析时，务必用 try/except 捕获 json.JSONDecodeError，返回友好的错误消息而非让程序崩溃。",
+        "用一个字典映射 action → 必需字段列表，然后用 for 循环逐一检查字段是否存在，避免重复代码。"
+      ],
+      "difficulty": "medium",
+      "conceptTags": [
+        "json-parsing",
+        "exception-handling",
+        "data-validation",
+        "error-handling"
+      ],
+      "commonPitfalls": [
+        "忘记在 json.loads() 之前检查空字符串，导致 json.JSONDecodeError 而非友好的错误消息",
+        "假设 LLM 返回的 JSON 一定包含所有必需字段，不做校验直接访问导致 KeyError",
+        "异常捕获顺序错误：先捕获宽泛异常再捕获具体异常，导致具体异常分支永远不执行"
+      ],
+      "estimatedMinutes": 15
+    }
+  },
+  "expiry": 1783742900496
+}

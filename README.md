@@ -13,14 +13,15 @@
 3. **多语言执行器沙盒 (Polyglot Runner)**：底层解耦硬编码，基于调度器架构自动运行并验证不同语言的作业代码：
    - **原生本地支持**：TypeScript (`tsx`), Python (`unittest`), Bash (`shell`), Rust (`rustc`) 可直接在本地编译与断言。
    - **Piston 云端引擎支持**：对于 C++, Java, Go, Ruby, Swift 等数十种小众或主流语言，系统会自动生成测试断言代码并无缝投递至 Piston API 沙箱进行云端执行，**实现零本地依赖的万物皆可学**！
-4. **高性能 L2 分层缓存系统 (Layered L2 Cache)**：针对 LLM 响应慢、易超时及重复检索消耗额度问题，构建了基于 SHA-256 哈希的内存（L1）与磁盘文件（L2）分层缓存系统。对于已发起的网络搜索、相同 Prompt 参数的大模型生成以及相同画像的课程规划，实现 `1ms` 级闪电命中（Cache HIT），节省高达 60% 的 API 费用并彻底解决控制台卡顿。
+4. **版本化缓存与请求合并 (Versioned Cache)**：缓存键包含模型、提示词版本与 schema 版本；磁盘缓存原子写入、损坏隔离，并对同一并发检索请求执行 single-flight 合并，避免重复消耗模型额度。
 5. **交互式 AI 助教批改 (Assessment & TA Reviewer)**：不仅检测代码测试是否通过，还会自动收集并**支持数字/字母/括号多种格式归一化校验**选择题（Quiz）答案。大模型扮演极具共情力与专业度的 AI TA，提供多阶段渐进式 Hints（根据尝试次数提供概念指引、方向锁定、或伪代码提示）以及有温度的诊断反馈。
 6. **自适应补救路线 (Adaptive Remediation)**：当同一单元连续失败到第 2 次时，系统会根据失败测试、Quiz 错题和诊断结果生成一个短小的 `remediation` 补救单元，自动插回学习计划；通关补救单元后会通过 `nextIfPassed` 路由回原单元重新挑战。
 7. **课程质量审计 (Curriculum Audit)**：提供 `fc audit` 本地质量闸门，扫描当前计划里的讲义、Quiz、练习测试、ProjectSpec、Remediation 路由和 fallback 标记，输出质量分与可操作问题清单，也支持 `--json` 接入脚本。
 8. **弹性跳过与复习机制 (Skip & Review)**：支持 `fc skip` 跳过太难的关卡（在 submit 连续失败 5 次时系统亦会自动发出友好跳过提示），之后随时通过 `fc review` 唤起复习面板重新挑战，让你保持顺畅的学习心流。
-9. **控频并发预生成与自适应重试 (Generate All & Auto-Retry)**：
-   - **抗 Rate Limit 流控**：支持一键离线预生成命令 `fc generate-all`，底层集成自定义 `pLimit` 并发调度器与可配置启动间隔（默认并发度 `1`、间隔 `1000ms`），既能稳健避开模型提供商连接限流，也能在额度更高时通过参数提速。
-   - **断点续传与弹性恢复**：网络或 API 超时导致单个单元降级为占位符时，系统不会锁死状态。重新执行 `generate-all` 或 `start` 时，CLI 会自动扫描并**仅重新触发生成失败的单元**，实现无缝断点续传。
+9. **可恢复安全发布 (Generation Jobs & Atomic Publish)**：
+   - **质量门**：课程大纲、单元、测验和评估反馈均经结构化工具调用与 schema 校验；正式单元还必须有来源包、目标覆盖、三类测试和通过实跑的参考解答。
+   - **可恢复性**：每次生成记录 durable job 与 artifact manifest；失败不会以占位课发布，可用 generation status 查看并用 generation retry 恢复。
+   - **学习者保护**：发布使用原子写入和单写者锁；已有 solution 文件默认永不覆盖，生成器另写 starter 文件。只有显式 reset-solution 才会替换答案。
 
 ---
 
@@ -71,6 +72,10 @@ npm run dev -- generate-all
 
 # 【可选】提高预生成吞吐：最多允许 4 个并发，按启动间隔做限流
 npm run dev -- generate-all --concurrency 2 --stagger-ms 1500
+
+# 查看或重试未发布的生成作业
+npm run dev -- generation status <jobId>
+npm run dev -- generation retry <jobId>
 
 # 【可选】审计当前计划/讲义/练习/Project 的质量
 npm run dev -- audit

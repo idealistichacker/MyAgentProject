@@ -32,6 +32,10 @@ export interface ToolDefinition {
 export interface ChatOptions {
   temperature?: number;
   tools?: ToolDefinition[];
+  toolChoice?: 'auto' | 'required' | { type: 'function'; function: { name: string } };
+  responseFormat?: {
+    type: 'json_object';
+  };
 }
 
 export interface ChatResponse {

@@ -133,6 +133,7 @@ function auditUnit(
   }
 
   auditContent(unit, issues);
+  auditTeachingEvidence(unit, issues);
   auditQuiz(unit, issues);
   auditExercise(unit, issues);
   auditProject(unit, issues);
@@ -229,6 +230,18 @@ function auditQuizQuestion(
     addIssue(issues, unit, 'warning', 'unit.quiz.question.empty', `Quiz "${question.id}" has an empty prompt.`);
   }
 
+  if (hasTeachingMetadata(unit) && !question.objectiveIds?.length) {
+    addIssue(issues, unit, 'warning', 'unit.quiz.objectives.missing', `Quiz "${question.id}" has no objective mapping.`);
+  }
+
+  if (hasTeachingMetadata(unit) && !question.misconception?.trim()) {
+    addIssue(issues, unit, 'warning', 'unit.quiz.misconception.missing', `Quiz "${question.id}" has no misconception label.`);
+  }
+
+  if (hasTeachingMetadata(unit) && question.type === 'short-answer' && !question.rubric?.trim()) {
+    addIssue(issues, unit, 'warning', 'unit.quiz.rubric.missing', `Short-answer quiz "${question.id}" has no grading rubric.`);
+  }
+
   if (question.type === 'choice') {
     if (!question.options || question.options.length < 2) {
       addIssue(
@@ -321,6 +334,16 @@ function auditExercise(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
     );
   }
 
+  if (hasTeachingMetadata(unit) && (!exercise.conceptTags?.length || !exercise.commonPitfalls?.length)) {
+    addIssue(
+      issues,
+      unit,
+      'warning',
+      'unit.exercise.teachingMetadata.missing',
+      'Exercise has no concept tags or common-pitfall guidance.'
+    );
+  }
+
   auditExerciseTestShape(unit, exercise, issues);
 }
 
@@ -361,6 +384,51 @@ function auditExerciseTestShape(
       'Add an edge case so learners confront boundary reasoning.'
     );
   }
+
+  const categories = new Set(exercise.testCases.map((testCase) => testCase.category).filter(Boolean));
+  if (categories.size > 0 && !['normal', 'edge', 'misconception'].every((category) => categories.has(category as typeof exercise.testCases[number]['category']))) {
+    addIssue(
+      issues,
+      unit,
+      'warning',
+      'unit.exercise.testCases.categoriesMissing',
+      'Exercise test metadata does not cover normal, edge, and misconception categories.'
+    );
+  }
+}
+
+function auditTeachingEvidence(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
+  const sources = unit.sources ?? [];
+  const citations = unit.citations ?? [];
+  const coverage = unit.objectiveCoverage ?? [];
+
+  if (sources.length === 0) {
+    addIssue(issues, unit, 'info', 'unit.qualityMetadata.legacy', 'Unit predates structured sources and objective evidence.');
+    return;
+  }
+
+  const sourceIds = new Set(sources.map((source) => source.id));
+  if (citations.length === 0 || citations.some((citation) => !sourceIds.has(citation.sourceId))) {
+    addIssue(issues, unit, 'warning', 'unit.citations.invalid', 'Unit citations are missing or do not match its source pack.');
+  }
+
+  const coverageIds = new Set(coverage.map((item) => item.objectiveId));
+  for (const objective of unit.objectives) {
+    if (!coverageIds.has(objective)) {
+      addIssue(issues, unit, 'warning', 'unit.objectives.uncovered', `Objective "${objective}" has no lesson/example/assessment evidence.`);
+    }
+  }
+}
+
+function hasTeachingMetadata(unit: SeedUnit): boolean {
+  return Boolean(
+    unit.sources?.length ||
+    unit.objectiveCoverage?.length ||
+    unit.quiz?.some((question) => question.objectiveIds?.length || question.misconception || question.rubric) ||
+    unit.exercise?.conceptTags?.length ||
+    unit.exercise?.commonPitfalls?.length ||
+    unit.exercise?.testCases.some((testCase) => testCase.category)
+  );
 }
 
 function auditProject(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
@@ -394,6 +462,15 @@ function auditProject(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
         'warning',
         'unit.project.milestone.incomplete',
         `Project milestone "${milestone.id}" needs learnerTasks and acceptanceCriteria.`
+      );
+    }
+    if (hasTeachingMetadata(unit) && (!milestone.objectiveIds?.length || !milestone.checkpointQuestions?.length)) {
+      addIssue(
+        issues,
+        unit,
+        'warning',
+        'unit.project.milestone.learningEvidenceMissing',
+        `Project milestone "${milestone.id}" needs objective mappings and checkpoint questions.`
       );
     }
   }

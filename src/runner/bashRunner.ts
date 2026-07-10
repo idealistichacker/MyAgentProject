@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import type { ExerciseSpec, TestResult } from '../types.js';
-import { getTestPath } from '../utils/paths.js';
 import { writeTextFile } from '../state/fsState.js';
 import type { ExerciseRunResult } from './types.js';
+import { createRestrictedEnvironment } from './restrictedEnv.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -12,7 +13,7 @@ export async function runBashExercise(
   exercise: ExerciseSpec,
   exerciseDir: string
 ): Promise<ExerciseRunResult> {
-  const testPath = getTestPath(unitId, '.sh');
+  const testPath = path.join(exerciseDir, 'test.sh');
   const testSource = buildTestSource(exercise);
   writeTextFile(testPath, testSource);
 
@@ -22,9 +23,7 @@ export async function runBashExercise(
       ['test.sh'],
       {
         cwd: exerciseDir,
-        env: {
-          ...process.env,
-        },
+        env: createRestrictedEnvironment(),
         timeout: 5000,
         maxBuffer: 1024 * 1024,
       }

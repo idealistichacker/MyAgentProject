@@ -18,7 +18,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
     if (options?.tools && options.tools.length > 0) {
       body.tools = options.tools;
-      body.tool_choice = 'auto';
+      body.tool_choice = options.toolChoice ?? 'auto';
+    }
+
+    if (options?.responseFormat) {
+      body.response_format = options.responseFormat;
     }
 
     let lastError: any = null;

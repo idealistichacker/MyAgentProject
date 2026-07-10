@@ -3,8 +3,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 import type { ExerciseSpec, TestResult } from '../types.js';
-import { getTestPath } from '../utils/paths.js';
 import { writeTextFile } from '../state/fsState.js';
+import { createRestrictedEnvironment } from './restrictedEnv.js';
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -18,7 +18,7 @@ export async function runTypeScriptExercise(
   exercise: ExerciseSpec,
   exerciseDir: string
 ): Promise<ExerciseRunResult> {
-  const testPath = getTestPath(unitId);
+  const testPath = path.join(exerciseDir, 'test.ts');
   const testSource = buildTestSource(exercise);
   writeTextFile(testPath, testSource);
 
@@ -28,10 +28,7 @@ export async function runTypeScriptExercise(
       [tsxCliPath, 'test.ts'],
       {
         cwd: exerciseDir,
-        env: {
-          ...process.env,
-          NODE_ENV: 'test',
-        },
+        env: createRestrictedEnvironment(),
         timeout: 5000,
         maxBuffer: 1024 * 1024,
       }

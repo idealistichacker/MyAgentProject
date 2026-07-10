@@ -36,6 +36,9 @@ export const quizQuestionSchema = z.object({
   options: z.array(z.string()).optional(),
   answer: z.string(),
   explanation: z.string().default(''),
+  objectiveIds: z.array(z.string()).optional(),
+  misconception: z.string().optional(),
+  rubric: z.string().optional(),
 });
 
 export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
@@ -51,12 +54,17 @@ export const exerciseSchema = z.object({
   testCases: z.array(
     z.object({
       name: z.string(),
+      category: z.enum(['normal', 'edge', 'misconception']).optional(),
       input: z.array(z.unknown()),
       expected: z.unknown(),
       explanation: z.string().optional(),
     })
   ),
   hints: z.array(z.string()).default([]),
+  difficulty: z.enum(['introductory', 'practice', 'challenge']).optional(),
+  conceptTags: z.array(z.string()).optional(),
+  commonPitfalls: z.array(z.string()).optional(),
+  estimatedMinutes: z.number().int().min(1).max(240).optional(),
 });
 
 export type ExerciseSpec = z.infer<typeof exerciseSchema>;
@@ -67,6 +75,8 @@ export const projectMilestoneSchema = z.object({
   goal: z.string(),
   learnerTasks: z.array(z.string()).default([]),
   acceptanceCriteria: z.array(z.string()).default([]),
+  objectiveIds: z.array(z.string()).optional(),
+  checkpointQuestions: z.array(z.string()).optional(),
 });
 
 export type ProjectMilestone = z.infer<typeof projectMilestoneSchema>;
@@ -101,6 +111,35 @@ export const projectSpecSchema = z.object({
 
 export type ProjectSpec = z.infer<typeof projectSpecSchema>;
 
+export const sourceSchema = z.object({
+  id: z.string(),
+  url: z.string().url(),
+  title: z.string(),
+  publisher: z.string(),
+  retrievedAt: z.string().datetime(),
+  hash: z.string(),
+  trust: z.enum(['primary', 'secondary', 'background']),
+  excerpt: z.string(),
+});
+
+export type Source = z.infer<typeof sourceSchema>;
+
+export const objectiveCoverageSchema = z.object({
+  objectiveId: z.string(),
+  lessonEvidence: z.string().min(1),
+  exampleEvidence: z.string().min(1),
+  assessmentIds: z.array(z.string()).min(1),
+});
+
+export type ObjectiveCoverage = z.infer<typeof objectiveCoverageSchema>;
+
+export const citationSchema = z.object({
+  sourceId: z.string(),
+  claim: z.string().min(1),
+});
+
+export type Citation = z.infer<typeof citationSchema>;
+
 export const seedUnitSchema = z.object({
   id: z.string(),
   type: z.enum(['unit', 'project', 'remediation']).default('unit'),
@@ -110,6 +149,9 @@ export const seedUnitSchema = z.object({
   objectives: z.array(z.string()).default([]),
   content: z.string().optional(),
   references: z.array(z.string()).default([]),
+  sources: z.array(sourceSchema).optional(),
+  citations: z.array(citationSchema).optional(),
+  objectiveCoverage: z.array(objectiveCoverageSchema).optional(),
   quiz: z.array(quizQuestionSchema).optional(),
   exercise: exerciseSchema.optional(),
   project: projectSpecSchema.optional(),
@@ -128,11 +170,83 @@ export const planSchema = z.object({
   learnerProfile: learnerProfileSchema,
   units: z.array(seedUnitSchema),
   currentIndex: z.number().int().min(0).default(0),
+  origin: z.enum(['generated', 'offline']).default('offline'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 
 export type LearningPlan = z.infer<typeof planSchema>;
+
+export const generationStatusSchema = z.enum([
+  'planned',
+  'retrieving',
+  'drafting',
+  'reviewing',
+  'validating',
+  'publishing',
+  'published',
+  'offline',
+  'degraded',
+  'failed',
+]);
+
+export type GenerationStatus = z.infer<typeof generationStatusSchema>;
+
+export const qualityIssueSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  severity: z.enum(['error', 'warning']),
+});
+
+export type QualityIssue = z.infer<typeof qualityIssueSchema>;
+
+export const qualityReportSchema = z.object({
+  passed: z.boolean(),
+  checks: z.array(z.string()).default([]),
+  issues: z.array(qualityIssueSchema).default([]),
+  evaluatedAt: z.string().datetime(),
+});
+
+export type QualityReport = z.infer<typeof qualityReportSchema>;
+
+export const generationJobSchema = z.object({
+  id: z.string(),
+  unitId: z.string(),
+  status: generationStatusSchema,
+  stage: z.string(),
+  attempt: z.number().int().min(1),
+  inputHash: z.string(),
+  startedAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional(),
+  error: z.string().optional(),
+  qualityReport: qualityReportSchema.optional(),
+});
+
+export type GenerationJob = z.infer<typeof generationJobSchema>;
+
+export const artifactFileSchema = z.object({
+  path: z.string(),
+  hash: z.string(),
+  role: z.enum(['lesson', 'starter', 'solution', 'project']),
+  protected: z.boolean().default(false),
+});
+
+export type ArtifactFile = z.infer<typeof artifactFileSchema>;
+
+export const artifactManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  unitId: z.string(),
+  jobId: z.string().optional(),
+  status: z.enum(['publishing', 'published', 'offline', 'degraded', 'failed']),
+  inputHash: z.string(),
+  publishedAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime(),
+  qualityReport: qualityReportSchema.optional(),
+  files: z.array(artifactFileSchema).default([]),
+});
+
+export type ArtifactManifest = z.infer<typeof artifactManifestSchema>;
 
 export const testResultSchema = z.object({
   name: z.string(),

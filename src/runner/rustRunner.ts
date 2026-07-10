@@ -1,11 +1,10 @@
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import fs from 'node:fs';
 import type { ExerciseSpec, TestResult } from '../types.js';
-import { getTestPath } from '../utils/paths.js';
 import { writeTextFile } from '../state/fsState.js';
 import type { ExerciseRunResult } from './types.js';
+import { createRestrictedEnvironment } from './restrictedEnv.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -29,6 +28,7 @@ export async function runRustExercise(
     try {
       await execFileAsync('rustc', ['test.rs', '-o', exeName], {
         cwd: exerciseDir,
+        env: createRestrictedEnvironment(),
         timeout: 10000,
       });
     } catch (compileErr: any) {
@@ -47,6 +47,7 @@ export async function runRustExercise(
     // Run the compiled executable
     const { stdout, stderr } = await execFileAsync(exePath, [], {
       cwd: exerciseDir,
+      env: createRestrictedEnvironment(),
       timeout: 5000,
       maxBuffer: 1024 * 1024,
     });

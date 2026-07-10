@@ -4,8 +4,11 @@ import {
   getConfigPath,
   getExercisesDir,
   getFcDir,
+  getJobsDir,
   getLessonsDir,
+  getLocksDir,
   getLogsDir,
+  getManifestsDir,
   getLearnerPath,
   getPlanPath,
   getStatePath,
@@ -38,6 +41,9 @@ export function ensureProjectDirs(): void {
     getExercisesDir(),
     getLogsDir(),
     getTmpDir(),
+    getJobsDir(),
+    getManifestsDir(),
+    getLocksDir(),
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -52,8 +58,7 @@ export function readJson<T>(filePath: string, fallback: T): T {
 }
 
 export function writeJson<T>(filePath: string, value: T): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  writeTextFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export function loadConfig(): ProviderConfig {
@@ -109,7 +114,69 @@ export function saveState(state: LearningState): void {
 
 export function writeTextFile(filePath: string, content: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content, 'utf8');
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+  );
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(tempPath, 'w');
+    fs.writeFileSync(descriptor, content, 'utf8');
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(tempPath, filePath);
+  } catch (error) {
+    if (descriptor !== undefined) {
+      fs.closeSync(descriptor);
+    }
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+    throw error;
+  }
+}
+
+export function withFileLock<T>(
+  lockPath: string,
+  action: () => T,
+  options: { timeoutMs?: number; staleMs?: number } = {}
+): T {
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  const staleMs = options.staleMs ?? 60_000;
+  const startedAt = Date.now();
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+
+  while (true) {
+    try {
+      const descriptor = fs.openSync(lockPath, 'wx');
+      fs.writeFileSync(descriptor, `${process.pid}:${Date.now()}\n`, 'utf8');
+      fs.closeSync(descriptor);
+      break;
+    } catch (error: unknown) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code !== 'EEXIST') {
+        throw error;
+      }
+      const modifiedAt = fs.statSync(lockPath).mtimeMs;
+      if (Date.now() - modifiedAt > staleMs) {
+        fs.unlinkSync(lockPath);
+        continue;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        throw new Error(`Timed out waiting for file lock: ${lockPath}`);
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+
+  try {
+    return action();
+  } finally {
+    if (fs.existsSync(lockPath)) {
+      fs.unlinkSync(lockPath);
+    }
+  }
 }
 
 export function ensureExerciseDirs(): void {

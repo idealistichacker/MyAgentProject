@@ -76,7 +76,7 @@ fc start
 ```
 执行后，系统会在本地生成这些文件：
 1. **讲义文件**：`.fuckcolloge/lessons/unit-xxx.md` (你可以用 VS Code 打开直接阅读，或者在命令行输入 `fc lesson` 在控制台查看)。
-2. **练习代码文件**：`.fuckcolloge/exercises/unit-xxx/solution.ts` (或者是其他语言的后缀，包含初始代码骨架)。
+2. **练习代码文件**：首次生成时会创建 solution.ts；同时保留 starter.ts 作为最新模板。后续执行 start 不会覆盖你的 solution 文件。
 3. **Project 规格文件**：如果当前关卡是 `type: "project"`，还会生成 `.fuckcolloge/exercises/unit-xxx/PROJECT.md`，里面包含项目目标、里程碑、交付物、文件清单和评分标准。
 
 ### Step 8: 编写代码、答题与提交评估
@@ -171,13 +171,22 @@ fc next
   ```
 
 ### 14. `generate-all` — 全量课件生成
-* **描述**：在离线或弱网前，提前一次性批量生成大纲内所有的讲义、代码骨架和 Project 规格，并存放在 `.fuckcolloge/` 对应目录下。
+* **描述**：在离线或弱网前，提前一次性批量生成大纲内所有的讲义、代码骨架和 Project 规格，并存放在 `.fuckcolloge/` 对应目录下。每个单元都会产生可恢复的 generation job 与 artifact manifest；失败不会发布为正式课程。
 * **参数选项**：
   * `--concurrency <number>`：同时生成的单元数量，范围建议 `1-4`，默认 `1`，用于在稳定性与速度之间取舍。
   * `--stagger-ms <number>`：每个生成任务的启动间隔，默认 `1000` 毫秒，用于平滑 API 连接峰值。
+  * `--reset-solution`：显式覆盖已有学习者答案；默认会要求确认，也可结合 `--yes` 在自动化环境确认。
 * **示例**：
   ```powershell
   fc generate-all --concurrency 2 --stagger-ms 1500
+  ```
+
+### 15. `generation status` / `generation retry` — 生成作业恢复
+* **描述**：查看作业阶段、失败原因和质量报告，或依据 unit id 重试失败作业。
+* **示例**：
+  ```powershell
+  fc generation status <jobId>
+  fc generation retry <jobId>
   ```
 
 ---
