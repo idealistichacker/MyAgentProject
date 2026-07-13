@@ -1,8 +1,11 @@
 import crypto from 'node:crypto';
 import { generateUnitContent } from '../agents/pipeline.js';
+import { GeneratedUnitQualityError } from '../agents/generatedUnitQuality.js';
 import { loadPlan } from '../state/fsState.js';
 import type { LLMProvider } from '../providers/types.js';
-import type { GenerationJob, QualityReport, SeedUnit } from '../types.js';
+import { InstrumentedProvider } from '../providers/instrumentedProvider.js';
+import { qualityReportSchema, type GenerationCheckpoint, type GenerationJob, type GenerationMetrics, type QualityReport, type SeedUnit } from '../types.js';
+import { stableStringify } from '../utils/cache.js';
 import {
   createGenerationJob,
   createPassedQualityReport,
@@ -14,6 +17,7 @@ import {
 export interface GenerateAndPublishOptions {
   provider?: LLMProvider;
   resetSolution?: boolean;
+  resumeFromJob?: GenerationJob;
 }
 
 export interface GenerateAndPublishResult {
@@ -35,8 +39,24 @@ export async function generateAndPublishUnit(
     throw new Error(`Unknown unit "${unitId}".`);
   }
 
-  const inputHash = hashInput({ unit, learnerProfile: plan.learnerProfile });
-  let job = createGenerationJob(unit.id, inputHash);
+  const projectUnit = plan.units.find((candidate) => candidate.type === 'project');
+  const inputHash = hashInput({
+    unit,
+    learnerProfile: plan.learnerProfile,
+    project: projectUnit ? { id: projectUnit.id, title: projectUnit.title, description: projectUnit.description } : null,
+  });
+  if (options.resumeFromJob) {
+    if (options.resumeFromJob.unitId !== unit.id) {
+      throw new Error(`Cannot resume job "${options.resumeFromJob.id}" for a different unit.`);
+    }
+    if (options.resumeFromJob.inputHash !== inputHash) {
+      throw new Error(`Cannot resume job "${options.resumeFromJob.id}" because its generation input has changed.`);
+    }
+  }
+  const startedAt = Date.now();
+  const stages: Record<string, number> = {};
+  const instrumentedProvider = options.provider ? new InstrumentedProvider(options.provider) : undefined;
+  let job = createGenerationJob(unit.id, inputHash, options.resumeFromJob);
   saveGenerationJob(job);
 
   try {
@@ -47,12 +67,20 @@ export async function generateAndPublishUnit(
       if (!options.provider) {
         throw new Error('Provider not configured. Run `fc init` and set an API key.');
       }
-      job = transition(job, 'drafting', 'drafting');
+      job = transition(job, 'retrieving', 'retrieving');
       saveGenerationJob(job);
-      artifact = await generateUnitContent(unit, plan, options.provider);
+      const generationStartedAt = Date.now();
+      artifact = await generateUnitContent(unit, plan, instrumentedProvider, {
+        onCheckpoint: (checkpoint) => {
+          job = recordGenerationCheckpoint(job, checkpoint);
+          saveGenerationJob(job);
+        },
+      });
+      stages.generation = Date.now() - generationStartedAt;
       status = 'published';
     }
 
+    const validationStartedAt = Date.now();
     job = transition(job, 'validating', 'validating');
     saveGenerationJob(job);
     qualityReport = createPassedQualityReport([
@@ -65,8 +93,10 @@ export async function generateAndPublishUnit(
       qualityReport,
       updatedAt: new Date().toISOString(),
     };
+    stages.validation = Date.now() - validationStartedAt;
     saveGenerationJob(job);
 
+    const publicationStartedAt = Date.now();
     job = transition(job, 'publishing', 'publishing');
     saveGenerationJob(job);
     const artifacts = publishUnitArtifacts(artifact, {
@@ -75,15 +105,19 @@ export async function generateAndPublishUnit(
       qualityReport,
       status,
       resetSolution: options.resetSolution,
+      expectedPlanRevision: plan.revision,
     });
+    stages.publication = Date.now() - publicationStartedAt;
 
     job = {
       ...transition(job, status, 'completed'),
       completedAt: new Date().toISOString(),
+      metrics: buildMetrics(startedAt, stages, artifact, instrumentedProvider, status === 'published'),
     };
     saveGenerationJob(job);
     return { unit: artifact, job, artifacts };
   } catch (error) {
+    const failedQualityReport = qualityReportFromGenerationError(error);
     job = {
       ...job,
       status: 'failed',
@@ -91,10 +125,62 @@ export async function generateAndPublishUnit(
       error: error instanceof Error ? error.message : String(error),
       updatedAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
+      qualityReport: failedQualityReport ?? job.qualityReport,
+      metrics: buildMetrics(startedAt, stages, unit, instrumentedProvider, false),
     };
     saveGenerationJob(job);
     throw error;
   }
+}
+
+export function qualityReportFromGenerationError(error: unknown): QualityReport | undefined {
+  return error instanceof GeneratedUnitQualityError
+    ? qualityReportSchema.parse({
+        passed: false,
+        checks: ['fact claim verification'],
+        issues: error.issues,
+        evaluatedAt: new Date().toISOString(),
+      })
+    : undefined;
+}
+
+export function recordGenerationCheckpoint(job: GenerationJob, checkpoint: GenerationCheckpoint): GenerationJob {
+  const status = checkpoint.stage === 'draft'
+    ? 'drafting'
+    : checkpoint.stage === 'critique'
+      ? 'reviewing'
+      : 'validating';
+  return {
+    ...job,
+    status,
+    stage: checkpoint.stage,
+    checkpoints: [
+      ...job.checkpoints.filter((candidate) => candidate.stage !== checkpoint.stage),
+      checkpoint,
+    ],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function buildMetrics(
+  startedAt: number,
+  stages: Record<string, number>,
+  unit: SeedUnit,
+  provider: InstrumentedProvider | undefined,
+  generated: boolean
+): GenerationMetrics {
+  const providerMetrics = provider?.snapshot();
+  return {
+    totalDurationMs: Date.now() - startedAt,
+    stages,
+    providerCalls: providerMetrics?.calls ?? 0,
+    providerRetries: providerMetrics?.retries ?? 0,
+    promptTokens: providerMetrics?.promptTokens ?? 0,
+    completionTokens: providerMetrics?.completionTokens ?? 0,
+    totalTokens: providerMetrics?.totalTokens ?? 0,
+    sourceCount: unit.sources?.length ?? 0,
+    cacheReuse: generated && (providerMetrics?.calls ?? 0) === 0,
+  };
 }
 
 function isPublishableOfflineUnit(unit: SeedUnit): boolean {
@@ -112,17 +198,4 @@ function transition(job: GenerationJob, status: GenerationJob['status'], stage: 
 
 function hashInput(value: unknown): string {
   return crypto.createHash('sha256').update(stableStringify(value)).digest('hex');
-}
-
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`;
-  }
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
 }

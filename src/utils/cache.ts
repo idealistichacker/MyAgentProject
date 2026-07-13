@@ -115,6 +115,14 @@ export class CacheManager {
     await fs.rm(this.cacheDir, { recursive: true, force: true });
   }
 
+  async delete(key: string): Promise<void> {
+    const keyHash = this.getHash(key);
+    this.memoryCache.delete(keyHash);
+    await fs.unlink(this.getFilePath(keyHash)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+
   private touchMemory(keyHash: string, entry: CacheEntry<unknown>): void {
     this.memoryCache.delete(keyHash);
     this.memoryCache.set(keyHash, entry);
@@ -142,6 +150,10 @@ export class CacheManager {
 
 export function createCacheKey(kind: string, input: unknown): string {
   return `${kind}:v1:${stableStringify(input)}`;
+}
+
+export function hashCacheKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
 }
 
 export function stableStringify(value: unknown): string {

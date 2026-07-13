@@ -13,8 +13,10 @@ import {
   gradeQuiz,
 } from './agents/pipeline.js';
 import { generateAndPublishUnit } from './generation/orchestrator.js';
-import { loadArtifactManifest, loadGenerationJob } from './generation/publisher.js';
+import { buildGenerationMetricsReport } from './generation/metrics.js';
+import { inspectInterruptedPublications, listGenerationJobs, loadArtifactManifest, loadGenerationJob, recoverInterruptedPublications } from './generation/publisher.js';
 import { GenerationScheduler } from './generation/scheduler.js';
+import { replacePlan, updatePlan } from './state/planStore.js';
 import { createProvider } from './providers/types.js';
 import type { LLMProvider } from './providers/types.js';
 import fs from 'node:fs';
@@ -27,7 +29,6 @@ import {
   loadState,
   saveConfig,
   saveLearner,
-  savePlan,
   saveState,
 } from './state/fsState.js';
 import {
@@ -183,8 +184,7 @@ program.command('plan')
     s.start('FCAgent CurriculumPlanner 正在为你生成定制化大纲...');
     let plan: LearningPlan;
     try {
-      plan = await generatePlan(learner, provider);
-      savePlan(plan);
+      plan = replacePlan(await generatePlan(learner, provider));
     } catch (error) {
       s.stop(color.red('✖ 计划未保存，现有计划保持不变。'));
       cancel(error instanceof Error ? error.message : String(error));
@@ -418,13 +418,20 @@ program.command('next')
       return;
     }
 
-    plan.currentIndex = routed.currentIndex;
-    plan.updatedAt = new Date().toISOString();
-    savePlan(plan);
+    let updatedPlan: LearningPlan;
+    try {
+      updatedPlan = updatePlan(plan.revision, (draft) => {
+        draft.currentIndex = routed.currentIndex;
+      });
+    } catch (error) {
+      console.error(color.red(error instanceof Error ? error.message : String(error)));
+      process.exitCode = 1;
+      return;
+    }
 
-    const nextUnit = plan.units[plan.currentIndex];
+    const nextUnit = updatedPlan.units[updatedPlan.currentIndex];
     state.currentUnitId = nextUnit.id;
-    state.updatedAt = plan.updatedAt;
+    state.updatedAt = updatedPlan.updatedAt;
     saveState(state);
 
     intro(color.inverse(' ⏭️ 前往下一关 '));
@@ -458,13 +465,20 @@ program.command('skip')
       return;
     }
 
-    plan.currentIndex = currentIndex + 1;
-    plan.updatedAt = new Date().toISOString();
-    savePlan(plan);
+    let updatedPlan: LearningPlan;
+    try {
+      updatedPlan = updatePlan(plan.revision, (draft) => {
+        draft.currentIndex = currentIndex + 1;
+      });
+    } catch (error) {
+      console.error(color.red(error instanceof Error ? error.message : String(error)));
+      process.exitCode = 1;
+      return;
+    }
 
-    const nextUnit = plan.units[plan.currentIndex];
+    const nextUnit = updatedPlan.units[updatedPlan.currentIndex];
     state.currentUnitId = nextUnit.id;
-    state.updatedAt = plan.updatedAt;
+    state.updatedAt = updatedPlan.updatedAt;
     saveState(state);
 
     intro(color.inverse(' ⏭️ 跳过当前关卡 '));
@@ -553,6 +567,8 @@ program.command('generate-all')
   .description('Pre-generate all lessons, exercise skeletons, and project specs in the plan')
   .option('--concurrency <number>', 'Max unit generations running at once', '1')
   .option('--stagger-ms <number>', 'Minimum delay between generation starts', '1000')
+  .option('--requests-per-minute <number>', 'Maximum generation starts per minute', '60')
+  .option('--failure-threshold <number>', 'Transient failures before opening the circuit', '3')
   .option('--reset-solution', 'Replace existing learner solutions with starter templates')
   .option('--yes', 'Confirm destructive solution reset without prompting')
   .option('--force', 'Re-publish units that already have a complete artifact manifest')
@@ -584,11 +600,15 @@ program.command('generate-all')
 
     const concurrency = Math.max(1, Math.min(4, Number.parseInt(options.concurrency, 10) || 1));
     const staggerMs = Math.max(0, Math.min(10000, Number.parseInt(options.staggerMs, 10) || 0));
-    s.stop(`需要生成 ${tasks.length} 个单元。启动节流: 并发度 ${concurrency}, 间隔 ${staggerMs}ms。`);
+    const requestsPerMinute = Math.max(1, Math.min(600, Number.parseInt(options.requestsPerMinute, 10) || 60));
+    const failureThreshold = Math.max(1, Math.min(10, Number.parseInt(options.failureThreshold, 10) || 3));
+    s.stop(`需要生成 ${tasks.length} 个单元。并发 ${concurrency}，间隔 ${staggerMs}ms，速率 ${requestsPerMinute}/min。`);
 
     const scheduler = new GenerationScheduler({
       concurrency,
       minStartIntervalMs: staggerMs,
+      requestsPerMinute,
+      transientFailureThreshold: failureThreshold,
     });
     let completed = 0;
 
@@ -617,6 +637,9 @@ program.command('generate-all')
     const metrics = scheduler.snapshot();
     console.log(color.green(`\n✔ 批量生成结束：${generatedCount} 个已发布，${failures.length} 个失败。`));
     console.log(color.gray(`调度指标：p50 ${metrics.p50Ms}ms，p95 ${metrics.p95Ms}ms。`));
+    if (metrics.circuitOpen) {
+      console.log(color.yellow('提供方熔断器已打开；剩余排队任务已停止。'));
+    }
     outro('你可以去 `.fuckcolloge/lessons/` 和 `.fuckcolloge/exercises/` 尽情浏览啦！');
   });
 
@@ -635,6 +658,50 @@ generationCommand.command('status <jobId>')
     console.log(JSON.stringify(job, null, 2));
   });
 
+generationCommand.command('metrics')
+  .description('Summarize durable generation latency, token, retry, cache, and adaptive-stage metrics')
+  .option('--last <number>', 'Only include the most recent N jobs')
+  .option('--json', 'Print metrics as JSON')
+  .action((options) => {
+    const requestedCount = options.last ? Number.parseInt(options.last, 10) : undefined;
+    const jobs = listGenerationJobs();
+    const selectedJobs = requestedCount && requestedCount > 0 ? jobs.slice(0, requestedCount) : jobs;
+    const report = buildGenerationMetricsReport(selectedJobs);
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    console.log([
+      `Jobs: ${report.jobs} (${report.completed} completed, ${report.failed} failed)`,
+      `Success rate: ${(report.successRate * 100).toFixed(1)}%`,
+      `Latency: p50 ${report.p50DurationMs}ms, p95 ${report.p95DurationMs}ms`,
+      `Provider: ${report.providerCalls} calls, ${report.providerRetries} retries`,
+      `Tokens: ${report.promptTokens} input, ${report.completionTokens} output, ${report.totalTokens} total`,
+      `Cache-reused jobs: ${report.cacheReusedJobs}`,
+      `Critique skipped after high-confidence draft: ${report.critiqueSkippedJobs}`,
+    ].join('\n'));
+  });
+
+generationCommand.command('recover')
+  .description('Roll back publications interrupted after their recovery journal was written')
+  .option('--json', 'Print recovery results as JSON')
+  .action((options) => {
+    const results = recoverInterruptedPublications();
+    if (options.json) {
+      console.log(JSON.stringify(results, null, 2));
+    } else if (results.length === 0) {
+      console.log('No interrupted publications were found.');
+    } else {
+      for (const result of results) {
+        const prefix = result.action === 'rolled-back' || result.action === 'finalized' ? '✔' : result.action === 'manual-required' ? '!' : '✖';
+        console.log(`${prefix} ${result.unitId}: ${result.message}`);
+      }
+    }
+    if (results.some((result) => result.action !== 'rolled-back' && result.action !== 'finalized')) {
+      process.exitCode = 1;
+    }
+  });
+
 generationCommand.command('retry <jobId>')
   .description('Retry a failed or degraded job using its unit id')
   .option('--reset-solution', 'Replace an existing learner solution with the starter template')
@@ -646,6 +713,11 @@ generationCommand.command('retry <jobId>')
       process.exitCode = 1;
       return;
     }
+    if (job.status !== 'failed' && job.status !== 'degraded') {
+      console.error(`Generation job "${jobId}" is ${job.status}; only failed or degraded jobs can be resumed.`);
+      process.exitCode = 1;
+      return;
+    }
     if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
       return;
     }
@@ -654,6 +726,7 @@ generationCommand.command('retry <jobId>')
       const result = await generateAndPublishUnit(job.unitId, {
         provider,
         resetSolution: options.resetSolution,
+        resumeFromJob: job,
       });
       console.log(`Generation job ${result.job.id} completed with status ${result.job.status}.`);
     } catch (error) {
@@ -661,6 +734,16 @@ generationCommand.command('retry <jobId>')
       process.exitCode = 1;
     }
   });
+
+const interruptedPublications = inspectInterruptedPublications();
+if (interruptedPublications.length > 0 && !process.argv.includes('recover')) {
+  console.warn(color.yellow(
+    `Detected ${interruptedPublications.length} interrupted publication(s). Run \`fc generation recover\` before modifying learning state.`
+  ));
+  for (const publication of interruptedPublications) {
+    console.warn(color.gray(`- ${publication.unitId}: ${publication.state} — ${publication.message}`));
+  }
+}
 
 program.parseAsync(process.argv);
 
@@ -679,25 +762,31 @@ async function maybeInsertRemediation(
   try {
     const existingRemediationIndex = plan.units.findIndex((item) => item.remediationForUnitId === unit.id);
     if (existingRemediationIndex !== -1) {
-      plan.currentIndex = existingRemediationIndex;
-      plan.updatedAt = new Date().toISOString();
-      state.currentUnitId = plan.units[existingRemediationIndex].id;
-      state.updatedAt = plan.updatedAt;
-      savePlan(plan);
-      return `已切换到补救单元：${plan.units[existingRemediationIndex].id}`;
+      const updatedPlan = updatePlan(plan.revision, (draft) => {
+        const currentRemediationIndex = draft.units.findIndex((item) => item.remediationForUnitId === unit.id);
+        if (currentRemediationIndex === -1) {
+          throw new Error(`Remediation unit for "${unit.id}" disappeared during update.`);
+        }
+        draft.currentIndex = currentRemediationIndex;
+      });
+      Object.assign(plan, updatedPlan);
+      state.currentUnitId = updatedPlan.units[updatedPlan.currentIndex].id;
+      state.updatedAt = updatedPlan.updatedAt;
+      return `已切换到补救单元：${state.currentUnitId}`;
     }
 
     const remediationSpinner = spinner();
     remediationSpinner.start('FCAgent 正在为这次失败生成一个短小补救单元...');
     const remediationUnit = await generateRemediationUnit(unit, assessment, plan, provider);
-    const failedUnitIndex = plan.units.findIndex((item) => item.id === unit.id);
-    const insertIndex = failedUnitIndex === -1 ? plan.currentIndex + 1 : failedUnitIndex + 1;
-    plan.units.splice(insertIndex, 0, remediationUnit);
-    plan.currentIndex = insertIndex;
-    plan.updatedAt = new Date().toISOString();
+    const updatedPlan = updatePlan(plan.revision, (draft) => {
+      const failedUnitIndex = draft.units.findIndex((item) => item.id === unit.id);
+      const insertIndex = failedUnitIndex === -1 ? draft.currentIndex + 1 : failedUnitIndex + 1;
+      draft.units.splice(insertIndex, 0, remediationUnit);
+      draft.currentIndex = insertIndex;
+    });
+    Object.assign(plan, updatedPlan);
     state.currentUnitId = remediationUnit.id;
-    state.updatedAt = plan.updatedAt;
-    savePlan(plan);
+    state.updatedAt = updatedPlan.updatedAt;
     remediationSpinner.stop(color.green('✔ 补救单元已插入学习路线'));
     return `已插入补救单元：${remediationUnit.id}`;
   } catch (err) {

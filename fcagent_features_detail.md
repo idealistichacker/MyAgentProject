@@ -1,6 +1,6 @@
 # 🎓 FCAgent 功能全景与技术实现细节 (FCAgent Features & Implementation Details)
 
-主人！为了方便你全面理清 **FCAgent** 当前版本实现的黑科技，我为你整理了这篇超详细的功能全景与底层技术实现文档。这里涵盖了从目标诊断到沙盒编译，再到三阶段课件生成的全部细节，快来看看吧！✨
+主人！为了方便你全面理清 **FCAgent** 当前版本实现的黑科技，我为你整理了这篇超详细的功能全景与底层技术实现文档。这里涵盖了从目标诊断到沙盒编译，再到质量驱动课件生成的全部细节，快来看看吧！✨
 
 ---
 
@@ -16,7 +16,7 @@ graph TD
     D --> E[FCAgent课程规划器 + 联网搜索]
     E --> F[生成个性化计划 plan.json]
     F --> G[fc start: 激活单元]
-    G --> H[FCAgent 3-Pass 课件生成器]
+    G --> H[FCAgent 质量驱动课件生成器]
     H --> I[生成 Lesson.md + Starter Code + 可选 PROJECT.md]
     I --> J[用户编写 solution]
     J --> K[fc submit: 提交评测]
@@ -45,6 +45,8 @@ graph TD
 * **实现命令**：`fc plan`
 * **功能点**：
   - **大纲规模自适应**：根据用户的 `每周小时数 * 总周数` 自动折算总学时，动态生成 2 到 10 个单元的大纲，告别死板的固定大纲。
+  - **知识目标图**：每个 objective 在计划中全局唯一；除首单元外，正式单元通过 `prerequisiteObjectiveIds` 精确引用更早单元目标。验证器拒绝未知、歧义、重复和前向引用，并据此构建 objective 节点与依赖边。
+  - **Project 综合验证**：Project 必须引用至少两个前置单元的目标，生成后的每个声明前置目标还必须被至少一个 milestone 的 `objectiveIds` 实际使用，防止项目只在文案中声称“综合所学”。
   - **实战项目自动穿插**：如果计算出的单元总数 $\ge 4$，规划器会自动在中后期插入一个 `type: "project"` 的关卡（例如大作业），用来熔炼前面所学的所有零碎知识。
   - **离线 Project 保底**：默认种子课程也包含一个 DSA capstone Project，保证没有 API Key 时仍能体验“单元练习 -> 综合项目”的闭环。
   - **主线故事融合 (Narrative)**：要求生成的单元不仅是知识点的堆砌，更要有一条清晰的“史诗通关剧情”，各普通单元在描述中必须注明“自己是最终 Project 的哪一块拼图”。
@@ -52,19 +54,26 @@ graph TD
   - 由 `generatePlan` 控制。LLM 会被赋予 `CurriculumPlanner` 的角色。
   - 规划器内置了 `ToolManager`，在生成大纲前，AI 会先自动调用 `WebSearchTool` (默认 Wikipedia，若有 Tavily API Key 则使用 Tavily) 检索相关方向的优秀课程大纲或最新资料。
   - 相同画像的大纲会写入 L2 LLM 缓存，重复执行 `fc plan` 时可以直接复用已生成的单元列表。
-  - 生成的内容会先通过 `parseJsonFromText` 提取 JSON 候选，再由 `sanitizeJsonString` 兜底规避 JSON 转义引号的语法崩溃问题。
+  - 大纲通过强制工具调用提交结构化 payload，再由 Zod 校验；普通文本和猜测式 JSON 清洗不会进入正式计划。
 
-### 3. 三阶段联网课件生成 (3-Pass Cohesive Generator)
+### 3. 质量驱动联网课件生成 (Risk-Adaptive Generator)
 * **实现命令**：`fc start` 或 `fc generate-all`
 * **功能点**：
   - **联网补充**：在生成单元讲义前，根据单元的主题和 objectives，自动联网抓取最新官方标准规范（如 MDN 文档、Python 核心库设计文档）。
-  - **三段式工作流 (3-Pass Loop)**：
+  - **来源包策略**：搜索候选会重新通过 `sourceSchema`，清除追踪参数与提示注入片段，按规范 URL 去重，再综合 primary/secondary/background 可信等级、查询相关性与摘录完整度排序。模型看到的每条摘录都包在显式 `untrusted_source` 标记中。
+  - **双层检索缓存**：24 小时新鲜缓存负责减少重复联网；成功检索同时保留 30 天验证快照。提供方超时或中断时仅降级到该快照并打印 `[STALE CACHE]`，同时把来源标记为 `stale` 写入课程，供 `fc audit` 持续告警；不存在快照则停止正式生成。
+  - **发布追溯**：artifact manifest 保存来源策略版本，以及每条来源的 URL、publisher、retrievedAt、hash、trust 和 freshness；即使缓存后续更新，也能还原课程发布时使用的来源版本。
+  - **发布中断恢复**：写 lesson、starter、Project 和 plan 前，发布协调器预计算目标内容、hash 和目标 plan revision，在 `.fuckcolloge/recovery/` 创建写前备份并把恢复清单写入 `publishing` manifest。CLI 启动时只读扫描；全部 hash/revision 匹配时可安全完成发布，已知部分状态可回滚，未知修改只标记失败并保留日志。
+  - **事实声明核验**：结构化 citations 以 lesson 中逐字事实声明为分组键。每个声明必须至少引用一个 primary 来源，或重复引用两个不同 publisher；来源包本身不满足该独立性时会在 Draft 前快速失败。事实不确定性写入 generation job 的失败 `qualityReport`，不会静默进入正式课程。
+  - **题目诊断度核验**：Quiz 规则集中检查重复 id、题干与解释长度、misconception/rubric 具体度、objective 是否真实存在及是否全部被评估。选择题至少三个唯一且非近似重复的选项，并拒绝泛化干扰项；每个错误选项必须有唯一 misconception 与针对性反馈映射。同一规则同时用于发布质量门和 `fc audit`。
+  - **风险自适应工作流**：
     1. **Pass 1: Draft (起草)**：由 `ContentGenerator` 起草纯 Markdown，要求摆脱“机器味”，大量运用幽默比喻。
-    2. **Pass 2: Critique (提炼与检查)**：由 `ContentCritic` 对初稿进行“毒辣”的代码细节与人情味审核。如果发现“翻译腔”或缺乏过渡，直接退回重构，确保与最终大作业项目上下文产生强绑定。
-    3. **Pass 3: Polish (纯净化与出题)**：由 `FinalPolisher` 最终格式化，并动态生成配套的场景化选择题（Quiz）以及跟当前剧情背景高度契合的代码练习。输出被拆成 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`，避免把大段代码塞进 JSON 字符串导致转义失败。Project 单元的 JSON 元数据还必须包含 `project` 规格对象。
+    2. **Draft Risk Gate (本地风险门)**：确定性评估正文长度、目标词汇覆盖、标题结构、可运行示例、边界情况与常见误区。必要信号全部通过且总分不低于 85 才跳过 Critique；Project 还必须出现里程碑、验收标准和模块架构。
+    3. **Pass 2: Critique (按风险触发)**：低置信草稿由 `ContentCritic` 深度提炼；高置信草稿直接复用，减少一次模型调用。是否跳过、评分和失败信号会写入 generation checkpoint。
+    4. **Pass 3: Polish (结构化出题)**：由 `FinalPolisher` 通过 `submit_unit_artifact` 工具调用提交讲义、场景化 Quiz、代码练习、目标覆盖、引用与参考解答；Project 还必须包含 `project` 规格对象。
 * **底层实现细节**：
   - 在 `pipeline.ts` 中实现。生成时会将整个 `LearningPlan` 传入大模型，使大模型获得“上帝视角”，能清晰感知当前处于大纲的第几步、前后文衔接是什么。
-  - 自动运行结构化解析器，分别抓取返回的 JSON 元数据、`### CONTENT`、`### STARTER_CODE` 和可选 `### TEST_CODE`。
+  - 最终结果只接受指定的结构化工具调用，不从普通文本中猜测 JSON 或代码区块。
   - 使用 Zod 校验 Quiz、Exercise 与 Project 元数据，并额外检查讲义有效长度、至少 3 个测试用例、至少 2 条 Hint、入口函数存在性，以及非本地语言必须提供 `TEST_CODE`。
   - `ProjectSpec` 会校验交付物、里程碑、文件清单与 rubric。通过后，CLI 会在 `.fuckcolloge/exercises/<unitId>/PROJECT.md` 写出可读项目规格。
   - 如果最终输出解析失败或质量闸门不通过，系统会请求模型进行一次“结构化修复”，再尝试落盘，降低直接回退到占位练习的概率。

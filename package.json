@@ -11,7 +11,11 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/regression/*.test.ts"
+    "test": "tsx --test tests/regression/*.test.ts",
+    "test:unit": "tsx --test tests/regression/assessmentDiagnostics.test.ts tests/regression/cache.test.ts tests/regression/draftQuality.test.ts tests/regression/factVerification.test.ts tests/regression/generatedUnitQuality.test.ts tests/regression/generationMetrics.test.ts tests/regression/generationRecovery.test.ts tests/regression/instrumentedProvider.test.ts tests/regression/knowledgeGraph.test.ts tests/regression/providerErrors.test.ts tests/regression/scheduler.test.ts tests/regression/sourcePolicy.test.ts tests/regression/structuredOutput.test.ts tests/regression/webSearchRecovery.test.ts",
+    "test:integration": "tsx --test tests/regression/planStore.test.ts tests/regression/publisher.test.ts tests/regression/referenceVerifier.test.ts",
+    "test:golden": "tsx --test tests/regression/goldenCourse.test.ts",
+    "test:smoke": "tsx tests/test_agent_content.ts"
   },
   "keywords": [
     "ai-agent",

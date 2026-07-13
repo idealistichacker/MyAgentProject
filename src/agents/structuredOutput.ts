@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   citationSchema,
+  distractorRationaleSchema,
   exerciseSchema,
   objectiveCoverageSchema,
   projectSpecSchema,
@@ -13,9 +14,16 @@ const generatedQuizQuestionSchema = quizQuestionSchema.extend({
   objectiveIds: z.array(z.string()).min(1),
   misconception: z.string().min(1),
   rubric: z.string().min(1),
+  distractorRationales: z.array(distractorRationaleSchema),
 }).superRefine((question, context) => {
-  if (question.type === 'choice' && (!question.options || question.options.length < 2)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Choice questions need at least two options.' });
+  if (question.type === 'choice' && (!question.options || question.options.length < 3)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Choice questions need at least three options.' });
+  }
+  if (question.type === 'choice' && question.options && question.distractorRationales.length !== question.options.length - 1) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Choice questions need one distractor rationale for every incorrect option.' });
+  }
+  if (question.type === 'short-answer' && question.distractorRationales.length > 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Short-answer questions must use an empty distractorRationales array.' });
   }
 });
 
@@ -72,17 +80,30 @@ export const unitArtifactTool: ToolDefinition = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['id', 'type', 'question', 'answer', 'explanation'],
+            required: ['id', 'type', 'question', 'answer', 'explanation', 'objectiveIds', 'misconception', 'rubric', 'distractorRationales'],
             properties: {
               id: { type: 'string' },
               type: { type: 'string', enum: ['choice', 'short-answer'] },
               question: { type: 'string' },
-              options: { type: 'array', items: { type: 'string' } },
+              options: { type: 'array', minItems: 3, items: { type: 'string' } },
               answer: { type: 'string' },
               explanation: { type: 'string' },
               objectiveIds: { type: 'array', minItems: 1, items: { type: 'string' } },
               misconception: { type: 'string' },
               rubric: { type: 'string' },
+              distractorRationales: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['option', 'misconception', 'feedback'],
+                  properties: {
+                    option: { type: 'string' },
+                    misconception: { type: 'string' },
+                    feedback: { type: 'string' },
+                  },
+                },
+              },
             },
           },
         },
@@ -143,7 +164,13 @@ export const unitArtifactTool: ToolDefinition = {
             type: 'object',
             additionalProperties: false,
             required: ['sourceId', 'claim'],
-            properties: { sourceId: { type: 'string' }, claim: { type: 'string' } },
+            properties: {
+              sourceId: { type: 'string' },
+              claim: {
+                type: 'string',
+                description: 'A key externally verifiable factual sentence copied verbatim from the lesson. Repeat the same claim with another sourceId when two independent non-primary publishers are required.',
+              },
+            },
           },
         },
         referenceSolution: { type: 'string', description: 'Correct solution used only for pre-publication verification.' },
@@ -169,7 +196,7 @@ export const planSubmissionTool: ToolDefinition = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['id', 'type', 'title', 'description', 'prerequisites', 'objectives'],
+            required: ['id', 'type', 'title', 'description', 'prerequisites', 'objectives', 'prerequisiteObjectiveIds'],
             properties: {
               id: { type: 'string' },
               type: { type: 'string', enum: ['unit', 'project', 'remediation'] },
@@ -177,6 +204,7 @@ export const planSubmissionTool: ToolDefinition = {
               description: { type: 'string' },
               prerequisites: { type: 'array', items: { type: 'string' } },
               objectives: { type: 'array', items: { type: 'string' } },
+              prerequisiteObjectiveIds: { type: 'array', items: { type: 'string' } },
               remediationForUnitId: { type: 'string' },
               nextIfPassed: { type: 'string' },
               nextIfFailed: { type: 'string' },

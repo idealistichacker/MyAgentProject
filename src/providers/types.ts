@@ -31,6 +31,7 @@ export interface ToolDefinition {
 
 export interface ChatOptions {
   temperature?: number;
+  timeoutMs?: number;
   tools?: ToolDefinition[];
   toolChoice?: 'auto' | 'required' | { type: 'function'; function: { name: string } };
   responseFormat?: {
@@ -41,6 +42,15 @@ export interface ChatOptions {
 export interface ChatResponse {
   content: string | null;
   tool_calls?: ToolCall[];
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  meta?: {
+    attempts: number;
+    durationMs: number;
+  };
 }
 
 export interface LLMProvider {

@@ -9,6 +9,7 @@ import {
   getLocksDir,
   getLogsDir,
   getManifestsDir,
+  getRecoveryDir,
   getLearnerPath,
   getPlanPath,
   getStatePath,
@@ -44,6 +45,7 @@ export function ensureProjectDirs(): void {
     getJobsDir(),
     getManifestsDir(),
     getLocksDir(),
+    getRecoveryDir(),
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -95,10 +97,6 @@ export function loadPlan(): LearningPlan | undefined {
     return undefined;
   }
   return planSchema.parse(readJson<unknown>(getPlanPath(), {}));
-}
-
-export function savePlan(plan: LearningPlan): void {
-  writeJson(getPlanPath(), planSchema.parse(plan));
 }
 
 export function loadState(): LearningState | undefined {

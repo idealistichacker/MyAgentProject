@@ -1,6 +1,16 @@
-import type { ProjectSpec, QuizQuestion, SeedUnit, Source } from '../types.js';
+import type { ProjectSpec, QualityIssue, QuizQuestion, SeedUnit, Source } from '../types.js';
+import { buildFactVerificationIssues } from './factVerification.js';
+import { buildQuizDiagnosticIssues } from './assessmentDiagnostics.js';
+import { analyzeProjectObjectiveUsage } from '../curriculum/knowledgeGraph.js';
 
 const NATIVE_RUNNER_LANGUAGES = new Set(['typescript', 'python', 'bash', 'rust']);
+
+export class GeneratedUnitQualityError extends Error {
+  constructor(public readonly issues: QualityIssue[]) {
+    super(issues.map((issue) => `${issue.code}: ${issue.message}`).join('\n'));
+    this.name = 'GeneratedUnitQualityError';
+  }
+}
 
 export function assertGeneratedUnitQuality(
   unit: SeedUnit,
@@ -57,6 +67,10 @@ export function assertGeneratedUnitQuality(
       }
     }
   }
+  const quizIssues = buildQuizDiagnosticIssues(unit, quiz);
+  if (quizIssues.some((issue) => issue.severity === 'error')) {
+    throw new GeneratedUnitQualityError(quizIssues);
+  }
 
   if (sources.length === 0) {
     throw new Error('Generated unit needs at least one verified source.');
@@ -64,6 +78,10 @@ export function assertGeneratedUnitQuality(
   const sourceIds = new Set(sources.map((source) => source.id));
   if (citations.length === 0 || citations.some((citation) => !sourceIds.has(citation.sourceId))) {
     throw new Error('Generated citations must reference the retrieved source pack.');
+  }
+  const factIssues = buildFactVerificationIssues(content, citations, sources);
+  if (factIssues.some((issue) => issue.severity === 'error')) {
+    throw new GeneratedUnitQualityError(factIssues);
   }
 
   const coveredObjectives = new Map(objectiveCoverage.map((coverage) => [coverage.objectiveId, coverage]));
@@ -85,6 +103,14 @@ export function assertGeneratedUnitQuality(
   }
 
   if (unit.type !== 'project') return;
+  const projectKnowledgeIssues = analyzeProjectObjectiveUsage({ ...unit, project });
+  if (projectKnowledgeIssues.length > 0) {
+    throw new GeneratedUnitQualityError(projectKnowledgeIssues.map((issue) => ({
+      code: issue.code,
+      message: issue.message,
+      severity: issue.severity,
+    })));
+  }
   if (!project) {
     throw new Error('Project unit requires project metadata.');
   }

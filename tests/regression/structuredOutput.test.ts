@@ -17,12 +17,16 @@ function validResponse(): ChatResponse {
             id: 'quiz-1',
             type: 'choice',
             question: '1 + 1 等于多少？',
-            options: ['1', '2'],
+            options: ['1', '2', '3'],
             answer: '2',
             explanation: '数值相加得到 2。',
             objectiveIds: ['理解加法'],
             misconception: '把字符串拼接当作加法',
             rubric: '选择正确答案。',
+            distractorRationales: [
+              { option: '1', misconception: '忽略第二个加数', feedback: '需要同时累加两个操作数。' },
+              { option: '3', misconception: '错误增加额外单位', feedback: '只计算题目给出的两个数字。' },
+            ],
           }],
           exercise: {
             id: 'exercise-1',

@@ -1,4 +1,7 @@
 import type { ExerciseSpec, LearningPlan, QuizQuestion, SeedUnit } from '../types.js';
+import { buildFactVerificationIssues } from '../agents/factVerification.js';
+import { buildQuizDiagnosticIssues } from '../agents/assessmentDiagnostics.js';
+import { analyzeKnowledgeGraph } from './knowledgeGraph.js';
 
 export type CurriculumAuditSeverity = 'error' | 'warning' | 'info';
 
@@ -72,6 +75,25 @@ export function auditLearningPlan(plan: LearningPlan): CurriculumAuditReport {
       code: 'plan.missingProject',
       message: 'A course with 4+ units should include at least one project unit.',
       suggestion: 'Regenerate the plan or add a project unit to synthesize the preceding concepts.',
+    });
+  }
+
+  const hasKnowledgeGraph = plan.units.some((unit) => (unit.prerequisiteObjectiveIds?.length ?? 0) > 0);
+  if (hasKnowledgeGraph) {
+    for (const graphIssue of analyzeKnowledgeGraph(plan.units, true).issues) {
+      issues.push({
+        severity: graphIssue.severity,
+        code: graphIssue.code,
+        unitId: graphIssue.unitId,
+        message: graphIssue.message,
+      });
+    }
+  } else {
+    issues.push({
+      severity: 'info',
+      code: 'plan.knowledgeGraph.legacy',
+      message: 'Plan predates explicit prerequisiteObjectiveIds and is not graph-validated.',
+      suggestion: 'Regenerate the plan to create an explicit knowledge objective graph.',
     });
   }
 
@@ -218,6 +240,12 @@ function auditQuiz(unit: SeedUnit, issues: CurriculumAuditIssue[]): void {
 
   for (const question of unit.quiz) {
     auditQuizQuestion(unit, question, issues);
+  }
+
+  if (hasTeachingMetadata(unit)) {
+    for (const diagnostic of buildQuizDiagnosticIssues(unit, unit.quiz)) {
+      addIssue(issues, unit, diagnostic.severity, diagnostic.code, diagnostic.message);
+    }
   }
 }
 
@@ -408,8 +436,22 @@ function auditTeachingEvidence(unit: SeedUnit, issues: CurriculumAuditIssue[]): 
   }
 
   const sourceIds = new Set(sources.map((source) => source.id));
+  const staleSources = sources.filter((source) => source.freshness === 'stale');
+  if (staleSources.length > 0) {
+    addIssue(
+      issues,
+      unit,
+      'warning',
+      'unit.sources.stale',
+      `Unit uses ${staleSources.length} stale source snapshot(s).`,
+      'Regenerate when the search provider is available to refresh factual context.'
+    );
+  }
   if (citations.length === 0 || citations.some((citation) => !sourceIds.has(citation.sourceId))) {
     addIssue(issues, unit, 'warning', 'unit.citations.invalid', 'Unit citations are missing or do not match its source pack.');
+  }
+  for (const factIssue of buildFactVerificationIssues(unit.content ?? '', citations, sources)) {
+    addIssue(issues, unit, factIssue.severity, factIssue.code, factIssue.message);
   }
 
   const coverageIds = new Set(coverage.map((item) => item.objectiveId));

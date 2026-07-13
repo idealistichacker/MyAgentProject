@@ -36,6 +36,14 @@ export function getLocksDir(): string {
   return path.join(getFcDir(), 'locks');
 }
 
+export function getRecoveryDir(): string {
+  return path.join(getFcDir(), 'recovery');
+}
+
+export function getPublicationRecoveryDir(transactionId: string): string {
+  return path.join(getRecoveryDir(), safePathComponent(transactionId, 'recovery transaction id'));
+}
+
 export function getConfigPath(): string {
   return path.join(getFcDir(), 'config.json');
 }

@@ -29,6 +29,14 @@ export const learnerProfileSchema = z.object({
 
 export type LearnerProfile = z.infer<typeof learnerProfileSchema>;
 
+export const distractorRationaleSchema = z.object({
+  option: z.string().min(1),
+  misconception: z.string().min(1),
+  feedback: z.string().min(1),
+});
+
+export type DistractorRationale = z.infer<typeof distractorRationaleSchema>;
+
 export const quizQuestionSchema = z.object({
   id: z.string(),
   type: z.enum(['choice', 'short-answer']).default('choice'),
@@ -39,6 +47,7 @@ export const quizQuestionSchema = z.object({
   objectiveIds: z.array(z.string()).optional(),
   misconception: z.string().optional(),
   rubric: z.string().optional(),
+  distractorRationales: z.array(distractorRationaleSchema).optional(),
 });
 
 export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
@@ -119,6 +128,7 @@ export const sourceSchema = z.object({
   retrievedAt: z.string().datetime(),
   hash: z.string(),
   trust: z.enum(['primary', 'secondary', 'background']),
+  freshness: z.enum(['fresh', 'stale']).optional(),
   excerpt: z.string(),
 });
 
@@ -147,6 +157,7 @@ export const seedUnitSchema = z.object({
   description: z.string(),
   prerequisites: z.array(z.string()).default([]),
   objectives: z.array(z.string()).default([]),
+  prerequisiteObjectiveIds: z.array(z.string()).optional(),
   content: z.string().optional(),
   references: z.array(z.string()).default([]),
   sources: z.array(sourceSchema).optional(),
@@ -170,6 +181,7 @@ export const planSchema = z.object({
   learnerProfile: learnerProfileSchema,
   units: z.array(seedUnitSchema),
   currentIndex: z.number().int().min(0).default(0),
+  revision: z.number().int().min(0).default(0),
   origin: z.enum(['generated', 'offline']).default('offline'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -209,18 +221,47 @@ export const qualityReportSchema = z.object({
 
 export type QualityReport = z.infer<typeof qualityReportSchema>;
 
+export const generationMetricsSchema = z.object({
+  totalDurationMs: z.number().int().min(0),
+  stages: z.record(z.number().int().min(0)).default({}),
+  providerCalls: z.number().int().min(0).default(0),
+  providerRetries: z.number().int().min(0).default(0),
+  promptTokens: z.number().int().min(0).default(0),
+  completionTokens: z.number().int().min(0).default(0),
+  totalTokens: z.number().int().min(0).default(0),
+  sourceCount: z.number().int().min(0).default(0),
+  cacheReuse: z.boolean().default(false),
+});
+
+export type GenerationMetrics = z.infer<typeof generationMetricsSchema>;
+
+export const generationCheckpointSchema = z.object({
+  stage: z.enum(['draft', 'critique', 'final']),
+  cacheKeyHash: z.string(),
+  completedAt: z.string().datetime(),
+  cacheHit: z.boolean(),
+  outcome: z.enum(['completed', 'skipped']).optional(),
+  qualityScore: z.number().int().min(0).max(100).optional(),
+  reasons: z.array(z.string()).optional(),
+});
+
+export type GenerationCheckpoint = z.infer<typeof generationCheckpointSchema>;
+
 export const generationJobSchema = z.object({
   id: z.string(),
   unitId: z.string(),
   status: generationStatusSchema,
   stage: z.string(),
   attempt: z.number().int().min(1),
+  parentJobId: z.string().optional(),
   inputHash: z.string(),
   startedAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   completedAt: z.string().datetime().optional(),
   error: z.string().optional(),
   qualityReport: qualityReportSchema.optional(),
+  metrics: generationMetricsSchema.optional(),
+  checkpoints: z.array(generationCheckpointSchema).default([]),
 });
 
 export type GenerationJob = z.infer<typeof generationJobSchema>;
@@ -234,6 +275,36 @@ export const artifactFileSchema = z.object({
 
 export type ArtifactFile = z.infer<typeof artifactFileSchema>;
 
+export const artifactSourceSchema = sourceSchema.pick({
+  id: true,
+  url: true,
+  publisher: true,
+  retrievedAt: true,
+  hash: true,
+  trust: true,
+  freshness: true,
+});
+
+export type ArtifactSource = z.infer<typeof artifactSourceSchema>;
+
+export const publicationRecoveryFileSchema = z.object({
+  path: z.string().min(1),
+  existed: z.boolean(),
+  backupPath: z.string().min(1).optional(),
+  backupHash: z.string().optional(),
+  expectedHash: z.string().optional(),
+});
+export type PublicationRecoveryFile = z.infer<typeof publicationRecoveryFileSchema>;
+
+export const publicationRecoverySchema = z.object({
+  transactionId: z.string().min(1),
+  createdAt: z.string().datetime(),
+  basePlanRevision: z.number().int().min(0).optional(),
+  targetPlanRevision: z.number().int().min(0).optional(),
+  files: z.array(publicationRecoveryFileSchema).min(1),
+});
+export type PublicationRecovery = z.infer<typeof publicationRecoverySchema>;
+
 export const artifactManifestSchema = z.object({
   schemaVersion: z.literal(1),
   unitId: z.string(),
@@ -243,6 +314,12 @@ export const artifactManifestSchema = z.object({
   publishedAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime(),
   qualityReport: qualityReportSchema.optional(),
+  sourcePolicyVersion: z.string().optional(),
+  sources: z.array(artifactSourceSchema).default([]),
+  targetStatus: z.enum(['published', 'offline']).optional(),
+  recovery: publicationRecoverySchema.optional(),
+  recoveredAt: z.string().datetime().optional(),
+  error: z.string().optional(),
   files: z.array(artifactFileSchema).default([]),
 });
 

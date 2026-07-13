@@ -10,11 +10,15 @@ import type {
   SeedUnit,
   Source,
   TestResult,
+  GenerationCheckpoint,
 } from '../types.js';
 import type { LLMProvider, ChatMessage } from '../providers/types.js';
 import { ToolManager, WebSearchTool, TimeTool, formatSourcePack } from './tools.js';
 import { verifyReferenceSolution } from '../runner/referenceVerifier.js';
-import { assertGeneratedUnitQuality } from './generatedUnitQuality.js';
+import { assertGeneratedUnitQuality, GeneratedUnitQualityError } from './generatedUnitQuality.js';
+import { assessDraftQuality } from './draftQuality.js';
+import { buildSourcePackReadinessIssues } from './factVerification.js';
+import { assertKnowledgeGraph } from '../curriculum/knowledgeGraph.js';
 import {
   assessmentReviewTool,
   parseAssessmentReview,
@@ -24,13 +28,17 @@ import {
   unitArtifactTool,
 } from './structuredOutput.js';
 import { loadConfig } from '../state/fsState.js';
-import { createCacheKey, llmCache } from '../utils/cache.js';
+import { createCacheKey, hashCacheKey, llmCache } from '../utils/cache.js';
 import color from 'picocolors';
 
 const nowIso = () => new Date().toISOString();
 
 const NATIVE_RUNNER_LANGUAGES = ['typescript', 'python', 'bash', 'rust'] as const;
 const unitGenerationInFlight = new Map<string, Promise<SeedUnit>>();
+
+export interface UnitGenerationProgress {
+  onCheckpoint?: (checkpoint: GenerationCheckpoint) => void;
+}
 
 export async function diagnoseLearner(
   rawProfile: LearnerProfile,
@@ -57,7 +65,7 @@ ${JSON.stringify(rawProfile, null, 2)}
     const response = await provider.chat([
       { role: 'system', content: 'You are a concise learning diagnostician.' },
       { role: 'user', content: prompt },
-    ], { temperature: 0.2 });
+    ], { temperature: 0.2, timeoutMs: 60_000 });
 
     const summary = response.content || '';
 
@@ -93,19 +101,25 @@ export async function generatePlan(
           model: config.model,
           temperature: 0.3,
         },
-        promptVersion: 'plan-structured-v2',
-        schemaVersion: 'learning-plan-v2',
+        promptVersion: 'plan-structured-v3',
+        schemaVersion: 'learning-plan-v3',
       });
       const cachedUnits = await llmCache.get<SeedUnit[]>(cacheKey);
       if (cachedUnits?.length) {
-        return {
-          learnerProfile,
-          units: cachedUnits,
-          currentIndex: 0,
-          origin: 'generated',
-          createdAt: now,
-          updatedAt: now,
-        };
+        try {
+          assertKnowledgeGraph(cachedUnits);
+          return {
+            learnerProfile,
+            units: cachedUnits,
+            currentIndex: 0,
+            revision: 0,
+            origin: 'generated',
+            createdAt: now,
+            updatedAt: now,
+          };
+        } catch {
+          await llmCache.delete(cacheKey);
+        }
       }
 
       const toolManager = new ToolManager();
@@ -138,6 +152,11 @@ IMPORTANT RULES:
 3. Second priority: Use your internal parametric knowledge to combine with search results.
 4. ${targetUnitCount >= 4 ? 'Since the course is long enough, you MUST include exactly 1 unit of `type: "project"` (a large-scale coding project, like CS61A Ants or Scheme). It should be placed in the mid-to-late part of the curriculum. Mark its id with a "-project" suffix. All preceding units must explicitly state in their description how they serve as a puzzle piece for this specific project.' : 'Generate regular instructional units, but keep them tightly connected conceptually.'}
 5. When research is complete, call the \`submit_learning_plan\` tool exactly once. Do not return a JSON document or Markdown response.
+6. KNOWLEDGE OBJECTIVE GRAPH:
+   - Every objective string must be globally unique and concrete enough to assess.
+   - The first unit uses an empty prerequisiteObjectiveIds array.
+   - Every later regular/project unit lists exact objective strings from earlier units in prerequisiteObjectiveIds; never reference the current or a future unit.
+   - Every Project integrates prerequisite objectives from at least two different preceding units.
 Learner Profile:
 ${JSON.stringify(learnerProfile, null, 2)}
 `.trim();
@@ -151,6 +170,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
       for (let i = 0; i < 5; i++) {
         const response = await provider.chat(messages, { 
           temperature: 0.3,
+          timeoutMs: 120_000,
           tools: [...toolManager.getToolsDefinitions(), planSubmissionTool]
         });
 
@@ -188,6 +208,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
         throw new Error(`Planner submitted ${submitted.units.length} units; expected ${totalUnits}.`);
       }
       units = submitted.units;
+      assertKnowledgeGraph(units);
       origin = 'generated';
       await llmCache.set(cacheKey, units, { ttlMs: 7 * 24 * 60 * 60 * 1000 });
     } catch (err) {
@@ -199,6 +220,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
     learnerProfile,
     units,
     currentIndex: 0,
+    revision: 0,
     origin,
     createdAt: now,
     updatedAt: now,
@@ -317,7 +339,8 @@ function buildFallbackProjectSpec(unit: SeedUnit): ProjectSpec {
 export async function generateUnitContent(
   unit: SeedUnit,
   plan: LearningPlan,
-  provider?: LLMProvider
+  provider?: LLMProvider,
+  progress: UnitGenerationProgress = {}
 ): Promise<SeedUnit> {
   if (!provider) {
     throw new Error('A configured provider is required to generate a non-offline unit.');
@@ -330,7 +353,7 @@ export async function generateUnitContent(
     return existing;
   }
 
-  const request = generateUnitContentUncached(unit, plan, provider);
+  const request = generateUnitContentUncached(unit, plan, provider, progress);
   unitGenerationInFlight.set(cacheKey, request);
   try {
     return await request;
@@ -342,7 +365,8 @@ export async function generateUnitContent(
 async function generateUnitContentUncached(
   unit: SeedUnit,
   plan: LearningPlan,
-  provider?: LLMProvider
+  provider?: LLMProvider,
+  progress: UnitGenerationProgress = {}
 ): Promise<SeedUnit> {
   if (!provider) {
     throw new Error('A configured provider is required to generate a non-offline unit.');
@@ -361,9 +385,16 @@ async function generateUnitContentUncached(
       const query = `${unit.title} ${unit.objectives?.[0] || ''}`.trim();
       console.log(`\n🔍 FCAgent ContentGenerator 正在联网检索资料: "${query}"...`);
       sources = await webSearch.searchSources(query);
+      const sourcePackIssues = buildSourcePackReadinessIssues(sources);
+      if (sourcePackIssues.length > 0) {
+        throw new GeneratedUnitQualityError(sourcePackIssues);
+      }
       searchResult = formatSourcePack(sources);
       console.log(`📥 联网检索资料获取完成 (大小: ${searchResult.length} 字符)。`);
     } catch (searchErr: any) {
+      if (searchErr instanceof GeneratedUnitQualityError) {
+        throw searchErr;
+      }
       throw new Error(`Source retrieval failed; unit cannot be formally published: ${searchErr.message}`);
     }
 
@@ -388,6 +419,7 @@ Unit Outline:
 - Type: ${unit.type || 'unit'}
 - Description: ${unit.description}
 - Objectives: ${unit.objectives.join(', ')}
+- Prerequisite Objective IDs: ${(unit.prerequisiteObjectiveIds ?? []).join(', ') || '(none)'}
 
 Curriculum Context:
 ${projectContext}
@@ -406,24 +438,56 @@ Use only the supplied curriculum context, learner profile, and search excerpts. 
 Do not format as JSON yet, just generate a deep markdown document draft.
 `.trim();
 
+    const draftCacheKey = createCacheKey('unit-draft', { artifactCacheKey: cacheKey, promptVersion: 'draft-v2' });
     const draftResult = await llmCache.getOrSet(
-      createCacheKey('unit-draft', { artifactCacheKey: cacheKey, promptVersion: 'draft-v2' }),
+      draftCacheKey,
       async () => {
         const draftRes = await provider.chat([
           { role: 'system', content: 'You are a highly-qualified computer science educator, teaching at the level of CS61A.' },
           { role: 'user', content: draftPrompt }
-        ], { temperature: 0.45 });
+        ], { temperature: 0.45, timeoutMs: 120_000 });
         return draftRes.content || '';
       }
     );
     const draftContent = draftResult.value;
+    const draftAssessment = assessDraftQuality(unit, draftContent);
+    const failedDraftSignals = draftAssessment.signals
+      .filter((signal) => !signal.passed)
+      .map((signal) => signal.code);
+    progress.onCheckpoint?.({
+      stage: 'draft',
+      cacheKeyHash: hashCacheKey(draftCacheKey),
+      completedAt: nowIso(),
+      cacheHit: draftResult.hit,
+      outcome: 'completed',
+      qualityScore: draftAssessment.score,
+      reasons: failedDraftSignals,
+    });
     console.log('✅ Pass 1: 初稿生成完毕。');
 
-    // 3. Pass 2: Critique and Expand (Refinement 1)
-    console.log('🔧 Pass 2: 提炼与深度扩展 (Critique & Expand)...');
-    const projectCritiqueInstruction = isProject ? 'Ensure the Project Spec is detailed, explaining tricky architectural edge cases and providing comprehensive walk-throughs of how different modules interact.' : 'Provide additional insights, explain tricky edge cases, and add comprehensive practical walk-through examples or "gotchas".';
+    // 3. Pass 2: Critique and Expand when the deterministic draft gate finds material risk.
+    let refinedDraft = draftContent;
+    if (draftAssessment.highConfidence) {
+      console.log(color.green(`⏭️ Pass 2: 草稿质量 ${draftAssessment.score}/100，高置信跳过 Critique。`));
+      const skipKey = createCacheKey('unit-critique-skip', {
+        artifactCacheKey: cacheKey,
+        draftCacheKey: hashCacheKey(draftCacheKey),
+        policyVersion: 'draft-risk-v1',
+      });
+      progress.onCheckpoint?.({
+        stage: 'critique',
+        cacheKeyHash: hashCacheKey(skipKey),
+        completedAt: nowIso(),
+        cacheHit: false,
+        outcome: 'skipped',
+        qualityScore: draftAssessment.score,
+        reasons: [],
+      });
+    } else {
+      console.log(`🔧 Pass 2: 草稿质量 ${draftAssessment.score}/100，触发提炼与深度扩展 (${failedDraftSignals.join(', ')})...`);
+      const projectCritiqueInstruction = isProject ? 'Ensure the Project Spec is detailed, explaining tricky architectural edge cases and providing comprehensive walk-throughs of how different modules interact.' : 'Provide additional insights, explain tricky edge cases, and add comprehensive practical walk-through examples or "gotchas".';
 
-    const critiquePrompt = `
+      const critiquePrompt = `
 You are FCAgent ContentCritic. Your task is to critique and significantly expand the course draft below to ensure it meets the rigorous academic and pedagogical standards of UC Berkeley's CS61A.
 Ensure the content is technically deep, impeccably clear, conforms to the learning objectives, and has zero factual errors.
 ${projectCritiqueInstruction}
@@ -438,22 +502,33 @@ ${draftContent}
 Provide the expanded and corrected course content in Chinese. Focus on technical depth and gotchas, keeping the total content rich but under 1500 words in Chinese. Do not format as JSON yet, output the refined Markdown draft.
 `.trim();
 
-    const critiqueResult = await llmCache.getOrSet(
-      createCacheKey('unit-critique', {
+      const critiqueCacheKey = createCacheKey('unit-critique', {
         artifactCacheKey: cacheKey,
         draft: draftContent,
         promptVersion: 'critique-v2',
-      }),
-      async () => {
-        const critiqueRes = await provider.chat([
-          { role: 'system', content: 'You are an elite technical reviewer and educator.' },
-          { role: 'user', content: critiquePrompt }
-        ], { temperature: 0.3 });
-        return critiqueRes.content || '';
-      }
-    );
-    const refinedDraft = critiqueResult.value;
-    console.log('✅ Pass 2: 提炼与扩展完成。');
+      });
+      const critiqueResult = await llmCache.getOrSet(
+        critiqueCacheKey,
+        async () => {
+          const critiqueRes = await provider.chat([
+            { role: 'system', content: 'You are an elite technical reviewer and educator.' },
+            { role: 'user', content: critiquePrompt }
+          ], { temperature: 0.3, timeoutMs: 120_000 });
+          return critiqueRes.content || '';
+        }
+      );
+      refinedDraft = critiqueResult.value;
+      progress.onCheckpoint?.({
+        stage: 'critique',
+        cacheKeyHash: hashCacheKey(critiqueCacheKey),
+        completedAt: nowIso(),
+        cacheHit: critiqueResult.hit,
+        outcome: 'completed',
+        qualityScore: draftAssessment.score,
+        reasons: failedDraftSignals,
+      });
+      console.log('✅ Pass 2: 提炼与扩展完成。');
+    }
 
     // 4. Pass 3: Final Polishing, Quiz & Starter Code Generation (Refinement 2)
     console.log('💎 Pass 3: 格式化与精修 (Format & Polish)...');
@@ -471,6 +546,7 @@ CS61A Pedagogical Rules for PROJECT STARTER_CODE:
   - at least 3 rubric items with points and evidence
   - extensionIdeas for ambitious learners
   - objectiveIds and checkpointQuestions for every milestone
+  - milestone objectiveIds copied from this unit's prerequisiteObjectiveIds so the Project demonstrably synthesizes prior learning
 ` : `
 CS61A Pedagogical Rules for STARTER_CODE:
 - Must include a rich docstring (e.g. TSDoc or Python Docstring) explaining the problem.
@@ -520,6 +596,7 @@ You must construct:
    - Every testCase must identify its category as \`normal\`, \`edge\`, or \`misconception\`.
    - Include conceptTags, commonPitfalls, difficulty, and estimatedMinutes for the exercise.
    - Every quiz question must include objectiveIds, a misconception label, and a grading rubric.
+   - Every incorrect choice option must have one distractorRationales entry using the exact option text, a unique misconception, and corrective feedback. Short-answer questions use an empty distractorRationales array.
    - For bash exercises, assertionMode should likely be 'stdout'. For others it can be 'return' or 'mutate-and-return'.
 2. The final Markdown CONTENT (using the refined course content). Keep it dense and copy it directly from the refined draft without expanding it with unnecessary verbose prose.
 3. The STARTER_CODE block for the exercise. This must be raw code only.
@@ -536,7 +613,15 @@ The output MUST contain these sections, using your generated exercise code and q
       "question": "...",
       "options": ["A", "B", "C", "D"],
       "answer": "A",
-      "explanation": "..."
+      "explanation": "...",
+      "objectiveIds": ["exact objective string"],
+      "misconception": "the central misconception this question diagnoses",
+      "rubric": "what reasoning earns credit",
+      "distractorRationales": [
+        { "option": "B", "misconception": "unique misconception B", "feedback": "corrective feedback for B" },
+        { "option": "C", "misconception": "unique misconception C", "feedback": "corrective feedback for C" },
+        { "option": "D", "misconception": "unique misconception D", "feedback": "corrective feedback for D" }
+      ]
     }
   ],
   "exercise": {
@@ -578,7 +663,7 @@ export function actualFunctionName(args: any): any {
 
 IMPORTANT: Ignore the legacy text-section template above. Do not emit text, Markdown sections, or a JSON document. Call \`submit_unit_artifact\` exactly once with the complete lesson, quiz, exercise (including starterCode), and project when applicable.
 
-The tool payload must also include objectiveCoverage for every exact objective string, citations using only source IDs in the source pack, and a complete referenceSolution. lessonEvidence and exampleEvidence must be copied verbatim from the lesson; referenceSolution is validation-only and is never published to the learner.
+The tool payload must also include objectiveCoverage for every exact objective string, citations using only source IDs in the source pack, and a complete referenceSolution. lessonEvidence, exampleEvidence, and every citation claim must be copied verbatim from the lesson. Record every key externally verifiable factual sentence as a citation claim. Each distinct claim must cite either one primary source or two sources from independent publishers; repeat the exact same claim for both source IDs when using independent secondary/background sources. referenceSolution is validation-only and is never published to the learner.
 
 Refined Course Draft:
 ${refinedDraft}
@@ -590,22 +675,30 @@ Learner Programming Level: ${learnerProfile.programmingLevel}
 Learner DSA Level: ${learnerProfile.dsaLevel}
 `.trim();
 
-    const finalResult = await llmCache.getOrSet(
-      createCacheKey('unit-final-response', {
+    const finalCacheKey = createCacheKey('unit-final-response', {
         artifactCacheKey: cacheKey,
         refinedDraft,
         promptVersion: 'final-structured-v3',
-      }),
+      });
+    const finalResult = await llmCache.getOrSet(
+      finalCacheKey,
       () => provider.chat([
         { role: 'system', content: 'You are a curriculum content generator. Submit the completed artifact through the required structured-output tool.' },
         { role: 'user', content: finalPrompt }
       ], {
         temperature: 0.2,
+        timeoutMs: 180_000,
         tools: [unitArtifactTool],
         toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
       })
     );
     const finalRes = finalResult.value;
+    progress.onCheckpoint?.({
+      stage: 'final',
+      cacheKeyHash: hashCacheKey(finalCacheKey),
+      completedAt: nowIso(),
+      cacheHit: finalResult.hit,
+    });
     console.log('✅ Pass 3: 格式精修完成。');
 
     try {
@@ -675,6 +768,10 @@ export async function generateRemediationUnit(
   }
 
   const remediationSources = await getRemediationSources(outline, failedUnit);
+  const remediationSourceIssues = buildSourcePackReadinessIssues(remediationSources);
+  if (remediationSourceIssues.length > 0) {
+    throw new GeneratedUnitQualityError(remediationSourceIssues);
+  }
   const sourceContext = formatSourcePack(remediationSources);
 
   const remediationPrompt = `
@@ -720,13 +817,22 @@ Design rules:
 - Include at least 3 testCases and at least 2 hints.
 - Use normal, edge, and misconception test categories plus conceptTags and commonPitfalls.
 - Include objectiveCoverage for every exact objective, citations using the Source pack IDs, and a complete referenceSolution.
+- Every incorrect choice option needs a distractorRationales entry with exact option text, a unique misconception, and corrective feedback.
 - Do not include starterCode inside JSON. Put raw starter code only in STARTER_CODE.
 
 Return exactly this format:
 \`\`\`json
 {
   "quiz": [
-    { "id": "q1", "type": "choice", "question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "..." }
+    {
+      "id": "q1", "type": "choice", "question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "...",
+      "objectiveIds": ["exact remediation objective"], "misconception": "...", "rubric": "...",
+      "distractorRationales": [
+        { "option": "B", "misconception": "...", "feedback": "..." },
+        { "option": "C", "misconception": "...", "feedback": "..." },
+        { "option": "D", "misconception": "...", "feedback": "..." }
+      ]
+    }
   ],
   "exercise": {
     "id": "ex-${outline.id}",
@@ -760,6 +866,7 @@ IMPORTANT: Ignore the legacy text-section template above. Do not emit text, Mark
       { role: 'user', content: remediationPrompt },
     ], {
       temperature: 0.2,
+      timeoutMs: 120_000,
       tools: [unitArtifactTool],
       toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
     });
@@ -806,6 +913,7 @@ function buildRemediationOutline(failedUnit: SeedUnit, assessment: AssessmentRes
     title: `补救单元：${failedUnit.title} 的关键误区拆解`,
     description: `针对 ${failedUnit.title} 的失败反馈，聚焦 ${focus}，用一个更小的练习补齐关键心智模型。`,
     prerequisites: [failedUnit.id],
+    prerequisiteObjectiveIds: [...failedUnit.objectives],
     objectives: [
       `复盘 ${failedUnit.title} 中暴露的关键误区`,
       '用更小的输入规模重建正确的推理步骤',
@@ -978,6 +1086,8 @@ Rules:
 - JSON must not include starterCode.
 - Include at least 3 testCases and at least 2 hints.
 - Include normal, edge, and misconception test categories, objectiveCoverage, citations using available source IDs, and a complete referenceSolution.
+- Every incorrect choice option needs a distractorRationales entry with exact option text, a unique misconception, and corrective feedback; short-answer questions use an empty array.
+- Every citation claim must be copied verbatim from CONTENT. Each distinct claim needs one primary source or two independent publishers; repeat the exact claim with both source IDs when needed.
 - CONTENT must be a useful Chinese markdown lesson, at least 400 Chinese characters.
 - STARTER_CODE must be raw code only and contain the exercise entrypoint.
 - Include TEST_CODE only if the language is not ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
@@ -1029,6 +1139,7 @@ Do not return Markdown sections or raw JSON. Call \`submit_unit_artifact\` exact
     { role: 'user', content: repairPrompt },
   ], {
     temperature: 0.1,
+    timeoutMs: 120_000,
     tools: [unitArtifactTool],
     toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
   });
@@ -1217,6 +1328,7 @@ Call \`submit_assessment_review\` exactly once with diagnosis and nextAction. Do
         { role: 'user', content: prompt }
       ], {
         temperature: 0.2,
+        timeoutMs: 60_000,
         tools: [assessmentReviewTool],
         toolChoice: { type: 'function', function: { name: assessmentReviewTool.function.name } },
       });

@@ -49,6 +49,9 @@ fc init
 ```
 **交互式引导中你将遇到以下选择**：
 * **选择搜索引擎**：系统会提示你选择 `wikipedia`（免费自带）或 `tavily`（需要 API Key）。
+* **来源稳定性**：搜索结果会经过 schema 复验、URL 去重、可信度/相关性排序和提示注入清洗。正常结果缓存 24 小时；若搜索提供方暂时不可用，会在终端显示 `[STALE CACHE]` 并复用 30 天内最近一次验证通过的来源包。该来源会以 `stale` 状态写入课程和参考来源，`fc audit` 会提示后续刷新；没有可验证来源时仍会阻止正式发布。
+* **正式事实门**：每条 citation claim 必须逐字出现在 lesson，并由一个 `primary` 来源或两个不同 publisher 支撑。默认 Wikipedia 适合背景检索，但单一 Wikipedia 来源包不能独立满足正式事实门；需要正式生成时应配置 Tavily，或后续接入能返回官方文档的检索适配器。
+* **题目诊断门**：正式选择题至少有三个唯一且具备词汇差异的选项，不能使用“以上都正确/都不正确”等降低诊断度的干扰项；每个错误选项必须通过 `distractorRationales` 绑定不同 misconception 与纠正反馈。每题映射真实 objective，并提供教学解释和评分 rubric；计划中的每个 objective 至少由一道 Quiz 直接评估。
 * **配置参数**：如果不想走交互流程，也可以直接用选项一步到位：
   ```powershell
   fc init --api-key "your_siliconflow_api_key" --base-url "https://api.siliconflow.cn/v1" --model "deepseek-ai/DeepSeek-V4-Pro" --search-provider "wikipedia"
@@ -140,7 +143,7 @@ fc next
 * **描述**：以终端 Markdown 的排版形式输出当前或指定单元的课件内容。
 
 ### 7. `submit [unitId]` — 提交评测
-* **描述**：输入答案并通过小测验（Quiz），触发本地 Runner 沙盒运行测试用例，并拉取 AI 助教返回的诊断细节。
+* **描述**：输入答案并通过小测验（Quiz），触发受限环境变量与临时工作区下的本地 Runner 运行测试，并拉取 AI 助教返回的诊断细节。该本地模式不是操作系统级安全沙盒，不应运行不可信第三方代码。
   如果 Quiz 或代码测试在同一单元连续失败到第 2 次，系统会生成或复用一个补救单元并切换当前进度；补救单元通过后会路由回原单元。
 * **参数选项**：
   * `--quiz <answers>`：直接从命令行传递测验答案（例如 `--quiz="q1=C,q2=O(log n)"`）。若未指定，系统会自动启动交互式输入。
@@ -175,19 +178,33 @@ fc next
 * **参数选项**：
   * `--concurrency <number>`：同时生成的单元数量，范围建议 `1-4`，默认 `1`，用于在稳定性与速度之间取舍。
   * `--stagger-ms <number>`：每个生成任务的启动间隔，默认 `1000` 毫秒，用于平滑 API 连接峰值。
+  * `--requests-per-minute <number>`：每分钟最多启动多少个生成任务，默认 `60`；与启动间隔同时生效，取更保守的限制。
+  * `--failure-threshold <number>`：连续限流、超时、网络或提供方 5xx 达到该次数后熔断剩余队列，默认 `3`。认证、配置和质量校验错误不会触发熔断。
   * `--reset-solution`：显式覆盖已有学习者答案；默认会要求确认，也可结合 `--yes` 在自动化环境确认。
 * **示例**：
   ```powershell
   fc generate-all --concurrency 2 --stagger-ms 1500
+  fc generate-all --requests-per-minute 30 --failure-threshold 3
   ```
 
-### 15. `generation status` / `generation retry` — 生成作业恢复
-* **描述**：查看作业阶段、失败原因和质量报告，或依据 unit id 重试失败作业。
+### 15. `generation status` / `generation retry` / `generation recover` / `generation metrics` — 生成作业恢复与指标
+* **描述**：查看作业阶段、失败原因、质量报告和阶段 checkpoint。Draft 会先经过本地质量评分；仅当长度、目标覆盖、结构和示例等必要信号高置信通过时，才跳过 Critique，最终结构化质量门始终执行。重试失败或降级作业时，新作业会关联父作业并复用输入未变化的已完成阶段；若学习画像、项目摘要或单元定义发生变化，则拒绝复用旧 checkpoint。发布前会写入计划与目标文件的恢复日志；CLI 启动时只读扫描 `publishing` manifest。若所有目标 hash 与计划 revision 匹配，`generation recover` 会安全完成最终 manifest；若仅出现日志记录内的部分写入则回滚；未知 hash/revision 会标记失败并保留人工检查证据，绝不覆盖。指标命令汇总 p50/p95 延迟、提供方调用/重试、token、缓存复用和 Critique 跳过次数。
+* **一致性**：学习计划使用递增 revision 和单写者锁更新。并发命令若基于旧 revision 写入会明确失败，不会覆盖更新后的计划。
 * **示例**：
   ```powershell
   fc generation status <jobId>
   fc generation retry <jobId>
+  fc generation recover
+  fc generation recover --json
+  fc generation metrics --last 20
+  fc generation metrics --json
   ```
+
+### 16. 分层测试命令
+* `npm run test:unit`：纯函数、结构化解析、缓存、指标聚合和生成恢复。
+* `npm run test:integration`：临时目录发布、计划并发冲突和参考解答实跑。
+* `npm run test:golden`：固定代表性课程产物的质量回归。
+* `npm run test:smoke`：手工访问真实提供方；默认测试和 CI 不执行。
 
 ---
 

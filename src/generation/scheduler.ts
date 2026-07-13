@@ -1,6 +1,11 @@
+import { isRetryableProviderError } from '../providers/errors.js';
+
 export interface GenerationSchedulerOptions {
   concurrency: number;
   minStartIntervalMs: number;
+  requestsPerMinute?: number;
+  transientFailureThreshold?: number;
+  circuitCooldownMs?: number;
 }
 
 export interface GenerationScheduleMetric {
@@ -25,10 +30,15 @@ export class GenerationScheduler {
   private readonly metrics = new Map<string, GenerationScheduleMetric>();
   private activeCount = 0;
   private nextStartAt = 0;
+  private consecutiveTransientFailures = 0;
+  private circuitOpenedAt?: number;
 
   constructor(private readonly options: GenerationSchedulerOptions) {}
 
   schedule<T>(id: string, task: () => Promise<T>): Promise<T> {
+    if (this.isCircuitOpen()) {
+      return Promise.reject(new GenerationCircuitOpenError());
+    }
     if (this.metrics.has(id)) {
       throw new Error(`A generation task with id "${id}" is already scheduled.`);
     }
@@ -40,7 +50,7 @@ export class GenerationScheduler {
     return promise;
   }
 
-  snapshot(): { metrics: GenerationScheduleMetric[]; p50Ms: number; p95Ms: number } {
+  snapshot(): { metrics: GenerationScheduleMetric[]; p50Ms: number; p95Ms: number; circuitOpen: boolean } {
     const metrics = [...this.metrics.values()].map((metric) => ({ ...metric }));
     const durations = metrics
       .map((metric) => metric.durationMs)
@@ -50,7 +60,21 @@ export class GenerationScheduler {
       metrics,
       p50Ms: percentile(durations, 0.5),
       p95Ms: percentile(durations, 0.95),
+      circuitOpen: this.isCircuitOpen(),
     };
+  }
+
+  cancelPending(reason = 'Generation queue cancelled.'): void {
+    const error = new Error(reason);
+    for (const queued of this.queue.splice(0)) {
+      const metric = this.metrics.get(queued.id);
+      if (metric) {
+        metric.status = 'failed';
+        metric.completedAt = Date.now();
+        metric.error = reason;
+      }
+      queued.reject(error);
+    }
   }
 
   private pump(): void {
@@ -66,7 +90,7 @@ export class GenerationScheduler {
     const metric = this.metrics.get(queued.id);
     const now = Date.now();
     const startAt = Math.max(now, this.nextStartAt);
-    this.nextStartAt = startAt + this.options.minStartIntervalMs;
+    this.nextStartAt = startAt + this.effectiveStartIntervalMs();
     const delay = startAt - now;
     if (delay > 0) {
       await sleep(delay);
@@ -84,6 +108,7 @@ export class GenerationScheduler {
         metric.completedAt = Date.now();
         metric.durationMs = metric.completedAt - (metric.startedAt ?? metric.completedAt);
       }
+      this.consecutiveTransientFailures = 0;
       queued.resolve(result);
     } catch (error) {
       if (metric) {
@@ -92,11 +117,45 @@ export class GenerationScheduler {
         metric.durationMs = metric.completedAt - (metric.startedAt ?? metric.completedAt);
         metric.error = error instanceof Error ? error.message : String(error);
       }
+      if (isRetryableProviderError(error)) {
+        this.consecutiveTransientFailures++;
+        if (this.consecutiveTransientFailures >= (this.options.transientFailureThreshold ?? 3)) {
+          this.circuitOpenedAt = Date.now();
+          this.cancelPending('Generation circuit opened after repeated transient provider failures.');
+        }
+      } else {
+        this.consecutiveTransientFailures = 0;
+      }
       queued.reject(error);
     } finally {
       this.activeCount--;
       this.pump();
     }
+  }
+
+  private effectiveStartIntervalMs(): number {
+    const requestsPerMinute = this.options.requestsPerMinute;
+    const rateInterval = requestsPerMinute && requestsPerMinute > 0
+      ? Math.ceil(60_000 / requestsPerMinute)
+      : 0;
+    return Math.max(this.options.minStartIntervalMs, rateInterval);
+  }
+
+  private isCircuitOpen(): boolean {
+    if (this.circuitOpenedAt === undefined) return false;
+    if (Date.now() - this.circuitOpenedAt >= (this.options.circuitCooldownMs ?? 30_000)) {
+      this.circuitOpenedAt = undefined;
+      this.consecutiveTransientFailures = 0;
+      return false;
+    }
+    return true;
+  }
+}
+
+export class GenerationCircuitOpenError extends Error {
+  constructor() {
+    super('Generation circuit is open after repeated transient provider failures.');
+    this.name = 'GenerationCircuitOpenError';
   }
 }
 
