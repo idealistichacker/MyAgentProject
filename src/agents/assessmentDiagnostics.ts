@@ -47,9 +47,11 @@ export function buildQuizDiagnosticIssues(unit: SeedUnit, quiz: QuizQuestion[]):
     if (options.some((option) => GENERIC_DISTRACTOR.test(option.trim()))) {
       issues.push(issue('quiz.choice.distractor.generic', `Choice quiz "${question.id}" uses an "all/none of the above" distractor that weakens diagnosis.`));
     }
+    const isCodeQuiz = options.some((opt) => opt.includes('(') || opt.includes('=') || opt.includes('def ') || opt.includes('import ') || opt.includes('class '));
+    const threshold = isCodeQuiz ? 0.95 : 0.85;
     for (let left = 0; left < normalizedOptions.length; left += 1) {
       for (let right = left + 1; right < normalizedOptions.length; right += 1) {
-        if (bigramSimilarity(normalizedOptions[left]!, normalizedOptions[right]!) >= 0.85) {
+        if (bigramSimilarity(normalizedOptions[left]!, normalizedOptions[right]!) >= threshold) {
           issues.push(issue('quiz.choice.distractor.tooSimilar', `Choice quiz "${question.id}" contains options that are too lexically similar to diagnose distinct reasoning.`));
         }
       }

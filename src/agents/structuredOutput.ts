@@ -7,6 +7,7 @@ import {
   projectSpecSchema,
   quizQuestionSchema,
   seedUnitSchema,
+  type SeedUnit,
 } from '../types.js';
 import type { ChatResponse, ToolDefinition } from '../providers/types.js';
 
@@ -257,4 +258,26 @@ export function parseNamedToolArguments(response: ChatResponse, name: string): u
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Provider returned invalid arguments for "${name}": ${message}`);
   }
+}
+
+export function buildUnitArtifactTool(unit: SeedUnit): ToolDefinition {
+  const tool = JSON.parse(JSON.stringify(unitArtifactTool)) as ToolDefinition;
+  if (unit.objectives && unit.objectives.length > 0) {
+    const quizProps = tool.function.parameters.properties.quiz?.items?.properties;
+    if (quizProps?.objectiveIds) {
+      quizProps.objectiveIds.items = {
+        type: 'string',
+        enum: unit.objectives,
+      };
+    }
+
+    const coverageProps = tool.function.parameters.properties.objectiveCoverage?.items?.properties;
+    if (coverageProps?.objectiveId) {
+      coverageProps.objectiveId = {
+        type: 'string',
+        enum: unit.objectives,
+      };
+    }
+  }
+  return tool;
 }

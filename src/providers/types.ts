@@ -45,6 +45,7 @@ export interface ChatOptions {
 export interface ChatResponse {
   content: string | null;
   tool_calls?: ToolCall[];
+  finishReason?: string;
   usage?: {
     promptTokens: number;
     completionTokens: number;

@@ -184,7 +184,7 @@ program.command('plan')
     s.start('FCAgent CurriculumPlanner 正在为你生成定制化大纲...');
     let plan: LearningPlan;
     try {
-      plan = replacePlan(await generatePlan(learner, provider));
+      plan = replacePlan(await generatePlan(learner, provider, (msg) => s.message(msg)));
     } catch (error) {
       s.stop(color.red('✖ 计划未保存，现有计划保持不变。'));
       cancel(error instanceof Error ? error.message : String(error));

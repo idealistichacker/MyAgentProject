@@ -9,7 +9,7 @@ import {
 import { TIMEOUTS } from '../timeouts.js';
 
 export class OpenAICompatibleProvider implements LLMProvider {
-  constructor(private readonly config: ProviderConfig) {}
+  constructor(private readonly config: ProviderConfig) { }
 
   async chat(messages: ChatMessage[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.config.apiKey) {
@@ -79,12 +79,16 @@ export class OpenAICompatibleProvider implements LLMProvider {
         }
 
         const json = (await response.json()) as {
-          choices?: Array<{ message?: { content?: string | null; tool_calls?: ToolCall[] } }>;
+          choices?: Array<{
+            message?: { content?: string | null; tool_calls?: ToolCall[] };
+            finish_reason?: string;
+          }>;
           usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
           error?: unknown;
         };
 
-        const message = json.choices?.[0]?.message;
+        const choice = json.choices?.[0];
+        const message = choice?.message;
         if (!message) {
           throw new ProviderRequestError(
             `Provider returned no message: ${JSON.stringify(json.error ?? json)}`,
@@ -95,6 +99,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         return {
           content: message.content ?? null,
           tool_calls: message.tool_calls,
+          finishReason: choice?.finish_reason ?? undefined,
           usage: json.usage ? {
             promptTokens: json.usage.prompt_tokens ?? 0,
             completionTokens: json.usage.completion_tokens ?? 0,
