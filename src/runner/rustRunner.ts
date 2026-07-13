@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { TIMEOUTS } from '../timeouts.js';
 import type { ExerciseSpec, TestResult } from '../types.js';
 import { writeTextFile } from '../state/fsState.js';
 import type { ExerciseRunResult } from './types.js';
@@ -29,7 +30,7 @@ export async function runRustExercise(
       await execFileAsync('rustc', ['test.rs', '-o', exeName], {
         cwd: exerciseDir,
         env: createRestrictedEnvironment(),
-        timeout: 10000,
+        timeout: TIMEOUTS.RUNNER_COMPILE_RUST,
       });
     } catch (compileErr: any) {
       const stderr = compileErr.stderr || compileErr.message;
@@ -48,7 +49,7 @@ export async function runRustExercise(
     const { stdout, stderr } = await execFileAsync(exePath, [], {
       cwd: exerciseDir,
       env: createRestrictedEnvironment(),
-      timeout: 5000,
+      timeout: TIMEOUTS.RUNNER_RUN_RUST,
       maxBuffer: 1024 * 1024,
     });
 
@@ -74,7 +75,7 @@ export async function runRustExercise(
 
     const testResults = parseJsonLines(execError.stdout ?? '');
     const message = execError.signal === 'SIGTERM'
-      ? 'timeout: exercise exceeded 5 seconds'
+      ? `timeout: exercise exceeded ${TIMEOUTS.RUNNER_RUN_RUST / 1000} seconds`
       : execError.stderr || execError.message || 'unknown execution error';
 
     return {

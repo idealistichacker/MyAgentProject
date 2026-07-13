@@ -1,0 +1,51 @@
+{
+  "id": "unit-1-1783937319728-3797aa02",
+  "unitId": "unit-1",
+  "status": "failed",
+  "stage": "failed",
+  "attempt": 1,
+  "inputHash": "1a3c6aefd4dccd96a200af254c6d7b2c26a5c9f42b4ec4803aa177855427da4f",
+  "startedAt": "2026-07-13T10:08:39.727Z",
+  "updatedAt": "2026-07-13T10:44:28.006Z",
+  "completedAt": "2026-07-13T10:44:28.006Z",
+  "error": "The operation was aborted due to timeout",
+  "metrics": {
+    "totalDurationMs": 2148279,
+    "stages": {},
+    "providerCalls": 3,
+    "providerRetries": 5,
+    "promptTokens": 7552,
+    "completionTokens": 10399,
+    "totalTokens": 17951,
+    "sourceCount": 0,
+    "cacheReuse": false
+  },
+  "checkpoints": [
+    {
+      "stage": "draft",
+      "cacheKeyHash": "2cdb2e89250c2a8780810d9f275605a9de337818030e7526827fe6655782348c",
+      "completedAt": "2026-07-13T10:14:23.864Z",
+      "cacheHit": false,
+      "outcome": "completed",
+      "qualityScore": 90,
+      "reasons": [
+        "misconceptions"
+      ]
+    },
+    {
+      "stage": "critique",
+      "cacheKeyHash": "22c2f9c99df786966efe3acea1a37aad9ffee8cf4a891f2fb95fb9bc20df007e",
+      "completedAt": "2026-07-13T10:14:23.869Z",
+      "cacheHit": false,
+      "outcome": "skipped",
+      "qualityScore": 90,
+      "reasons": []
+    },
+    {
+      "stage": "final",
+      "cacheKeyHash": "6311ab8eb79ee7114baacc6ab37923264679d4ebc9fd46d8f80bba89eab0e4d3",
+      "completedAt": "2026-07-13T10:18:57.086Z",
+      "cacheHit": false
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import type { ExerciseSpec, TestResult } from '../types.js';
 import { writeTextFile } from '../state/fsState.js';
 import type { ExerciseRunResult } from './types.js';
 import { createRestrictedEnvironment } from './restrictedEnv.js';
+import { TIMEOUTS } from '../timeouts.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -24,7 +25,7 @@ export async function runPythonExercise(
       {
         cwd: exerciseDir,
         env: createRestrictedEnvironment(),
-        timeout: 5000,
+        timeout: TIMEOUTS.RUNNER_RUN_PYTHON,
         maxBuffer: 1024 * 1024,
       }
     );
@@ -50,7 +51,7 @@ export async function runPythonExercise(
 
     const testResults = parseJsonLines(execError.stdout ?? '');
     const message = execError.signal === 'SIGTERM'
-      ? 'timeout: exercise exceeded 5 seconds'
+      ? `timeout: exercise exceeded ${TIMEOUTS.RUNNER_RUN_PYTHON / 1000} seconds`
       : execError.stderr || execError.message || 'unknown execution error';
 
     return {

@@ -1,3 +1,4 @@
+import { TIMEOUTS } from '../timeouts.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -140,7 +141,7 @@ export function withFileLock<T>(
   action: () => T,
   options: { timeoutMs?: number; staleMs?: number } = {}
 ): T {
-  const timeoutMs = options.timeoutMs ?? 10_000;
+  const timeoutMs = options.timeoutMs ?? TIMEOUTS.FS_LOCK_WAIT;
   const staleMs = options.staleMs ?? 60_000;
   const startedAt = Date.now();
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });

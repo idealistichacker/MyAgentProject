@@ -9,8 +9,9 @@ import type { Source } from '../types.js';
 import color from 'picocolors';
 import { classifySourceTrust, normalizeSourcePack, sanitizeSourceExcerpt } from './sourcePolicy.js';
 
+import { TIMEOUTS } from '../timeouts.js';
+
 const execAsync = promisify(exec);
-const SEARCH_TIMEOUT_MS = 15000;
 const MAX_SEARCH_RESULT_CHARS = 6000;
 const FRESH_SOURCE_TTL_MS = 24 * 60 * 60 * 1000;
 const STALE_SOURCE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -160,7 +161,7 @@ export class WebSearchTool implements Tool {
             include_answer: false,
             max_results: 3
           }),
-          signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+          signal: AbortSignal.timeout(TIMEOUTS.WEB_SEARCH),
         });
         if (!response.ok) {
           throw new Error(`Tavily search failed with status ${response.status}`);
@@ -186,7 +187,7 @@ export class WebSearchTool implements Tool {
     } else {
       try {
         const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json`;
-        const response = await this.fetchImplementation(url, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+        const response = await this.fetchImplementation(url, { signal: AbortSignal.timeout(TIMEOUTS.WEB_SEARCH) });
         if (!response.ok) {
           throw new Error(`Wikipedia search failed with status ${response.status}`);
         }
@@ -296,7 +297,7 @@ export class ExecuteCommandTool implements Tool {
     if (!command) return 'Error: Missing command parameter.';
 
     try {
-      const { stdout, stderr } = await execAsync(command, { cwd, timeout: 10000 });
+      const { stdout, stderr } = await execAsync(command, { cwd, timeout: TIMEOUTS.EXEC_COMMAND });
       let output = '';
       if (stdout) output += `STDOUT:\n${stdout}\n`;
       if (stderr) output += `STDERR:\n${stderr}\n`;

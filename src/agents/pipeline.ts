@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TIMEOUTS } from '../timeouts.js';
 import { getSeedUnit, SEED_CURRICULUM } from '../curriculum/seed.js';
 import { exerciseSchema } from '../types.js';
 import type {
@@ -65,7 +66,7 @@ ${JSON.stringify(rawProfile, null, 2)}
     const response = await provider.chat([
       { role: 'system', content: 'You are a concise learning diagnostician.' },
       { role: 'user', content: prompt },
-    ], { temperature: 0.2, timeoutMs: 60_000 });
+    ], { temperature: 0.2, timeoutMs: TIMEOUTS.LLM_LEARNING_PLAN });
 
     const summary = response.content || '';
 
@@ -170,7 +171,7 @@ ${JSON.stringify(learnerProfile, null, 2)}
       for (let i = 0; i < 5; i++) {
         const response = await provider.chat(messages, { 
           temperature: 0.3,
-          timeoutMs: 120_000,
+          timeoutMs: TIMEOUTS.LLM_REMEDIATION_OUTLINE,
           tools: [...toolManager.getToolsDefinitions(), planSubmissionTool]
         });
 
@@ -445,7 +446,7 @@ Do not format as JSON yet, just generate a deep markdown document draft.
         const draftRes = await provider.chat([
           { role: 'system', content: 'You are a highly-qualified computer science educator, teaching at the level of CS61A.' },
           { role: 'user', content: draftPrompt }
-        ], { temperature: 0.45, timeoutMs: 120_000 });
+        ], { temperature: 0.45, timeoutMs: TIMEOUTS.LLM_PASS1_DRAFT });
         return draftRes.content || '';
       }
     );
@@ -513,7 +514,7 @@ Provide the expanded and corrected course content in Chinese. Focus on technical
           const critiqueRes = await provider.chat([
             { role: 'system', content: 'You are an elite technical reviewer and educator.' },
             { role: 'user', content: critiquePrompt }
-          ], { temperature: 0.3, timeoutMs: 120_000 });
+          ], { temperature: 0.3, timeoutMs: TIMEOUTS.LLM_PASS2_CRITIQUE });
           return critiqueRes.content || '';
         }
       );
@@ -687,7 +688,7 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
         { role: 'user', content: finalPrompt }
       ], {
         temperature: 0.2,
-        timeoutMs: 180_000,
+        timeoutMs: TIMEOUTS.LLM_PASS3_FINAL,
         maxTokens: 12_000,
         maxAttempts: 2,
         thinkingMode: 'disabled',
@@ -869,7 +870,7 @@ IMPORTANT: Ignore the legacy text-section template above. Do not emit text, Mark
       { role: 'user', content: remediationPrompt },
     ], {
       temperature: 0.2,
-      timeoutMs: 120_000,
+      timeoutMs: TIMEOUTS.LLM_REMEDIATION_UNIT,
       tools: [unitArtifactTool],
       toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
     });
@@ -1142,7 +1143,7 @@ Do not return Markdown sections or raw JSON. Call \`submit_unit_artifact\` exact
     { role: 'user', content: repairPrompt },
   ], {
     temperature: 0.1,
-    timeoutMs: 120_000,
+    timeoutMs: TIMEOUTS.LLM_REPAIR,
     tools: [unitArtifactTool],
     toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
   });
@@ -1331,7 +1332,7 @@ Call \`submit_assessment_review\` exactly once with diagnosis and nextAction. Do
         { role: 'user', content: prompt }
       ], {
         temperature: 0.2,
-        timeoutMs: 60_000,
+        timeoutMs: TIMEOUTS.LLM_DIAGNOSTICS,
         tools: [assessmentReviewTool],
         toolChoice: { type: 'function', function: { name: assessmentReviewTool.function.name } },
       });

@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
+import { TIMEOUTS } from '../timeouts.js';
 import type { ExerciseSpec, TestResult } from '../types.js';
 import { writeTextFile } from '../state/fsState.js';
 import { createRestrictedEnvironment } from './restrictedEnv.js';
@@ -29,7 +30,7 @@ export async function runTypeScriptExercise(
       {
         cwd: exerciseDir,
         env: createRestrictedEnvironment(),
-        timeout: 5000,
+        timeout: TIMEOUTS.RUNNER_RUN_TYPESCRIPT,
         maxBuffer: 1024 * 1024,
       }
     );
@@ -55,7 +56,7 @@ export async function runTypeScriptExercise(
 
     const testResults = parseJsonLines(execError.stdout ?? '');
     const message = execError.signal === 'SIGTERM'
-      ? 'timeout: exercise exceeded 5 seconds'
+      ? `timeout: exercise exceeded ${TIMEOUTS.RUNNER_RUN_TYPESCRIPT / 1000} seconds`
       : execError.stderr || execError.message || 'unknown execution error';
 
     return {

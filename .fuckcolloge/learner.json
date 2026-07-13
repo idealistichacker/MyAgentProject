@@ -1,14 +1,14 @@
 {
-  "target": "最终学习目标：**用 Python 实现一个 Scheme 子集编译器，借助 LLVM 生成可直接运行的 .exe 文件。**",
+  "target": "最终学习目标：使用Python调用硅基流动GLM模型的OpenAI兼容API，结合Function Calling技术，从零开发一个能接收自然语言修Bug指令，并在隔离Docker容器内自主阅读代码、从零编写测试用例、执行测试并修复Bug的SWE Agent。",
   "programmingLevel": "basic",
   "dsaLevel": "heard",
   "weeklyHours": "2-5",
   "totalWeeks": "5-8",
-  "learningStyle": "example-first",
+  "learningStyle": "project-first",
   "codePractice": "yes",
-  "pace": "steady",
+  "pace": "normal",
   "nearTermGoal": "无",
   "rawAnswers": {},
-  "summary": "你是一位手握 Python 却心怀编译原理的“魔法学徒”——基础编程已入门，数据结构与算法还只是“江湖传说”，但居然想用 LLVM 把 Scheme 子集炼成 .exe，这胆识我先给满分！你偏爱从实例中摸爬滚打，每周 2-5 小时稳扎稳打，5-8 周内就要让编译器跑起来，简直是“时间管理大师”兼“项目驱动型冒险家”。别怕 DSA 底子薄，咱们就用代码当砖块，边砌编译器边补内功，我保证这段旅程既有挑战又有满满的成就感。欢迎入坑，你的自制编译器正在未来向你招手呢！",
+  "summary": "好家伙，基础Python刚上手、数据结构还停留在\"听说过\"的阶段，就敢直奔Function Calling + Docker隔离容器 + 自主修Bug的SWE Agent——这野心我太喜欢了！你是个典型的\"项目驱动型冒险家\"，比起啃理论你更愿意在真实代码里摸爬滚打，这恰恰是做Agent开发最对路的气质。每周2-5小时、5-8周的节奏说紧凑也紧凑，但只要咱们把Function Calling当主轴、Docker当沙盒、测试反馈当指南针，这条路完全跑得通。别担心底子薄，你缺的不是能力而是地图，而这张地图——我已经给你画好了。欢迎入坑，未来的SWE Agent架构师，咱们开工吧！🔥",
   "createdAt": "2026-06-11T08:32:49.081Z"
 }

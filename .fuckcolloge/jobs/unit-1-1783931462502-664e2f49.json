@@ -1,0 +1,24 @@
+{
+  "id": "unit-1-1783931462502-664e2f49",
+  "unitId": "unit-1",
+  "status": "failed",
+  "stage": "failed",
+  "attempt": 1,
+  "inputHash": "1a3c6aefd4dccd96a200af254c6d7b2c26a5c9f42b4ec4803aa177855427da4f",
+  "startedAt": "2026-07-13T08:31:02.500Z",
+  "updatedAt": "2026-07-13T08:31:07.588Z",
+  "completedAt": "2026-07-13T08:31:07.588Z",
+  "error": "Source retrieval failed; unit cannot be formally published: Tavily search error: fetch failed",
+  "metrics": {
+    "totalDurationMs": 5088,
+    "stages": {},
+    "providerCalls": 0,
+    "providerRetries": 0,
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "totalTokens": 0,
+    "sourceCount": 0,
+    "cacheReuse": false
+  },
+  "checkpoints": []
+}

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { TIMEOUTS } from '../timeouts.js';
 import type { ExerciseSpec, TestResult } from '../types.js';
 import { writeTextFile } from '../state/fsState.js';
 import type { ExerciseRunResult } from './types.js';
@@ -24,7 +25,7 @@ export async function runBashExercise(
       {
         cwd: exerciseDir,
         env: createRestrictedEnvironment(),
-        timeout: 5000,
+        timeout: TIMEOUTS.RUNNER_RUN_BASH,
         maxBuffer: 1024 * 1024,
       }
     );
@@ -50,7 +51,7 @@ export async function runBashExercise(
 
     const testResults = parseJsonLines(execError.stdout ?? '');
     const message = execError.signal === 'SIGTERM'
-      ? 'timeout: exercise exceeded 5 seconds'
+      ? `timeout: exercise exceeded ${TIMEOUTS.RUNNER_RUN_BASH / 1000} seconds`
       : execError.stderr || execError.message || 'unknown execution error';
 
     return {

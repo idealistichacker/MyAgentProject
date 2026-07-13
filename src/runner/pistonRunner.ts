@@ -1,3 +1,4 @@
+import { TIMEOUTS } from '../timeouts.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ExerciseSpec, TestResult } from '../types.js';
@@ -81,8 +82,8 @@ export async function runPistonExercise(
         language: exercise.language,
         version,
         files,
-        compile_timeout: 10000,
-        run_timeout: 5000,
+        compile_timeout: TIMEOUTS.RUNNER_COMPILE_PISTON,
+        run_timeout: TIMEOUTS.RUNNER_RUN_PISTON,
       }),
     });
 

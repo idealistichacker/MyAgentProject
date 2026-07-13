@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "createdAt": 1783931489653,
+  "expiry": 1784017889653,
+  "data": [
+    {
+      "id": "src-1",
+      "url": "https://cs.du.edu/~intropython/byte-of-python/data_structures.html",
+      "title": "Lists, Tuples, Dictionaries, and Sets · HonKit",
+      "publisher": "cs.du.edu",
+      "retrievedAt": "2026-07-13T08:31:29.619Z",
+      "hash": "1e012c783c24ffa9eaa0ebae6e6de37a2025ebe1642331745e467ea4990d5938",
+      "trust": "primary",
+      "excerpt": "There are four built-in data structures in Python - *list, tuple, dictionary and set*. A `list` is a data structure that holds an ordered collection of items i.e. you can store a *sequence* of items in a list. This is easy to imagine if you can think of a shopping list where you have a list of items to buy, except that you probably have each item on a separate line in your shopping list whereas in Python you put commas in between them. The list of items should be enclosed in square brackets so that Python understands that you are specifying a list. Once you have created a list, you can add, remove or search for items in the list. Since we can add and remove items, we say that a list is a *mutable* data type i.e. this type can be altered. For example, Python provides an `append` method for the `list` class which allows you to add an item to the end of the list.",
+      "freshness": "fresh"
+    },
+    {
+      "id": "src-2",
+      "url": "https://medium.com/@deBUGger404/data-structures-in-python-master-lists-tuples-sets-dictionaries-and-comprehensions-ac2e645c6b4a",
+      "title": "Data Structures in Python: Master Lists, Tuples, Sets, Dictionaries, and Comprehensions (Beginner’s…",
+      "publisher": "medium.com",
+      "retrievedAt": "2026-07-13T08:31:29.619Z",
+      "hash": "3a5be7695bf46eb241e070dc7fe0fd20ce15c0c738694b2534e11f9dfd776e5f",
+      "trust": "secondary",
+      "excerpt": "# Data Structures in Python: Master Lists, Tuples, Sets, Dictionaries, and Comprehensions (Beginner’s Guide). * **Dictionaries** — to store key-value pairs (like a name and phone number). And we’ll also explore **Comprehensions** — a beautiful way to create and manipulate data structures in a single line of code. In Python, a **list** is a **collection of items** that are **ordered** and **changeable (mutable)**. You can store **multiple values** — numbers, strings, booleans, even other lists — all inside a list! > Think of a list like a **basket** where you can throw in fruits, books, or anything you like — and you can even rearrange or remove them later! **Example 1: Basic List**Let’s create a simple list of fruits:. **Example 2: List with Different Data Types**a list can even store **different types** of data — not just one type! You can get (or access) items in a list by using their **index number**.",
+      "freshness": "fresh"
+    },
+    {
+      "id": "src-3",
+      "url": "https://www.youtube.com/watch?v=haCVFdMlvsc",
+      "title": "Python | Data Structures | Lists | Tuples | Dictionaries | Sets",
+      "publisher": "youtube.com",
+      "retrievedAt": "2026-07-13T08:31:29.619Z",
+      "hash": "1467b69433d8c2febafa98035a76b4df0cef1dccda65bfa559fc625a9a95f49e",
+      "trust": "secondary",
+      "excerpt": "Python | Data Structures | Lists | Tuples | Dictionaries | Sets This video provides a comprehensive exploration of fundamental data",
+      "freshness": "fresh"
+    }
+  ]
+}

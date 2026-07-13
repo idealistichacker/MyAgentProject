@@ -6,6 +6,7 @@ import {
   normalizeProviderError,
   ProviderRequestError,
 } from './errors.js';
+import { TIMEOUTS } from '../timeouts.js';
 
 export class OpenAICompatibleProvider implements LLMProvider {
   constructor(private readonly config: ProviderConfig) {}
@@ -54,7 +55,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(options?.timeoutMs ?? 180_000),
+          signal: AbortSignal.timeout(options?.timeoutMs ?? TIMEOUTS.LLM_DEFAULT),
         });
 
         if (!response.ok) {
