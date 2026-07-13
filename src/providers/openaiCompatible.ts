@@ -25,6 +25,14 @@ export class OpenAICompatibleProvider implements LLMProvider {
       messages,
     };
 
+    if (options?.maxTokens !== undefined) {
+      body.max_tokens = options.maxTokens;
+    }
+
+    if (options?.thinkingMode === 'disabled' && isSiliconFlowEndpoint(endpoint)) {
+      body.enable_thinking = false;
+    }
+
     if (options?.tools && options.tools.length > 0) {
       body.tools = options.tools;
       body.tool_choice = options.toolChoice ?? 'auto';
@@ -35,7 +43,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     let lastError: any = null;
-    const maxAttempts = 5;
+    const maxAttempts = Math.max(1, options?.maxAttempts ?? 5);
     const requestStartedAt = Date.now();
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -122,5 +130,13 @@ export class OpenAICompatibleProvider implements LLMProvider {
       lastError.durationMs = Date.now() - requestStartedAt;
     }
     throw lastError;
+  }
+}
+
+function isSiliconFlowEndpoint(endpoint: string): boolean {
+  try {
+    return new URL(endpoint).hostname.endsWith('siliconflow.cn');
+  } catch {
+    return false;
   }
 }

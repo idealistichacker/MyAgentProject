@@ -32,6 +32,9 @@ export interface ToolDefinition {
 export interface ChatOptions {
   temperature?: number;
   timeoutMs?: number;
+  maxTokens?: number;
+  maxAttempts?: number;
+  thinkingMode?: 'provider-default' | 'disabled';
   tools?: ToolDefinition[];
   toolChoice?: 'auto' | 'required' | { type: 'function'; function: { name: string } };
   responseFormat?: {

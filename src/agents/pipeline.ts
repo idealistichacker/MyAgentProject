@@ -688,6 +688,9 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
       ], {
         temperature: 0.2,
         timeoutMs: 180_000,
+        maxTokens: 12_000,
+        maxAttempts: 2,
+        thinkingMode: 'disabled',
         tools: [unitArtifactTool],
         toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
       })
