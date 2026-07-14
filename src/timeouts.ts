@@ -26,3 +26,30 @@ export const TIMEOUTS = {
   RUNNER_RUN_PYTHON: 5_000,
   RUNNER_RUN_TYPESCRIPT: 5_000,
 };
+
+export const LLM_POLICIES = {
+  PASS3_FINAL: {
+    timeoutMs: TIMEOUTS.LLM_PASS3_FINAL,
+    maxTokens: 12_000,
+    maxAttempts: 2,
+    thinkingMode: 'disabled' as const,
+  },
+  ASSESSMENT_REPAIR: {
+    timeoutMs: TIMEOUTS.LLM_REPAIR,
+    maxTokens: 6_000,
+    maxAttempts: 1,
+    thinkingMode: 'disabled' as const,
+  },
+  CITATION_REPAIR: {
+    timeoutMs: TIMEOUTS.LLM_REPAIR,
+    maxTokens: 4_000,
+    maxAttempts: 1,
+    thinkingMode: 'disabled' as const,
+  },
+  ARTIFACT_REPAIR: {
+    timeoutMs: TIMEOUTS.LLM_REPAIR,
+    maxTokens: 12_000,
+    maxAttempts: 1,
+    thinkingMode: 'disabled' as const,
+  },
+};

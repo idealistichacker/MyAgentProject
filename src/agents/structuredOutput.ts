@@ -53,6 +53,19 @@ export const generatedUnitArtifactSchema = z.object({
 
 export type GeneratedUnitArtifact = z.infer<typeof generatedUnitArtifactSchema>;
 
+const unitAssessmentRepairSchema = z.object({
+  quiz: z.array(generatedQuizQuestionSchema).min(1).max(5),
+  objectiveCoverage: z.array(objectiveCoverageSchema).min(1),
+});
+
+export type UnitAssessmentRepair = z.infer<typeof unitAssessmentRepairSchema>;
+
+const unitCitationRepairSchema = z.object({
+  citations: z.array(citationSchema).min(1),
+});
+
+export type UnitCitationRepair = z.infer<typeof unitCitationRepairSchema>;
+
 const planSubmissionSchema = z.object({
   units: z.array(seedUnitSchema).min(2).max(11),
 });
@@ -179,6 +192,63 @@ export const unitArtifactTool: ToolDefinition = {
   },
 };
 
+export function createUnitArtifactTool(objectives: string[]): ToolDefinition {
+  const tool = cloneTool(unitArtifactTool);
+  constrainObjectiveIds(tool, objectives);
+  return tool;
+}
+
+export function createUnitAssessmentRepairTool(objectives: string[]): ToolDefinition {
+  const artifactTool = createUnitArtifactTool(objectives);
+  const artifactProperties = artifactTool.function.parameters.properties;
+  return {
+    type: 'function',
+    function: {
+      name: 'submit_unit_assessment_repair',
+      description: 'Repair only the quiz and objective coverage for an otherwise valid learning-unit artifact.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['quiz', 'objectiveCoverage'],
+        properties: {
+          quiz: artifactProperties.quiz,
+          objectiveCoverage: artifactProperties.objectiveCoverage,
+        },
+      },
+    },
+  };
+}
+
+export function createUnitCitationRepairTool(sourceIds: string[], claimCandidates: string[]): ToolDefinition {
+  return {
+    type: 'function',
+    function: {
+      name: 'submit_unit_citation_repair',
+      description: 'Repair only citations for an otherwise valid learning-unit artifact.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['citations'],
+        properties: {
+          citations: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['sourceId', 'claim'],
+              properties: {
+                sourceId: { type: 'string', enum: sourceIds },
+                claim: { type: 'string', enum: claimCandidates },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 export const planSubmissionTool: ToolDefinition = {
   type: 'function',
   function: {
@@ -237,6 +307,14 @@ export function parseUnitArtifact(response: ChatResponse): GeneratedUnitArtifact
   return generatedUnitArtifactSchema.parse(parseNamedToolArguments(response, unitArtifactTool.function.name));
 }
 
+export function parseUnitAssessmentRepair(response: ChatResponse): UnitAssessmentRepair {
+  return unitAssessmentRepairSchema.parse(parseNamedToolArguments(response, 'submit_unit_assessment_repair'));
+}
+
+export function parseUnitCitationRepair(response: ChatResponse): UnitCitationRepair {
+  return unitCitationRepairSchema.parse(parseNamedToolArguments(response, 'submit_unit_citation_repair'));
+}
+
 export function parsePlanSubmission(response: ChatResponse): z.infer<typeof planSubmissionSchema> {
   return planSubmissionSchema.parse(parseNamedToolArguments(response, planSubmissionTool.function.name));
 }
@@ -257,4 +335,14 @@ export function parseNamedToolArguments(response: ChatResponse, name: string): u
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Provider returned invalid arguments for "${name}": ${message}`);
   }
+}
+
+function cloneTool(tool: ToolDefinition): ToolDefinition {
+  return JSON.parse(JSON.stringify(tool)) as ToolDefinition;
+}
+
+function constrainObjectiveIds(tool: ToolDefinition, objectives: string[]): void {
+  const parameters = tool.function.parameters as any;
+  parameters.properties.quiz.items.properties.objectiveIds.items.enum = [...objectives];
+  parameters.properties.objectiveCoverage.items.properties.objectiveId.enum = [...objectives];
 }

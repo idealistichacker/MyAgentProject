@@ -9,7 +9,7 @@
 ## ✨ 核心特性 (Key Features)
 
 1. **个性化诊断与知识目标图 (Diagnose, Plan & Objective Graph)**：基于大模型分析你的编程底子、算法基础、**预计总学习时长（周）**及近期目标，生成 2 至 10 个单元的动态课程树。每个后续单元通过 `prerequisiteObjectiveIds` 引用前置单元的精确目标，禁止未知或前向引用；中后期 Project 必须综合至少两个前置单元，并在里程碑中实际使用声明的前置目标。
-2. **质量驱动课件生成 (Risk-Adaptive Learning Loop)**：动态联网检索资料后先生成 Draft，并用确定性规则评估长度、目标覆盖、结构、示例、边界和误区。只有高置信草稿才跳过 Critique；存在风险时仍执行深度提炼，最后统一进入结构化 Polish、Zod 校验、内容质量闸门和一次自动修复。Project 单元还会额外生成 `ProjectSpec`，落盘为 `PROJECT.md`，包含里程碑、交付物、文件清单和 rubric。
+2. **质量驱动课件生成 (Risk-Adaptive Learning Loop)**：动态联网检索资料后先生成 Draft，并用确定性规则评估长度、目标覆盖、结构、示例、边界和误区。只有高置信草稿才跳过 Critique；存在风险时仍执行深度提炼，最后统一进入结构化 Polish、Zod 校验、内容质量闸门和按错误类型执行的有界局部修复。Project 单元还会额外生成 `ProjectSpec`，落盘为 `PROJECT.md`，包含里程碑、交付物、文件清单和 rubric。
 3. **多语言执行器沙盒 (Polyglot Runner)**：底层解耦硬编码，基于调度器架构自动运行并验证不同语言的作业代码：
    - **原生本地支持**：TypeScript (`tsx`), Python (`unittest`), Bash (`shell`), Rust (`rustc`) 可直接在本地编译与断言。
    - **Piston 云端引擎支持**：对于 C++, Java, Go, Ruby, Swift 等数十种小众或主流语言，系统会自动生成测试断言代码并无缝投递至 Piston API 沙箱进行云端执行，**实现零本地依赖的万物皆可学**！
@@ -32,6 +32,8 @@
 >
 > - 📄 **[从零上手与 CLI 命令指南 (GETTING_STARTED.md)](file:///y:/MyAgentProject/GETTING_STARTED.md)**：包含正式版 `fc` 命令链接、诊断追问模式、以及最全的参数手册。
 > - 🧠 **[FCAgent 功能全景与技术实现细节 (fcagent_features_detail.md)](file:///y:/MyAgentProject/fcagent_features_detail.md)**：关于大模型诊断、大纲生成、质量驱动课件渲染及多语言 Runner 的技术原理深度剖析文档。✨
+> - 🧰 **[生成故障与真实验收记录 (问题记录.md)](file:///y:/MyAgentProject/问题记录.md)**：记录 Pass 3 超时、局部质量修复、引用核验、Python runner 缺陷及 DeepSeek V4 Pro 真实回归结果。
+> - 🧭 **[课程生成优化重构建议 (课程生成优化重构建议.md)](file:///y:/MyAgentProject/课程生成优化重构建议.md)**：当前架构状态、已完成项、剩余风险和后续优先级。
 
 确保你的本地环境已安装 [Node.js (v18+)](https://nodejs.org/)。
 

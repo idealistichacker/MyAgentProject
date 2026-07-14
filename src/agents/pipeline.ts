@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TIMEOUTS } from '../timeouts.js';
+import { LLM_POLICIES, TIMEOUTS } from '../timeouts.js';
 import { getSeedUnit, SEED_CURRICULUM } from '../curriculum/seed.js';
 import { exerciseSchema } from '../types.js';
 import type {
@@ -22,12 +22,28 @@ import { buildSourcePackReadinessIssues } from './factVerification.js';
 import { assertKnowledgeGraph } from '../curriculum/knowledgeGraph.js';
 import {
   assessmentReviewTool,
+  createUnitArtifactTool,
+  createUnitAssessmentRepairTool,
+  createUnitCitationRepairTool,
   parseAssessmentReview,
   parsePlanSubmission,
+  parseUnitAssessmentRepair,
   parseUnitArtifact,
+  parseUnitCitationRepair,
   planSubmissionTool,
   unitArtifactTool,
 } from './structuredOutput.js';
+import {
+  buildAssessmentRepairPrompt,
+  buildCitationRepairPrompt,
+  extractCitationClaimCandidates,
+  isAssessmentOnlyQualityError,
+  isCitationOnlyQualityError,
+  mergeAssessmentRepair,
+  mergeCitationRepair,
+  normalizeAssessmentRepairEvidence,
+  retainSupportedCitationClaims,
+} from './unitArtifactRepair.js';
 import { loadConfig } from '../state/fsState.js';
 import { createCacheKey, hashCacheKey, llmCache } from '../utils/cache.js';
 import color from 'picocolors';
@@ -676,10 +692,11 @@ Learner Programming Level: ${learnerProfile.programmingLevel}
 Learner DSA Level: ${learnerProfile.dsaLevel}
 `.trim();
 
+    const finalArtifactTool = createUnitArtifactTool(unit.objectives);
     const finalCacheKey = createCacheKey('unit-final-response', {
         artifactCacheKey: cacheKey,
         refinedDraft,
-        promptVersion: 'final-structured-v3',
+        promptVersion: 'final-structured-v4-objective-enum',
       });
     const finalResult = await llmCache.getOrSet(
       finalCacheKey,
@@ -688,12 +705,9 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
         { role: 'user', content: finalPrompt }
       ], {
         temperature: 0.2,
-        timeoutMs: TIMEOUTS.LLM_PASS3_FINAL,
-        maxTokens: 12_000,
-        maxAttempts: 2,
-        thinkingMode: 'disabled',
-        tools: [unitArtifactTool],
-        toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
+        ...LLM_POLICIES.PASS3_FINAL,
+        tools: [finalArtifactTool],
+        toolChoice: { type: 'function', function: { name: finalArtifactTool.function.name } },
       })
     );
     const finalRes = finalResult.value;
@@ -711,7 +725,7 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
       await llmCache.set(cacheKey, finalUnit);
       return finalUnit;
     } catch (parseErr) {
-      console.warn('Response parsing failed. Asking the model for one structured repair...');
+      console.warn('Generated artifact failed validation. Asking for one bounded structured repair.', parseErr);
       const repairedUnit = await repairGeneratedUnit(unit, finalRes, parseErr, sources, provider);
       await llmCache.set(cacheKey, repairedUnit);
       return repairedUnit;
@@ -865,14 +879,15 @@ IMPORTANT: Ignore the legacy text-section template above. Do not emit text, Mark
 `.trim();
 
   try {
+    const remediationArtifactTool = createUnitArtifactTool(outline.objectives);
     const response = await provider.chat([
       { role: 'system', content: 'You generate compact remediation units for CS learners. Submit the completed artifact through the required structured-output tool.' },
       { role: 'user', content: remediationPrompt },
     ], {
       temperature: 0.2,
       timeoutMs: TIMEOUTS.LLM_REMEDIATION_UNIT,
-      tools: [unitArtifactTool],
-      toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
+      tools: [remediationArtifactTool],
+      toolChoice: { type: 'function', function: { name: remediationArtifactTool.function.name } },
     });
 
     const remediationUnit = await buildGeneratedUnit(outline, response, remediationSources);
@@ -1034,6 +1049,49 @@ async function repairGeneratedUnit(
   sources: Source[],
   provider: LLMProvider
 ): Promise<SeedUnit> {
+  if (isAssessmentOnlyQualityError(validationError)) {
+    let artifact = parseUnitArtifact(brokenResponse);
+    let currentValidationError = validationError;
+    const assessmentRepairTool = createUnitAssessmentRepairTool(unit.objectives);
+    const maxRepairRounds = 2;
+
+    for (let round = 1; round <= maxRepairRounds; round += 1) {
+      const repairPrompt = buildAssessmentRepairPrompt(unit.objectives, artifact, currentValidationError, round);
+      const repairResponse = await provider.chat([
+        { role: 'system', content: 'You repair assessment metadata for a validated course artifact without rewriting unrelated fields.' },
+        { role: 'user', content: repairPrompt },
+      ], {
+        temperature: round === 1 ? 0.1 : 0.2,
+        ...LLM_POLICIES.ASSESSMENT_REPAIR,
+        tools: [assessmentRepairTool],
+        toolChoice: { type: 'function', function: { name: assessmentRepairTool.function.name } },
+      });
+      const repairedAssessment = parseUnitAssessmentRepair(repairResponse);
+      const mergedResponse = mergeAssessmentRepair(
+        artifact,
+        normalizeAssessmentRepairEvidence(artifact, repairedAssessment)
+      );
+
+      try {
+        return await buildGeneratedUnit(unit, mergedResponse, sources);
+      } catch (error) {
+        if (isCitationOnlyQualityError(error)) {
+          return repairGeneratedUnitCitations(unit, parseUnitArtifact(mergedResponse), error, sources, provider);
+        }
+        if (round === maxRepairRounds || !isAssessmentOnlyQualityError(error)) throw error;
+        console.warn(`Assessment repair round ${round} still failed quality validation. Retrying once with focused feedback.`, error);
+        artifact = parseUnitArtifact(mergedResponse);
+        currentValidationError = error;
+      }
+    }
+
+    throw currentValidationError;
+  }
+
+  if (isCitationOnlyQualityError(validationError)) {
+    return repairGeneratedUnitCitations(unit, parseUnitArtifact(brokenResponse), validationError, sources, provider);
+  }
+
   const projectRepairRules = unit.type === 'project'
     ? '- Since this is a project unit, JSON must include a project object with at least 2 deliverables, 3 milestones, 2 files, 3 rubric items, and extensionIdeas.'
     : '';
@@ -1086,6 +1144,7 @@ The previous FCAgent unit generation response could not be parsed or failed qual
 Repair it into the exact required format below. Keep the same educational intent, but make it valid, runnable, and concise.
 
 Rules:
+- Exact objective IDs (copy verbatim; never translate or paraphrase): ${JSON.stringify(unit.objectives)}
 - Prefer these local runner languages: ${NATIVE_RUNNER_LANGUAGES.join(', ')}.
 - JSON must not include starterCode.
 - Include at least 3 testCases and at least 2 hints.
@@ -1138,17 +1197,69 @@ ${sources.map((source) => `${source.id}: ${source.title}`).join('\n')}
 Do not return Markdown sections or raw JSON. Call \`submit_unit_artifact\` exactly once with the corrected fields.
 `.trim();
 
+  const artifactRepairTool = createUnitArtifactTool(unit.objectives);
   const repairRes = await provider.chat([
     { role: 'system', content: 'You repair malformed curriculum artifacts. Submit the repaired artifact through the required structured-output tool.' },
     { role: 'user', content: repairPrompt },
   ], {
     temperature: 0.1,
-    timeoutMs: TIMEOUTS.LLM_REPAIR,
-    tools: [unitArtifactTool],
-    toolChoice: { type: 'function', function: { name: unitArtifactTool.function.name } },
+    ...LLM_POLICIES.ARTIFACT_REPAIR,
+    tools: [artifactRepairTool],
+    toolChoice: { type: 'function', function: { name: artifactRepairTool.function.name } },
   });
 
   return buildGeneratedUnit(unit, repairRes, sources);
+}
+
+async function repairGeneratedUnitCitations(
+  unit: SeedUnit,
+  artifact: ReturnType<typeof parseUnitArtifact>,
+  validationError: GeneratedUnitQualityError,
+  sources: Source[],
+  provider: LLMProvider
+): Promise<SeedUnit> {
+  const claimCandidates = extractCitationClaimCandidates(artifact.content);
+  if (claimCandidates.length === 0) {
+    throw new Error('Citation repair could not extract any factual sentence candidates from the lesson.');
+  }
+  const citationRepairTool = createUnitCitationRepairTool(
+    sources.map((source) => source.id),
+    claimCandidates
+  );
+  let currentArtifact = artifact;
+  let currentValidationError = validationError;
+  const maxRepairRounds = 2;
+
+  for (let round = 1; round <= maxRepairRounds; round += 1) {
+    const repairResponse = await provider.chat([
+      { role: 'system', content: 'You repair citation mappings without rewriting validated learning content.' },
+      {
+        role: 'user',
+        content: buildCitationRepairPrompt(currentArtifact, sources, currentValidationError, claimCandidates, round),
+      },
+    ], {
+      temperature: 0,
+      ...LLM_POLICIES.CITATION_REPAIR,
+      tools: [citationRepairTool],
+      toolChoice: { type: 'function', function: { name: citationRepairTool.function.name } },
+    });
+    const parsedRepair = parseUnitCitationRepair(repairResponse);
+    const supportedRepair = retainSupportedCitationClaims(parsedRepair, sources);
+    const mergedResponse = mergeCitationRepair(
+      currentArtifact,
+      supportedRepair.citations.length > 0 ? supportedRepair : parsedRepair
+    );
+    try {
+      return await buildGeneratedUnit(unit, mergedResponse, sources);
+    } catch (error) {
+      if (round === maxRepairRounds || !isCitationOnlyQualityError(error)) throw error;
+      console.warn(`Citation repair round ${round} still failed quality validation. Retrying once with focused feedback.`, error);
+      currentArtifact = parseUnitArtifact(mergedResponse);
+      currentValidationError = error;
+    }
+  }
+
+  throw currentValidationError;
 }
 
 async function getRemediationSources(outline: SeedUnit, failedUnit: SeedUnit): Promise<Source[]> {

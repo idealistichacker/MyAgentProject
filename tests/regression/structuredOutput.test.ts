@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseUnitArtifact } from '../../src/agents/structuredOutput.js';
+import {
+  createUnitArtifactTool,
+  createUnitAssessmentRepairTool,
+  createUnitCitationRepairTool,
+  parseUnitArtifact,
+} from '../../src/agents/structuredOutput.js';
 import type { ChatResponse } from '../../src/providers/types.js';
 
 function validResponse(): ChatResponse {
@@ -70,5 +75,40 @@ test('rejects plain text instead of guessing JSON fragments', () => {
   assert.throws(
     () => parseUnitArtifact({ content: '{"content":"looks like json"}' }),
     /required structured-output tool/
+  );
+});
+
+test('constrains generated and repaired assessment objectives to exact plan values', () => {
+  const objectives = ['objective-a', 'objective-b'];
+  const artifactTool = createUnitArtifactTool(objectives);
+  const assessmentRepairTool = createUnitAssessmentRepairTool(objectives);
+  const artifactParameters = artifactTool.function.parameters as any;
+  const repairParameters = assessmentRepairTool.function.parameters as any;
+
+  assert.deepEqual(
+    artifactParameters.properties.quiz.items.properties.objectiveIds.items.enum,
+    objectives
+  );
+  assert.deepEqual(
+    artifactParameters.properties.objectiveCoverage.items.properties.objectiveId.enum,
+    objectives
+  );
+  assert.deepEqual(
+    repairParameters.properties.quiz.items.properties.objectiveIds.items.enum,
+    objectives
+  );
+});
+
+test('constrains citation repair to retrieved source IDs and verbatim lesson claims', () => {
+  const tool = createUnitCitationRepairTool(['source-a', 'source-b'], ['Allowed exact claim.']);
+  const parameters = tool.function.parameters as any;
+
+  assert.deepEqual(
+    parameters.properties.citations.items.properties.sourceId.enum,
+    ['source-a', 'source-b']
+  );
+  assert.deepEqual(
+    parameters.properties.citations.items.properties.claim.enum,
+    ['Allowed exact claim.']
   );
 });

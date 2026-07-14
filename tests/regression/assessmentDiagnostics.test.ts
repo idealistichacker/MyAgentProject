@@ -67,3 +67,58 @@ test('rejects near-identical distractors and duplicated misconception rationales
   assert.ok(issues.some((issue) => issue.code === 'quiz.choice.distractor.tooSimilar'));
   assert.ok(issues.some((issue) => issue.code === 'quiz.choice.rationale.misconceptionDuplicate'));
 });
+
+test('accepts options whose clause order changes their validity', () => {
+  const unit = structuredClone(SEED_CURRICULUM[0]);
+  unit.objectives = [objective];
+  const issues = buildQuizDiagnosticIssues(unit, [validQuestion({
+    options: [
+      'try: ... except: ... finally: ...',
+      'try: ... finally: ... except: ...',
+      'try: ... except: ... else: ...',
+    ],
+    answer: 'try: ... except: ... finally: ...',
+    distractorRationales: [
+      {
+        option: 'try: ... finally: ... except: ...',
+        misconception: '认为异常处理子句可以任意排序',
+        feedback: 'except 必须位于 finally 之前，否则代码不符合 Python 的异常处理语法。',
+      },
+      {
+        option: 'try: ... except: ... else: ...',
+        misconception: '混淆 else 与 finally 的执行条件',
+        feedback: 'else 只在没有异常时执行，finally 才能保证无论结果如何都执行。',
+      },
+    ],
+  })]);
+
+  assert.equal(issues.some((issue) => issue.code === 'quiz.choice.distractor.tooSimilar'), false);
+});
+
+test('reports the exact near-identical option pair', () => {
+  const unit = structuredClone(SEED_CURRICULUM[0]);
+  unit.objectives = [objective];
+  const issues = buildQuizDiagnosticIssues(unit, [validQuestion({
+    options: [
+      "config = json.loads(file.read())",
+      "config = json.load(file)",
+      "config = json.loads(file.read(1))",
+    ],
+    answer: "config = json.load(file)",
+    distractorRationales: [
+      {
+        option: "config = json.loads(file.read())",
+        misconception: '认为只能先读取全部文本再解析 JSON',
+        feedback: 'json.load 可以直接解析文件对象，避免额外的完整字符串读取。',
+      },
+      {
+        option: "config = json.loads(file.read(1))",
+        misconception: '认为读取一个字符便足以形成完整 JSON',
+        feedback: '只读取一个字符通常不是完整 JSON 文档，因此解析会失败。',
+      },
+    ],
+  })]);
+
+  const similarityIssue = issues.find((issue) => issue.code === 'quiz.choice.distractor.tooSimilar');
+  assert.match(similarityIssue?.message ?? '', /options 1 and 3/);
+});

@@ -71,8 +71,10 @@ export async function runPythonExercise(
 function buildTestSource(exercise: ExerciseSpec): string {
   const functionName = exercise.entrypoint;
   const testCasesJson = JSON.stringify(exercise.testCases);
+  const testCasesBase64 = Buffer.from(testCasesJson, 'utf8').toString('base64');
 
-  return `import json
+  return `import base64
+import json
 import sys
 import copy
 
@@ -82,9 +84,16 @@ except ImportError as e:
     print(json.dumps({"name": "import-error", "passed": False, "message": str(e)}))
     sys.exit(1)
 
-tests = json.loads('${testCasesJson.replace(/'/g, "\\'")}')
+tests = json.loads(base64.b64decode('${testCasesBase64}').decode('utf-8'))
 assertion_mode = '${exercise.assertionMode}'
 passed_count = 0
+
+def expected_exception_name(expected):
+    if not isinstance(expected, str):
+        return None
+    if expected.endswith('Error') or expected.endswith('Exception'):
+        return expected
+    return None
 
 for test in tests:
     try:
@@ -108,13 +117,19 @@ for test in tests:
                 "actual": actual
             }))
     except Exception as e:
-        print(json.dumps({
-            "name": test['name'],
-            "passed": False,
-            "message": str(e),
-            "expected": test['expected'],
-            "actual": None
-        }))
+        expected_exception = expected_exception_name(test['expected'])
+        actual_exception = type(e).__name__
+        if expected_exception == actual_exception:
+            passed_count += 1
+            print(json.dumps({"name": test['name'], "passed": True}))
+        else:
+            print(json.dumps({
+                "name": test['name'],
+                "passed": False,
+                "message": str(e),
+                "expected": test['expected'],
+                "actual": actual_exception
+            }))
 
 if passed_count != len(tests):
     sys.exit(1)

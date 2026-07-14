@@ -49,8 +49,11 @@ export function buildQuizDiagnosticIssues(unit: SeedUnit, quiz: QuizQuestion[]):
     }
     for (let left = 0; left < normalizedOptions.length; left += 1) {
       for (let right = left + 1; right < normalizedOptions.length; right += 1) {
-        if (bigramSimilarity(normalizedOptions[left]!, normalizedOptions[right]!) >= 0.85) {
-          issues.push(issue('quiz.choice.distractor.tooSimilar', `Choice quiz "${question.id}" contains options that are too lexically similar to diagnose distinct reasoning.`));
+        if (editSimilarity(normalizedOptions[left]!, normalizedOptions[right]!) >= 0.9) {
+          issues.push(issue(
+            'quiz.choice.distractor.tooSimilar',
+            `Choice quiz "${question.id}" contains options ${left + 1} and ${right + 1} that are too lexically similar to diagnose distinct reasoning.`
+          ));
         }
       }
     }
@@ -110,18 +113,23 @@ function resolveCorrectOption(answer: string, options: string[]): string | undef
   );
 }
 
-function bigramSimilarity(left: string, right: string): number {
+function editSimilarity(left: string, right: string): number {
   if (left === right) return 1;
-  if (left.length < 2 || right.length < 2) return 0;
-  const leftBigrams = toBigrams(left);
-  const rightBigrams = toBigrams(right);
-  const intersection = [...leftBigrams].filter((gram) => rightBigrams.has(gram)).length;
-  const union = new Set([...leftBigrams, ...rightBigrams]).size;
-  return union === 0 ? 0 : intersection / union;
-}
-
-function toBigrams(value: string): Set<string> {
-  const result = new Set<string>();
-  for (let index = 0; index < value.length - 1; index += 1) result.add(value.slice(index, index + 2));
-  return result;
+  const longestLength = Math.max(left.length, right.length);
+  if (longestLength === 0) return 1;
+  const distances = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = distances[0]!;
+    distances[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const previous = distances[rightIndex]!;
+      distances[rightIndex] = Math.min(
+        previous + 1,
+        distances[rightIndex - 1]! + 1,
+        diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1)
+      );
+      diagonal = previous;
+    }
+  }
+  return 1 - distances[right.length]! / longestLength;
 }
