@@ -39,7 +39,7 @@ test('content preview stays isolated from plans, manifests, and learner solution
     };
     ensureProjectDirs();
     const storedPlan = replacePlan(plan);
-    const solutionPath = getSolutionPath(unit.id, '.ts');
+    const solutionPath = getSolutionPath(unit.id, '.ts', unit.title);
     writeTextFile(solutionPath, 'export const learnerAnswer = true;\n');
 
     const artifacts = writePreviewUnitArtifacts(unit);
@@ -113,7 +113,7 @@ test('publishing preserves existing learner solutions and writes a manifest', as
     };
     ensureProjectDirs();
     replacePlan(plan);
-    const solutionPath = getSolutionPath(unit.id, '.ts');
+    const solutionPath = getSolutionPath(unit.id, '.ts', unit.title);
     writeTextFile(solutionPath, 'export const learnerAnswer = true;\n');
 
     const job = createGenerationJob(unit.id, 'input-hash');

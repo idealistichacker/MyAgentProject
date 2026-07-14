@@ -34,6 +34,7 @@ export const defaultProviderConfig: ProviderConfig = {
   model: 'gpt-4o-mini',
   apiKey: '',
   temperature: 0.2,
+  qualityGateEnabled: true,
   searchProvider: 'wikipedia',
 };
 

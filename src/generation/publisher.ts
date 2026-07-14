@@ -45,7 +45,8 @@ export interface PublishUnitOptions {
   inputHash: string;
   job?: GenerationJob;
   qualityReport?: QualityReport;
-  status: Extract<GenerationStatus, 'published' | 'offline'>;
+  status: Extract<GenerationStatus, 'published' | 'offline' | 'degraded'>;
+  qualityGateEnabled?: boolean;
   resetSolution?: boolean;
   expectedPlanRevision?: number;
 }
@@ -83,7 +84,8 @@ export function createGenerationJob(
   unitId: string,
   inputHash: string,
   parentJob?: GenerationJob,
-  validationMode: 'full' | 'content-only' = parentJob?.validationMode ?? 'full'
+  validationMode: 'full' | 'content-only' = parentJob?.validationMode ?? 'full',
+  qualityGateEnabled: boolean = parentJob?.qualityGateEnabled ?? true
 ): GenerationJob {
   const now = new Date().toISOString();
   return generationJobSchema.parse({
@@ -94,6 +96,7 @@ export function createGenerationJob(
     attempt: parentJob ? parentJob.attempt + 1 : 1,
     parentJobId: parentJob?.id,
     validationMode,
+    qualityGateEnabled,
     inputHash,
     startedAt: now,
     updatedAt: now,
@@ -292,13 +295,13 @@ export function publishUnitArtifacts(
     }
 
     const now = new Date().toISOString();
-    const lessonPath = getLessonPath(unit.id);
+    const lessonPath = getLessonPath(unit.id, unit.title);
     const lessonContent = renderLessonMarkdown(unit);
     const extension = unit.exercise ? getExtensionForLanguage(unit.exercise.language) : undefined;
-    const starterPath = extension ? getStarterPath(unit.id, extension) : undefined;
-    const solutionPath = extension ? getSolutionPath(unit.id, extension) : undefined;
+    const starterPath = extension ? getStarterPath(unit.id, extension, unit.title) : undefined;
+    const solutionPath = extension ? getSolutionPath(unit.id, extension, unit.title) : undefined;
     const solutionWillBeWritten = Boolean(solutionPath && (options.resetSolution || !fs.existsSync(solutionPath)));
-    const projectSpecPath = unit.type === 'project' && unit.project ? getProjectSpecPath(unit.id) : undefined;
+    const projectSpecPath = unit.type === 'project' && unit.project ? getProjectSpecPath(unit.id, unit.title) : undefined;
     const projectSpecContent = projectSpecPath ? renderProjectSpecMarkdown(unit) : undefined;
     const nextPlan = preparePlanUpdate(plan, (draft) => {
       draft.units[unitIndex] = unit;
@@ -328,10 +331,12 @@ export function publishUnitArtifacts(
     );
     const pendingManifest = artifactManifestSchema.parse({
       schemaVersion: 1,
+      artifactNamingVersion: 1,
       unitId: unit.id,
       jobId: options.job?.id,
       status: 'publishing',
       targetStatus: options.status,
+      qualityGateEnabled: options.qualityGateEnabled ?? true,
       inputHash: options.inputHash,
       updatedAt: now,
       qualityReport: options.qualityReport,
@@ -416,12 +421,12 @@ export function publishUnitArtifacts(
 }
 
 export function writePreviewUnitArtifacts(unit: SeedUnit): PreviewUnitArtifacts {
-  const lessonPath = getPreviewLessonPath(unit.id);
-  const artifactPath = getPreviewArtifactPath(unit.id);
+  const lessonPath = getPreviewLessonPath(unit.id, unit.title);
+  const artifactPath = getPreviewArtifactPath(unit.id, unit.title);
   const extension = unit.exercise ? getExtensionForLanguage(unit.exercise.language) : undefined;
-  const starterPath = extension ? getPreviewStarterPath(unit.id, extension) : undefined;
+  const starterPath = extension ? getPreviewStarterPath(unit.id, extension, unit.title) : undefined;
   const projectSpecPath = unit.type === 'project' && unit.project
-    ? getPreviewProjectSpecPath(unit.id)
+    ? getPreviewProjectSpecPath(unit.id, unit.title)
     : undefined;
 
   writeTextFile(lessonPath, renderLessonMarkdown(unit));
@@ -536,7 +541,7 @@ function markGenerationJobFailed(jobId: string | undefined, message: string): vo
 
 function markGenerationJobCompleted(
   jobId: string | undefined,
-  status: Extract<GenerationStatus, 'published' | 'offline'>
+  status: Extract<GenerationStatus, 'published' | 'offline' | 'degraded'>
 ): void {
   if (!jobId) return;
   const job = loadGenerationJob(jobId);

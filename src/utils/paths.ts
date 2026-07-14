@@ -44,24 +44,35 @@ export function getPreviewsDir(): string {
   return path.join(getFcDir(), 'previews');
 }
 
-export function getPreviewUnitDir(unitId: string): string {
-  return path.join(getPreviewsDir(), safePathComponent(unitId, 'unit id'));
+export function getUnitArtifactName(unitId: string, title?: string): string {
+  const safeUnitId = safePathComponent(unitId, 'unit id');
+  const topic = title
+    ?.normalize('NFKC')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+    .replace(/-+$/g, '');
+  return topic ? `${topic}-${safeUnitId}` : safeUnitId;
 }
 
-export function getPreviewLessonPath(unitId: string): string {
-  return path.join(getPreviewUnitDir(unitId), 'lesson.md');
+export function getPreviewUnitDir(unitId: string, title?: string): string {
+  return path.join(getPreviewsDir(), getUnitArtifactName(unitId, title));
 }
 
-export function getPreviewArtifactPath(unitId: string): string {
-  return path.join(getPreviewUnitDir(unitId), 'artifact.json');
+export function getPreviewLessonPath(unitId: string, title?: string): string {
+  return path.join(getPreviewUnitDir(unitId, title), 'lesson.md');
 }
 
-export function getPreviewStarterPath(unitId: string, extension = '.ts'): string {
-  return path.join(getPreviewUnitDir(unitId), `starter${extension}`);
+export function getPreviewArtifactPath(unitId: string, title?: string): string {
+  return path.join(getPreviewUnitDir(unitId, title), 'artifact.json');
 }
 
-export function getPreviewProjectSpecPath(unitId: string): string {
-  return path.join(getPreviewUnitDir(unitId), 'PROJECT.md');
+export function getPreviewStarterPath(unitId: string, extension = '.ts', title?: string): string {
+  return path.join(getPreviewUnitDir(unitId, title), `starter${extension}`);
+}
+
+export function getPreviewProjectSpecPath(unitId: string, title?: string): string {
+  return path.join(getPreviewUnitDir(unitId, title), 'PROJECT.md');
 }
 
 export function getPublicationRecoveryDir(transactionId: string): string {
@@ -96,28 +107,28 @@ export function getPublicationLockPath(): string {
   return path.join(getLocksDir(), 'publication.lock');
 }
 
-export function getLessonPath(unitId: string): string {
-  return path.join(getLessonsDir(), `${safePathComponent(unitId, 'unit id')}.md`);
+export function getLessonPath(unitId: string, title?: string): string {
+  return path.join(getLessonsDir(), `${getUnitArtifactName(unitId, title)}.md`);
 }
 
-export function getExerciseDir(unitId: string): string {
-  return path.join(getExercisesDir(), safePathComponent(unitId, 'unit id'));
+export function getExerciseDir(unitId: string, title?: string): string {
+  return path.join(getExercisesDir(), getUnitArtifactName(unitId, title));
 }
 
-export function getSolutionPath(unitId: string, extension = '.ts'): string {
-  return path.join(getExerciseDir(unitId), `solution${extension}`);
+export function getSolutionPath(unitId: string, extension = '.ts', title?: string): string {
+  return path.join(getExerciseDir(unitId, title), `solution${extension}`);
 }
 
-export function getStarterPath(unitId: string, extension = '.ts'): string {
-  return path.join(getExerciseDir(unitId), `starter${extension}`);
+export function getStarterPath(unitId: string, extension = '.ts', title?: string): string {
+  return path.join(getExerciseDir(unitId, title), `starter${extension}`);
 }
 
-export function getProjectSpecPath(unitId: string): string {
-  return path.join(getExerciseDir(unitId), 'PROJECT.md');
+export function getProjectSpecPath(unitId: string, title?: string): string {
+  return path.join(getExerciseDir(unitId, title), 'PROJECT.md');
 }
 
-export function getTestPath(unitId: string, extension = '.ts'): string {
-  return path.join(getExerciseDir(unitId), `test${extension}`);
+export function getTestPath(unitId: string, extension = '.ts', title?: string): string {
+  return path.join(getExerciseDir(unitId, title), `test${extension}`);
 }
 
 export function getExtensionForLanguage(language: string): string {

@@ -59,6 +59,12 @@ const unitGenerationInFlight = new Map<string, Promise<SeedUnit>>();
 export interface UnitGenerationProgress {
   onCheckpoint?: (checkpoint: GenerationCheckpoint) => void;
   validationMode?: 'full' | 'content-only';
+  qualityGateEnabled?: boolean;
+}
+
+interface GeneratedUnitBuildOptions {
+  verifyReferenceSolution?: boolean;
+  qualityGateEnabled?: boolean;
 }
 
 export async function diagnoseLearner(
@@ -367,7 +373,9 @@ export async function generateUnitContent(
     throw new Error('A configured provider is required to generate a non-offline unit.');
   }
   const validationMode = progress.validationMode ?? 'full';
-  const cacheKey = getValidatedUnitCacheKey(getUnitCacheKey(unit, plan), validationMode);
+  const qualityGateEnabled = progress.qualityGateEnabled ?? loadConfig().qualityGateEnabled;
+  const resolvedProgress = { ...progress, qualityGateEnabled };
+  const cacheKey = getValidatedUnitCacheKey(getUnitCacheKey(unit, plan), validationMode, qualityGateEnabled);
 
   const existing = unitGenerationInFlight.get(cacheKey);
   if (existing) {
@@ -375,7 +383,7 @@ export async function generateUnitContent(
     return existing;
   }
 
-  const request = generateUnitContentUncached(unit, plan, provider, progress);
+  const request = generateUnitContentUncached(unit, plan, provider, resolvedProgress);
   unitGenerationInFlight.set(cacheKey, request);
   try {
     return await request;
@@ -395,6 +403,7 @@ async function generateUnitContentUncached(
   }
   const learnerProfile = plan.learnerProfile;
   const validationMode = progress.validationMode ?? 'full';
+  const qualityGateEnabled = progress.qualityGateEnabled ?? loadConfig().qualityGateEnabled;
   const projectUnit = plan.units.find(u => u.type === 'project');
   const projectContext = projectUnit ? `The final project for this curriculum is: ${projectUnit.title} (${projectUnit.description}). Your content MUST build towards this.` : 'Ensure content connects to the overall curriculum goals.';
   const config = loadConfig();
@@ -422,7 +431,7 @@ async function generateUnitContentUncached(
     }
 
     const artifactCacheKey = getUnitCacheKey(unit, plan, sources);
-    const cacheKey = getValidatedUnitCacheKey(artifactCacheKey, validationMode);
+    const cacheKey = getValidatedUnitCacheKey(artifactCacheKey, validationMode, qualityGateEnabled);
     const cachedUnit = await llmCache.get<SeedUnit>(cacheKey);
     if (cachedUnit) {
       console.log(color.magenta(`\n⚡ [LLM Cache HIT] 恢复已生成的单元: ${unit.title}`));
@@ -729,6 +738,7 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
     try {
       const finalUnit = await buildGeneratedUnit(unit, finalRes, sources, {
         verifyReferenceSolution: validationMode === 'full',
+        qualityGateEnabled,
       });
 
       await llmCache.set(cacheKey, finalUnit);
@@ -737,6 +747,7 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
       console.warn('Generated artifact failed validation. Asking for one bounded structured repair.', parseErr);
       const repairedUnit = await repairGeneratedUnit(unit, finalRes, parseErr, sources, provider, {
         verifyReferenceSolution: validationMode === 'full',
+        qualityGateEnabled,
       });
       await llmCache.set(cacheKey, repairedUnit);
       return repairedUnit;
@@ -770,9 +781,10 @@ function getUnitCacheKey(unit: SeedUnit, plan: LearningPlan, sources?: Source[])
 
 function getValidatedUnitCacheKey(
   artifactCacheKey: string,
-  validationMode: 'full' | 'content-only'
+  validationMode: 'full' | 'content-only',
+  qualityGateEnabled: boolean
 ): string {
-  return createCacheKey('validated-unit-artifact', { artifactCacheKey, validationMode });
+  return createCacheKey('validated-unit-artifact', { artifactCacheKey, validationMode, qualityGateEnabled });
 }
 
 export async function generateRemediationUnit(
@@ -1015,7 +1027,7 @@ async function buildGeneratedUnit(
   unit: SeedUnit,
   response: Awaited<ReturnType<LLMProvider['chat']>>,
   sources: Source[],
-  options: { verifyReferenceSolution?: boolean } = {}
+  options: GeneratedUnitBuildOptions = {}
 ): Promise<SeedUnit> {
   const parsed = normalizeGeneratedArtifactEvidence(parseUnitArtifact(response));
   const content = parsed.content.trim();
@@ -1035,16 +1047,18 @@ async function buildGeneratedUnit(
     ? parsed.project
     : undefined;
 
-  assertGeneratedUnitQuality(
-    unit,
-    content,
-    parsed.quiz,
-    exercise,
-    project,
-    parsed.objectiveCoverage,
-    parsed.citations,
-    sources
-  );
+  if (options.qualityGateEnabled !== false) {
+    assertGeneratedUnitQuality(
+      unit,
+      content,
+      parsed.quiz,
+      exercise,
+      project,
+      parsed.objectiveCoverage,
+      parsed.citations,
+      sources
+    );
+  }
   if (options.verifyReferenceSolution !== false) {
     await verifyReferenceSolution(exercise, parsed.referenceSolution);
   }
@@ -1069,7 +1083,7 @@ async function repairGeneratedUnit(
   validationError: unknown,
   sources: Source[],
   provider: LLMProvider,
-  options: { verifyReferenceSolution?: boolean } = {}
+  options: GeneratedUnitBuildOptions = {}
 ): Promise<SeedUnit> {
   if (isAssessmentRepairableQualityError(validationError)) {
     let artifact = parseUnitArtifact(brokenResponse);
@@ -1278,7 +1292,7 @@ async function repairGeneratedUnitCitations(
   validationError: GeneratedUnitQualityError,
   sources: Source[],
   provider: LLMProvider,
-  options: { verifyReferenceSolution?: boolean } = {}
+  options: GeneratedUnitBuildOptions = {}
 ): Promise<SeedUnit> {
   const claimCandidates = extractCitationClaimCandidates(artifact.content);
   if (claimCandidates.length === 0) {

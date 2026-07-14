@@ -54,6 +54,7 @@ test('rejects a published manifest when a reused unit id has new generation inpu
   const originalHash = getGenerationInputHash(originalPlan, seedUnit);
   const manifest = artifactManifestSchema.parse({
     schemaVersion: 1,
+    artifactNamingVersion: 1,
     unitId: seedUnit.id,
     status: 'published',
     inputHash: originalHash,
@@ -87,4 +88,21 @@ test('rejects a published manifest when a reused unit id has new generation inpu
   };
   const replacementPlan = generatedPlan(replacementUnit);
   assert.equal(isArtifactManifestReusable(manifest, replacementPlan, replacementUnit), false);
+});
+
+test('only reuses relaxed artifacts while the strict quality gate remains disabled', () => {
+  const plan = generatedPlan(seedUnit);
+  const manifest = artifactManifestSchema.parse({
+    schemaVersion: 1,
+    artifactNamingVersion: 1,
+    unitId: seedUnit.id,
+    status: 'degraded',
+    qualityGateEnabled: false,
+    inputHash: getGenerationInputHash(plan, seedUnit),
+    updatedAt: '2026-07-14T00:00:00.000Z',
+    files: [],
+  });
+
+  assert.equal(isArtifactManifestReusable(manifest, plan, seedUnit, false), true);
+  assert.equal(isArtifactManifestReusable(manifest, plan, seedUnit, true), false);
 });

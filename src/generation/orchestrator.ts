@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { generateUnitContent } from '../agents/pipeline.js';
 import { GeneratedUnitQualityError } from '../agents/generatedUnitQuality.js';
-import { loadPlan } from '../state/fsState.js';
+import { loadConfig, loadPlan } from '../state/fsState.js';
 import type { LLMProvider } from '../providers/types.js';
 import { InstrumentedProvider } from '../providers/instrumentedProvider.js';
 import {
@@ -30,6 +30,7 @@ export interface GenerateAndPublishOptions {
   resetSolution?: boolean;
   resumeFromJob?: GenerationJob;
   contentOnly?: boolean;
+  qualityGateEnabled?: boolean;
 }
 
 export interface GenerateAndPublishResult {
@@ -51,6 +52,7 @@ export async function generateAndPublishUnit(
     throw new Error(`Unknown unit "${unitId}".`);
   }
 
+  const qualityGateEnabled = options.qualityGateEnabled ?? loadConfig().qualityGateEnabled;
   const inputHash = getGenerationInputHash(plan, unit);
   if (options.resumeFromJob) {
     if (options.resumeFromJob.unitId !== unit.id) {
@@ -63,6 +65,9 @@ export async function generateAndPublishUnit(
     if (options.resumeFromJob.validationMode !== requestedMode) {
       throw new Error(`Cannot resume job "${options.resumeFromJob.id}" with a different validation mode.`);
     }
+    if (options.resumeFromJob.qualityGateEnabled !== qualityGateEnabled) {
+      throw new Error(`Cannot resume job "${options.resumeFromJob.id}" with a different quality-gate mode.`);
+    }
   }
   const startedAt = Date.now();
   const stages: Record<string, number> = {};
@@ -71,13 +76,14 @@ export async function generateAndPublishUnit(
     unit.id,
     inputHash,
     options.resumeFromJob,
-    options.contentOnly ? 'content-only' : 'full'
+    options.contentOnly ? 'content-only' : 'full',
+    qualityGateEnabled
   );
   saveGenerationJob(job);
 
   try {
     let artifact = unit;
-    let status: 'published' | 'preview' | 'offline' = options.contentOnly ? 'preview' : 'offline';
+    let status: 'published' | 'preview' | 'offline' | 'degraded' = options.contentOnly ? 'preview' : 'offline';
     let qualityReport: QualityReport;
     if (!isPublishableOfflineUnit(unit)) {
       if (!options.provider) {
@@ -88,13 +94,14 @@ export async function generateAndPublishUnit(
       const generationStartedAt = Date.now();
       artifact = await generateUnitContent(unit, plan, instrumentedProvider, {
         validationMode: options.contentOnly ? 'content-only' : 'full',
+        qualityGateEnabled,
         onCheckpoint: (checkpoint) => {
           job = recordGenerationCheckpoint(job, checkpoint);
           saveGenerationJob(job);
         },
       });
       stages.generation = Date.now() - generationStartedAt;
-      status = options.contentOnly ? 'preview' : 'published';
+      status = options.contentOnly ? 'preview' : qualityGateEnabled ? 'published' : 'degraded';
     }
 
     const validationStartedAt = Date.now();
@@ -102,7 +109,9 @@ export async function generateAndPublishUnit(
     saveGenerationJob(job);
     qualityReport = createPassedQualityReport([
       'schema validation',
-      'content and exercise quality gate',
+      qualityGateEnabled
+        ? 'strict content and exercise quality gate'
+        : 'strict content and exercise quality gate skipped by configuration',
       options.contentOnly
         ? 'reference solution execution skipped for content-only preview'
         : 'reference solution execution',
@@ -131,6 +140,7 @@ export async function generateAndPublishUnit(
         job,
         qualityReport,
         status,
+        qualityGateEnabled,
         resetSolution: options.resetSolution,
         expectedPlanRevision: plan.revision,
       });
@@ -140,7 +150,7 @@ export async function generateAndPublishUnit(
     job = {
       ...transition(job, status, 'completed'),
       completedAt: new Date().toISOString(),
-      metrics: buildMetrics(startedAt, stages, artifact, instrumentedProvider, status === 'published'),
+      metrics: buildMetrics(startedAt, stages, artifact, instrumentedProvider, status === 'published' || status === 'degraded'),
     };
     saveGenerationJob(job);
     return { unit: artifact, job, artifacts };
@@ -175,11 +185,16 @@ export function getGenerationInputHash(plan: LearningPlan, unit: SeedUnit): stri
 export function isArtifactManifestReusable(
   manifest: ArtifactManifest | undefined,
   plan: LearningPlan,
-  unit: SeedUnit
+  unit: SeedUnit,
+  qualityGateEnabled = true
 ): boolean {
-  if (manifest?.status !== 'published' && manifest?.status !== 'offline') {
+  const acceptedStatus = manifest?.status === 'published'
+    || manifest?.status === 'offline'
+    || (!qualityGateEnabled && manifest?.status === 'degraded' && manifest.qualityGateEnabled === false);
+  if (!acceptedStatus || manifest?.artifactNamingVersion !== 1) {
     return false;
   }
+  if (qualityGateEnabled && manifest.qualityGateEnabled === false) return false;
   return manifest.inputHash === getGenerationInputHash(plan, unit);
 }
 
@@ -187,10 +202,10 @@ export function shouldGenerateUnit(
   manifest: ArtifactManifest | undefined,
   plan: LearningPlan,
   unit: SeedUnit,
-  options: { force?: boolean; contentOnly?: boolean } = {}
+  options: { force?: boolean; contentOnly?: boolean; qualityGateEnabled?: boolean } = {}
 ): boolean {
   return Boolean(options.contentOnly || options.force)
-    || !isArtifactManifestReusable(manifest, plan, unit);
+    || !isArtifactManifestReusable(manifest, plan, unit, options.qualityGateEnabled);
 }
 
 function generatedUnitSpecification(unit: SeedUnit): Pick<

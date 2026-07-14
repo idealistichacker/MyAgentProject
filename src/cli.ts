@@ -100,6 +100,7 @@ program.command('init')
       `Base URL: ${next.baseUrl}\n` +
       `Model: ${next.model}\n` +
       `API key configured: ${next.apiKey ? 'yes' : 'no'}\n` +
+      `Strict quality gate: ${next.qualityGateEnabled ? 'enabled' : 'disabled'}\n` +
       `Search Provider: ${next.searchProvider}\n` +
       `Tavily API key configured: ${next.tavilyApiKey ? 'yes' : 'no'}`,
       'Config Info'
@@ -117,6 +118,7 @@ program.command('config')
       model: config.model,
       apiKeyConfigured: Boolean(config.apiKey),
       temperature: config.temperature,
+      qualityGateEnabled: config.qualityGateEnabled,
       searchProvider: config.searchProvider,
       tavilyApiKeyConfigured: Boolean(config.tavilyApiKey),
     }, null, 2));
@@ -225,17 +227,22 @@ program.command('start [unitId]')
     if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
       return;
     }
+    const config = loadConfig();
     const existingManifest = loadArtifactManifest(unit.id);
     let artifacts = existingArtifacts(unit);
-    if (options.contentOnly || !isArtifactManifestReusable(existingManifest, plan, unit) || options.resetSolution) {
+    if (options.contentOnly || !isArtifactManifestReusable(existingManifest, plan, unit, config.qualityGateEnabled) || options.resetSolution) {
+      if (!config.qualityGateEnabled) {
+        console.warn(color.yellow('⚠ 严格质量门已在 .fuckcolloge/config.json 中关闭；产物会标记为 degraded。'));
+      }
       const s = spinner();
       s.start(`FCAgent 正在准备 [${unit.id}] 的课件与练习...`);
-      const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+      const provider = config.apiKey ? await createProvider(config) : undefined;
       try {
         const result = await generateAndPublishUnit(unit.id, {
           provider,
           resetSolution: options.resetSolution,
           contentOnly: options.contentOnly,
+          qualityGateEnabled: config.qualityGateEnabled,
         });
         unit = result.unit;
         artifacts = result.artifacts;
@@ -353,7 +360,7 @@ program.command('submit [unitId]')
 
     const s = spinner();
     s.start('正在运行本地测试断言...');
-    const exerciseDir = getExerciseDir(unit.id);
+    const exerciseDir = getExerciseDir(unit.id, unit.title);
     const runResult = await runExercise(unit.id, unit.exercise, exerciseDir);
     s.stop(color.green('✔ 本地测试执行完毕'));
     
@@ -361,7 +368,7 @@ program.command('submit [unitId]')
     let learnerCode = '';
     try {
       const extension = getExtensionForLanguage(unit.exercise.language);
-      learnerCode = fs.readFileSync(getSolutionPath(unit.id, extension), 'utf-8');
+      learnerCode = fs.readFileSync(getSolutionPath(unit.id, extension, unit.title), 'utf-8');
     } catch (err) {
       console.warn('Could not read solution code:', err);
     }
@@ -603,7 +610,11 @@ program.command('generate-all')
       process.exitCode = 1;
       return;
     }
-    const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+    const config = loadConfig();
+    const provider = config.apiKey ? await createProvider(config) : undefined;
+    if (!config.qualityGateEnabled) {
+      console.warn(color.yellow('⚠ 严格质量门已关闭；批量正式产物会标记为 degraded。'));
+    }
     if (options.contentOnly && options.resetSolution) {
       cancel('`--content-only` cannot be combined with `--reset-solution`; previews never modify learner solutions.');
       process.exitCode = 1;
@@ -621,7 +632,7 @@ program.command('generate-all')
       loadArtifactManifest(unit.id),
       plan,
       unit,
-      { force: options.force, contentOnly: options.contentOnly }
+      { force: options.force, contentOnly: options.contentOnly, qualityGateEnabled: config.qualityGateEnabled }
     ));
 
     if (tasks.length === 0) {
@@ -651,6 +662,7 @@ program.command('generate-all')
           provider,
           resetSolution: options.resetSolution,
           contentOnly: options.contentOnly,
+          qualityGateEnabled: config.qualityGateEnabled,
         });
         completed++;
         generatedCount++;
@@ -674,7 +686,7 @@ program.command('generate-all')
     const metrics = scheduler.snapshot();
     console.log(color.green(`\n✔ 批量生成结束：${generatedCount} 个${options.contentOnly ? '预览完成' : '已发布'}，${failures.length} 个失败。`));
     if (options.contentOnly) {
-      console.log(color.gray('预览产物位于 `.fuckcolloge/previews/<unitId>/`；正式计划、manifest 和 solution.* 未被修改。'));
+      console.log(color.gray('预览产物位于 `.fuckcolloge/previews/<主题>-<unitId>/`；正式计划、manifest 和 solution.* 未被修改。'));
     }
     console.log(color.gray(`调度指标：p50 ${metrics.p50Ms}ms，p95 ${metrics.p95Ms}ms。`));
     if (metrics.circuitOpen) {
@@ -768,6 +780,7 @@ generationCommand.command('retry <jobId>')
         resetSolution: options.resetSolution,
         resumeFromJob: job,
         contentOnly: job.validationMode === 'content-only',
+        qualityGateEnabled: job.qualityGateEnabled,
       });
       console.log(`Generation job ${result.job.id} completed with status ${result.job.status}.`);
     } catch (error) {
@@ -861,10 +874,10 @@ function existingArtifacts(unit: SeedUnit): {
 } {
   const extension = unit.exercise ? getExtensionForLanguage(unit.exercise.language) : undefined;
   return {
-    lessonPath: getLessonPath(unit.id),
-    starterPath: extension ? getStarterPath(unit.id, extension) : undefined,
-    solutionPath: extension ? getSolutionPath(unit.id, extension) : undefined,
-    projectSpecPath: unit.type === 'project' ? getProjectSpecPath(unit.id) : undefined,
+    lessonPath: getLessonPath(unit.id, unit.title),
+    starterPath: extension ? getStarterPath(unit.id, extension, unit.title) : undefined,
+    solutionPath: extension ? getSolutionPath(unit.id, extension, unit.title) : undefined,
+    projectSpecPath: unit.type === 'project' ? getProjectSpecPath(unit.id, unit.title) : undefined,
     solutionPreserved: true,
   };
 }

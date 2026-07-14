@@ -53,6 +53,16 @@ npm run dev -- init --api-key "你的API_KEY" --base-url "接口BaseURL" --model
 npm run dev -- init --api-key "你的API_KEY" --base-url "接口BaseURL" --model "模型名称" --search-provider "tavily" --tavily-api-key "你的TAVILY_KEY"
 ```
 
+严格质量门默认开启。开发期如需快速观察模型原始产物，可在 `.fuckcolloge/config.json` 中手动设置：
+
+```json
+{
+  "qualityGateEnabled": false
+}
+```
+
+关闭后仍保留来源包校验、结构化 Schema 校验，以及正式模式下的参考解答运行；只跳过题目诊断度、事实声明、目标覆盖和 Project 综合等严格内容规则。正式产物会标记为 `degraded`，重新设为 `true` 后不会复用该降级产物，而会重新经过严格质量门。此配置文件包含密钥，不应提交到 Git。
+
 ### 3. 开始诊断与规划
 
 ```bash
@@ -69,8 +79,8 @@ npm run dev -- plan
 # 开启当前学习单元，生成讲义与代码模板
 npm run dev -- start
 
-# 仅检查内容质量：保留检索、Pass 1~3、结构/题目/引用/目标覆盖门，跳过参考解答实跑
-# 预览写入 .fuckcolloge/previews/<unitId>/，不会更新计划、manifest 或 solution.*
+# 内容预览：保留检索、Pass 1~3 与 Schema；严格内容门是否执行由 qualityGateEnabled 控制
+# 预览写入 .fuckcolloge/previews/<内容主题>-<unitId>/，不会更新计划、manifest 或 solution.*
 npm run dev -- start --content-only
 
 # 【可选】一键并发离线生成大纲中所有单元的讲义与代码骨架以供预览
@@ -113,6 +123,8 @@ npm run dev -- review
 # 通过后，解锁并进入下一关
 npm run dev -- next
 ```
+
+正式讲义命名为 `.fuckcolloge/lessons/<内容主题>-<unitId>.md`，练习目录与预览目录使用相同的主题化名称。不同主题即使都从 `unit-1` 编号，也不会再互相覆盖；同一主题、同一单元的再次生成仍视为该产物的新 revision。
 
 ---
 
