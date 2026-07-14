@@ -12,7 +12,7 @@ import {
   getCurrentUnit,
   gradeQuiz,
 } from './agents/pipeline.js';
-import { generateAndPublishUnit } from './generation/orchestrator.js';
+import { generateAndPublishUnit, isArtifactManifestReusable, shouldGenerateUnit } from './generation/orchestrator.js';
 import { buildGenerationMetricsReport } from './generation/metrics.js';
 import { inspectInterruptedPublications, listGenerationJobs, loadArtifactManifest, loadGenerationJob, recoverInterruptedPublications } from './generation/publisher.js';
 import { GenerationScheduler } from './generation/scheduler.js';
@@ -203,6 +203,7 @@ program.command('plan')
 
 program.command('start [unitId]')
   .description('Start a learning unit and generate lesson, exercise, and project files')
+  .option('--content-only', 'Generate a quality-checked preview without running the reference solution or publishing learner artifacts')
   .option('--reset-solution', 'Replace an existing learner solution with the current starter template')
   .option('--yes', 'Confirm destructive solution reset without prompting')
   .action(async (unitId: string | undefined, options) => {
@@ -216,12 +217,17 @@ program.command('start [unitId]')
     }
 
     let unit = getCurrentUnit(plan, unitId);
+    if (options.contentOnly && options.resetSolution) {
+      cancel('`--content-only` cannot be combined with `--reset-solution`; previews never modify learner solutions.');
+      process.exitCode = 1;
+      return;
+    }
     if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
       return;
     }
     const existingManifest = loadArtifactManifest(unit.id);
     let artifacts = existingArtifacts(unit);
-    if (!isPublishedManifest(existingManifest) || options.resetSolution) {
+    if (options.contentOnly || !isArtifactManifestReusable(existingManifest, plan, unit) || options.resetSolution) {
       const s = spinner();
       s.start(`FCAgent 正在准备 [${unit.id}] 的课件与练习...`);
       const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
@@ -229,11 +235,13 @@ program.command('start [unitId]')
         const result = await generateAndPublishUnit(unit.id, {
           provider,
           resetSolution: options.resetSolution,
+          contentOnly: options.contentOnly,
         });
         unit = result.unit;
         artifacts = result.artifacts;
-        s.stop(color.green(
-          result.artifacts.solutionPreserved
+        s.stop(color.green(options.contentOnly
+          ? '✔ 内容质量预览已生成；未执行参考解答，未正式发布。'
+          : result.artifacts.solutionPreserved
             ? '✔ 课件已发布，已保留现有学习者答案。'
             : '✔ 课件与练习已安全发布。'
         ));
@@ -245,6 +253,19 @@ program.command('start [unitId]')
       }
     } else {
       console.log(color.green(`✔ 课件已就绪（${existingManifest?.status ?? 'unknown'}）。`));
+    }
+
+    if (options.contentOnly && 'artifactPath' in artifacts) {
+      note(
+        `单元: ${unit.id}: ${unit.title}\n` +
+        `预览讲义: ${artifacts.lessonPath}\n` +
+        `结构化产物: ${artifacts.artifactPath}` +
+        `${artifacts.starterPath ? `\n预览 Starter: ${artifacts.starterPath}` : ''}` +
+        `${artifacts.projectSpecPath ? `\n预览项目规格: ${artifacts.projectSpecPath}` : ''}`,
+        '内容质量预览'
+      );
+      outro('预览不会更新学习计划、正式 manifest 或学习者 solution；完整发布仍需执行不带 `--content-only` 的 `fc start`。');
+      return;
     }
 
     note(
@@ -565,6 +586,7 @@ program.command('audit')
 
 program.command('generate-all')
   .description('Pre-generate all lessons, exercise skeletons, and project specs in the plan')
+  .option('--content-only', 'Generate isolated quality previews for every unit without running reference solutions or publishing learner artifacts')
   .option('--concurrency <number>', 'Max unit generations running at once', '1')
   .option('--stagger-ms <number>', 'Minimum delay between generation starts', '1000')
   .option('--requests-per-minute <number>', 'Maximum generation starts per minute', '60')
@@ -582,6 +604,11 @@ program.command('generate-all')
       return;
     }
     const provider = loadConfig().apiKey ? await createProvider(loadConfig()) : undefined;
+    if (options.contentOnly && options.resetSolution) {
+      cancel('`--content-only` cannot be combined with `--reset-solution`; previews never modify learner solutions.');
+      process.exitCode = 1;
+      return;
+    }
     if (options.resetSolution && !await confirmSolutionReset(options.yes)) {
       return;
     }
@@ -590,7 +617,12 @@ program.command('generate-all')
     let generatedCount = 0;
     s.start(`正在检查需生成的单元...`);
 
-    const tasks = plan.units.filter((unit) => options.force || !isPublishedManifest(loadArtifactManifest(unit.id)));
+    const tasks = plan.units.filter((unit) => shouldGenerateUnit(
+      loadArtifactManifest(unit.id),
+      plan,
+      unit,
+      { force: options.force, contentOnly: options.contentOnly }
+    ));
 
     if (tasks.length === 0) {
       s.stop(color.green('✔ 所有单元已生成完毕，无需重复生成！'));
@@ -618,9 +650,14 @@ program.command('generate-all')
         const result = await generateAndPublishUnit(unit.id, {
           provider,
           resetSolution: options.resetSolution,
+          contentOnly: options.contentOnly,
         });
         completed++;
         generatedCount++;
+        if (options.contentOnly) {
+          console.log(color.green(`✅ [${result.unit.id}] 预览完成 (${completed}/${tasks.length})`));
+          return;
+        }
         const answerMessage = result.artifacts.solutionPreserved ? '，已保留学习者答案' : '';
         console.log(color.green(`✅ [${result.unit.id}] 发布完成 (${completed}/${tasks.length})${answerMessage}`));
       });
@@ -630,12 +667,15 @@ program.command('generate-all')
     const failures = results.filter((result) => result.status === 'rejected');
     if (failures.length > 0) {
       for (const failure of failures) {
-        console.error(color.red(`✖ 单元未发布：${String(failure.reason)}`));
+        console.error(color.red(`✖ 单元${options.contentOnly ? '预览失败' : '未发布'}：${String(failure.reason)}`));
       }
       process.exitCode = 1;
     }
     const metrics = scheduler.snapshot();
-    console.log(color.green(`\n✔ 批量生成结束：${generatedCount} 个已发布，${failures.length} 个失败。`));
+    console.log(color.green(`\n✔ 批量生成结束：${generatedCount} 个${options.contentOnly ? '预览完成' : '已发布'}，${failures.length} 个失败。`));
+    if (options.contentOnly) {
+      console.log(color.gray('预览产物位于 `.fuckcolloge/previews/<unitId>/`；正式计划、manifest 和 solution.* 未被修改。'));
+    }
     console.log(color.gray(`调度指标：p50 ${metrics.p50Ms}ms，p95 ${metrics.p95Ms}ms。`));
     if (metrics.circuitOpen) {
       console.log(color.yellow('提供方熔断器已打开；剩余排队任务已停止。'));
@@ -727,6 +767,7 @@ generationCommand.command('retry <jobId>')
         provider,
         resetSolution: options.resetSolution,
         resumeFromJob: job,
+        contentOnly: job.validationMode === 'content-only',
       });
       console.log(`Generation job ${result.job.id} completed with status ${result.job.status}.`);
     } catch (error) {
@@ -809,10 +850,6 @@ function formatUnitTypeLabel(unit?: SeedUnit): string {
   }
 
   return '';
-}
-
-function isPublishedManifest(manifest: ReturnType<typeof loadArtifactManifest>): boolean {
-  return manifest?.status === 'published' || manifest?.status === 'offline';
 }
 
 function existingArtifacts(unit: SeedUnit): {

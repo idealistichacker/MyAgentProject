@@ -37,6 +37,14 @@ test('links retry jobs and carries completed checkpoints forward', () => {
   assert.deepEqual(withFinal.checkpoints.map((checkpoint) => checkpoint.stage), ['draft', 'final']);
 });
 
+test('preserves content-only validation mode across retry jobs', () => {
+  const parent = createGenerationJob('unit-1', 'input-hash', undefined, 'content-only');
+  const child = createGenerationJob('unit-1', 'input-hash', parent);
+
+  assert.equal(parent.validationMode, 'content-only');
+  assert.equal(child.validationMode, 'content-only');
+});
+
 test('refuses to resume checkpoints after generation inputs change', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-generation-recovery-'));
   const previousDirectory = process.cwd();

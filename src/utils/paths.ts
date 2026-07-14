@@ -40,6 +40,30 @@ export function getRecoveryDir(): string {
   return path.join(getFcDir(), 'recovery');
 }
 
+export function getPreviewsDir(): string {
+  return path.join(getFcDir(), 'previews');
+}
+
+export function getPreviewUnitDir(unitId: string): string {
+  return path.join(getPreviewsDir(), safePathComponent(unitId, 'unit id'));
+}
+
+export function getPreviewLessonPath(unitId: string): string {
+  return path.join(getPreviewUnitDir(unitId), 'lesson.md');
+}
+
+export function getPreviewArtifactPath(unitId: string): string {
+  return path.join(getPreviewUnitDir(unitId), 'artifact.json');
+}
+
+export function getPreviewStarterPath(unitId: string, extension = '.ts'): string {
+  return path.join(getPreviewUnitDir(unitId), `starter${extension}`);
+}
+
+export function getPreviewProjectSpecPath(unitId: string): string {
+  return path.join(getPreviewUnitDir(unitId), 'PROJECT.md');
+}
+
 export function getPublicationRecoveryDir(transactionId: string): string {
   return path.join(getRecoveryDir(), safePathComponent(transactionId, 'recovery transaction id'));
 }

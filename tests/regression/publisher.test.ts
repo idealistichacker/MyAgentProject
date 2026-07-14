@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { SEED_CURRICULUM } from '../../src/curriculum/seed.js';
+import { generateAndPublishUnit } from '../../src/generation/orchestrator.js';
 import {
   createGenerationJob,
   createPassedQualityReport,
@@ -15,11 +16,75 @@ import {
   recoverInterruptedPublications,
   saveArtifactManifest,
   saveGenerationJob,
+  writePreviewUnitArtifacts,
 } from '../../src/generation/publisher.js';
 import { ensureProjectDirs, loadPlan, writeTextFile } from '../../src/state/fsState.js';
 import { preparePlanUpdate, replacePlan } from '../../src/state/planStore.js';
 import { artifactManifestSchema, type LearningPlan, type SeedUnit } from '../../src/types.js';
 import { getFcDir, getLessonPath, getPlanPath, getPublicationRecoveryDir, getRecoveryDir, getSolutionPath } from '../../src/utils/paths.js';
+
+test('content preview stays isolated from plans, manifests, and learner solutions', async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-preview-test-'));
+  const previousDirectory = process.cwd();
+  process.chdir(workspace);
+  try {
+    const unit = structuredClone(SEED_CURRICULUM[0]) as SeedUnit;
+    const timestamp = new Date().toISOString();
+    const plan: LearningPlan = {
+      learnerProfile: {
+        target: 'test', programmingLevel: 'basic', dsaLevel: 'none', weeklyHours: '2-5', totalWeeks: '1-4',
+        learningStyle: 'example-first', codePractice: 'yes', pace: 'normal', nearTermGoal: '', rawAnswers: {}, summary: '',
+      },
+      units: [unit], currentIndex: 0, revision: 0, origin: 'offline', createdAt: timestamp, updatedAt: timestamp,
+    };
+    ensureProjectDirs();
+    const storedPlan = replacePlan(plan);
+    const solutionPath = getSolutionPath(unit.id, '.ts');
+    writeTextFile(solutionPath, 'export const learnerAnswer = true;\n');
+
+    const artifacts = writePreviewUnitArtifacts(unit);
+
+    assert.match(artifacts.lessonPath, /[\\/]previews[\\/]/);
+    assert.match(artifacts.artifactPath, /[\\/]previews[\\/]/);
+    assert.equal(await fs.readFile(solutionPath, 'utf8'), 'export const learnerAnswer = true;\n');
+    assert.equal(loadArtifactManifest(unit.id), undefined);
+    assert.deepEqual(loadPlan(), storedPlan);
+    assert.equal(JSON.parse(await fs.readFile(artifacts.artifactPath, 'utf8')).id, unit.id);
+  } finally {
+    process.chdir(previousDirectory);
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('content-only orchestration previews offline units instead of formally publishing them', async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-offline-preview-test-'));
+  const previousDirectory = process.cwd();
+  process.chdir(workspace);
+  try {
+    const unit = structuredClone(SEED_CURRICULUM[0]) as SeedUnit;
+    const timestamp = new Date().toISOString();
+    const plan: LearningPlan = {
+      learnerProfile: {
+        target: 'test', programmingLevel: 'basic', dsaLevel: 'none', weeklyHours: '2-5', totalWeeks: '1-4',
+        learningStyle: 'example-first', codePractice: 'yes', pace: 'normal', nearTermGoal: '', rawAnswers: {}, summary: '',
+      },
+      units: [unit], currentIndex: 0, revision: 0, origin: 'offline', createdAt: timestamp, updatedAt: timestamp,
+    };
+    ensureProjectDirs();
+    const storedPlan = replacePlan(plan);
+
+    const result = await generateAndPublishUnit(unit.id, { contentOnly: true });
+
+    assert.equal(result.job.status, 'preview');
+    assert.equal(result.job.validationMode, 'content-only');
+    assert.ok('artifactPath' in result.artifacts);
+    assert.equal(loadArtifactManifest(unit.id), undefined);
+    assert.deepEqual(loadPlan(), storedPlan);
+  } finally {
+    process.chdir(previousDirectory);
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
 
 test('publishing preserves existing learner solutions and writes a manifest', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-publisher-test-'));

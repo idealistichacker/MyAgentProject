@@ -45,7 +45,7 @@ test('falls back to a validated stale source pack after a provider outage', asyn
   const fresh = await search.searchSources('recursion base case');
   providerAvailable = false;
   for (const key of cache.values.keys()) {
-    if (key.startsWith('source-pack:v2:')) cache.values.delete(key);
+    if (key.startsWith('source-pack:v4:')) cache.values.delete(key);
   }
   const recovered = await search.searchSources('recursion base case');
 
@@ -53,4 +53,57 @@ test('falls back to a validated stale source pack after a provider outage', asyn
   assert.equal(recovered[0]?.hash, fresh[0]?.hash);
   assert.equal(recovered[0]?.trust, 'background');
   assert.equal(recovered[0]?.freshness, 'stale');
+});
+
+test('supplements a secondary-only Tavily result with official documentation', async () => {
+  const cache = new MemoryCache();
+  const requestedBodies: Array<Record<string, unknown>> = [];
+  const fetchImplementation: typeof fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    requestedBodies.push(body);
+    const official = Array.isArray(body.include_domains);
+    return new Response(JSON.stringify({
+      results: official
+        ? [{
+            url: 'https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html',
+            title: 'What Is Ownership?',
+            content: 'Ownership is a set of rules that govern how a Rust program manages memory.',
+          }]
+        : [{
+            url: 'https://example.com/rust-ownership',
+            title: 'Rust ownership tutorial',
+            content: 'A community tutorial explaining ownership, moves, borrowing, and scope.',
+          }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const search = new WebSearchTool('tavily', 'test-key', { cache, fetch: fetchImplementation });
+
+  const sources = await search.searchSources('Rust ownership rules and move semantics');
+
+  assert.equal(requestedBodies.length, 2);
+  assert.deepEqual(requestedBodies[1]?.include_domains, ['doc.rust-lang.org']);
+  assert.equal(sources[0]?.publisher, 'doc.rust-lang.org');
+  assert.equal(sources[0]?.trust, 'primary');
+});
+
+test('retries transient Tavily network failures before failing source retrieval', async () => {
+  const cache = new MemoryCache();
+  let attempts = 0;
+  const fetchImplementation: typeof fetch = async () => {
+    attempts += 1;
+    if (attempts < 3) throw new TypeError('fetch failed');
+    return new Response(JSON.stringify({
+      results: [{
+        url: 'https://doc.rust-lang.org/book/',
+        title: 'The Rust Programming Language',
+        content: 'Official Rust documentation explains how structs define named fields and how impl blocks add associated functions and methods.',
+      }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const search = new WebSearchTool('tavily', 'test-key', { cache, fetch: fetchImplementation });
+
+  const sources = await search.searchSources('Rust structs and impl blocks');
+
+  assert.equal(attempts, 3);
+  assert.equal(sources[0]?.trust, 'primary');
 });

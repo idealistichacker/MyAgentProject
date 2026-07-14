@@ -14,6 +14,18 @@ export function isAssessmentOnlyQualityError(error: unknown): error is Generated
     && error.issues.every((issue) => issue.code.startsWith('quiz.'));
 }
 
+export function isAssessmentRepairableQualityError(error: unknown): error is GeneratedUnitQualityError {
+  return error instanceof GeneratedUnitQualityError
+    && error.issues.length > 0
+    && error.issues.every((issue) => issue.code.startsWith('quiz.'));
+}
+
+export function isObjectiveCoverageQualityError(error: unknown): error is GeneratedUnitQualityError {
+  return error instanceof GeneratedUnitQualityError
+    && error.issues.length > 0
+    && error.issues.every((issue) => issue.code.startsWith('objective.'));
+}
+
 export function isCitationOnlyQualityError(error: unknown): error is GeneratedUnitQualityError {
   return error instanceof GeneratedUnitQualityError
     && error.issues.length > 0
@@ -43,16 +55,31 @@ export function normalizeAssessmentRepairEvidence(
   artifact: GeneratedUnitArtifact,
   repair: UnitAssessmentRepair
 ): UnitAssessmentRepair {
+  const normalizedArtifact = normalizeGeneratedArtifactEvidence({
+    ...artifact,
+    quiz: repair.quiz,
+    objectiveCoverage: repair.objectiveCoverage,
+  });
+
+  return {
+    quiz: repair.quiz,
+    objectiveCoverage: normalizedArtifact.objectiveCoverage,
+  };
+}
+
+export function normalizeGeneratedArtifactEvidence(
+  artifact: GeneratedUnitArtifact
+): GeneratedUnitArtifact {
   const evidenceCandidates = extractEvidenceCandidates(artifact.content);
   const validAssessmentIds = new Set([
-    ...repair.quiz.map((question) => question.id),
+    ...artifact.quiz.map((question) => question.id),
     ...artifact.exercise.testCases.map((testCase) => testCase.name),
   ]);
 
   return {
-    quiz: repair.quiz,
-    objectiveCoverage: repair.objectiveCoverage.map((coverage) => {
-      const mappedQuizIds = repair.quiz
+    ...artifact,
+    objectiveCoverage: artifact.objectiveCoverage.map((coverage) => {
+      const mappedQuizIds = artifact.quiz
         .filter((question) => question.objectiveIds.includes(coverage.objectiveId))
         .map((question) => question.id);
       const assessmentIds = [...new Set([
@@ -209,9 +236,17 @@ export function extractCitationClaimCandidates(content: string): string[] {
       inCodeFence = !inCodeFence;
       continue;
     }
-    if (inCodeFence || !trimmedLine || /^[-*_]{3,}$/.test(trimmedLine)) continue;
+    if (
+      inCodeFence
+      || !trimmedLine
+      || /^[-*_]{3,}$/.test(trimmedLine)
+      || /^#{1,6}\s+/.test(trimmedLine)
+    ) continue;
 
-    const line = trimmedLine.replace(/^#{1,6}\s+/, '').replace(/^[-*+]\s+/, '');
+    const line = trimmedLine
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\d+[.)、]\s*/, '');
+    if (/[:：]$/.test(line)) continue;
     const sentences = line.match(/[^。！？!?]+[。！？!?]?/g) ?? [];
     for (const sentence of sentences) {
       const candidate = sentence.trim();
@@ -230,7 +265,7 @@ export function extractCitationClaimCandidates(content: string): string[] {
   return [...new Set(candidates)].slice(0, 60);
 }
 
-function extractEvidenceCandidates(content: string): string[] {
+export function extractEvidenceCandidates(content: string): string[] {
   const candidates: string[] = [];
   for (const rawLine of content.split(/\r?\n/)) {
     const trimmedLine = rawLine.trim();
@@ -240,6 +275,34 @@ function extractEvidenceCandidates(content: string): string[] {
     candidates.push(...(line.match(/[^。！？!?]+[。！？!?]?/g) ?? []).map((sentence) => sentence.trim()));
   }
   return [...new Set(candidates.filter((candidate) => candidate.length >= 4 && content.includes(candidate)))];
+}
+
+export function fallbackConflictingChoicesToShortAnswer(
+  artifact: GeneratedUnitArtifact,
+  validationError: GeneratedUnitQualityError
+): UnitAssessmentRepair | undefined {
+  if (!validationError.issues.every((issue) => issue.code === 'quiz.choice.distractor.tooSimilar')) {
+    return undefined;
+  }
+  const conflictingIds = new Set(validationError.issues.flatMap((issue) => {
+    const match = issue.message.match(/Choice quiz "([^"]+)"/);
+    return match?.[1] ? [match[1]] : [];
+  }));
+  if (conflictingIds.size === 0) return undefined;
+
+  return {
+    quiz: artifact.quiz.map((question) => conflictingIds.has(question.id) && question.type === 'choice'
+      ? {
+          ...question,
+          type: 'short-answer' as const,
+          question: `${question.question}\n请直接写出正确做法并说明理由。`,
+          options: undefined,
+          distractorRationales: [],
+          rubric: question.rubric?.trim() || '回答必须给出正确结论，并解释其与常见误区的区别。',
+        }
+      : question),
+    objectiveCoverage: artifact.objectiveCoverage,
+  };
 }
 
 function selectVerbatimEvidence(content: string, evidence: string, candidates: string[]): string {

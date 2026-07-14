@@ -37,11 +37,14 @@ import {
   buildAssessmentRepairPrompt,
   buildCitationRepairPrompt,
   extractCitationClaimCandidates,
-  isAssessmentOnlyQualityError,
+  fallbackConflictingChoicesToShortAnswer,
+  isAssessmentRepairableQualityError,
   isCitationOnlyQualityError,
+  isObjectiveCoverageQualityError,
   mergeAssessmentRepair,
   mergeCitationRepair,
   normalizeAssessmentRepairEvidence,
+  normalizeGeneratedArtifactEvidence,
   retainSupportedCitationClaims,
 } from './unitArtifactRepair.js';
 import { loadConfig } from '../state/fsState.js';
@@ -55,6 +58,7 @@ const unitGenerationInFlight = new Map<string, Promise<SeedUnit>>();
 
 export interface UnitGenerationProgress {
   onCheckpoint?: (checkpoint: GenerationCheckpoint) => void;
+  validationMode?: 'full' | 'content-only';
 }
 
 export async function diagnoseLearner(
@@ -362,7 +366,8 @@ export async function generateUnitContent(
   if (!provider) {
     throw new Error('A configured provider is required to generate a non-offline unit.');
   }
-  const cacheKey = getUnitCacheKey(unit, plan);
+  const validationMode = progress.validationMode ?? 'full';
+  const cacheKey = getValidatedUnitCacheKey(getUnitCacheKey(unit, plan), validationMode);
 
   const existing = unitGenerationInFlight.get(cacheKey);
   if (existing) {
@@ -389,6 +394,7 @@ async function generateUnitContentUncached(
     throw new Error('A configured provider is required to generate a non-offline unit.');
   }
   const learnerProfile = plan.learnerProfile;
+  const validationMode = progress.validationMode ?? 'full';
   const projectUnit = plan.units.find(u => u.type === 'project');
   const projectContext = projectUnit ? `The final project for this curriculum is: ${projectUnit.title} (${projectUnit.description}). Your content MUST build towards this.` : 'Ensure content connects to the overall curriculum goals.';
   const config = loadConfig();
@@ -415,7 +421,8 @@ async function generateUnitContentUncached(
       throw new Error(`Source retrieval failed; unit cannot be formally published: ${searchErr.message}`);
     }
 
-    const cacheKey = getUnitCacheKey(unit, plan, sources);
+    const artifactCacheKey = getUnitCacheKey(unit, plan, sources);
+    const cacheKey = getValidatedUnitCacheKey(artifactCacheKey, validationMode);
     const cachedUnit = await llmCache.get<SeedUnit>(cacheKey);
     if (cachedUnit) {
       console.log(color.magenta(`\n⚡ [LLM Cache HIT] 恢复已生成的单元: ${unit.title}`));
@@ -455,7 +462,7 @@ Use only the supplied curriculum context, learner profile, and search excerpts. 
 Do not format as JSON yet, just generate a deep markdown document draft.
 `.trim();
 
-    const draftCacheKey = createCacheKey('unit-draft', { artifactCacheKey: cacheKey, promptVersion: 'draft-v2' });
+    const draftCacheKey = createCacheKey('unit-draft', { artifactCacheKey, promptVersion: 'draft-v2' });
     const draftResult = await llmCache.getOrSet(
       draftCacheKey,
       async () => {
@@ -487,7 +494,7 @@ Do not format as JSON yet, just generate a deep markdown document draft.
     if (draftAssessment.highConfidence) {
       console.log(color.green(`⏭️ Pass 2: 草稿质量 ${draftAssessment.score}/100，高置信跳过 Critique。`));
       const skipKey = createCacheKey('unit-critique-skip', {
-        artifactCacheKey: cacheKey,
+        artifactCacheKey,
         draftCacheKey: hashCacheKey(draftCacheKey),
         policyVersion: 'draft-risk-v1',
       });
@@ -520,7 +527,7 @@ Provide the expanded and corrected course content in Chinese. Focus on technical
 `.trim();
 
       const critiqueCacheKey = createCacheKey('unit-critique', {
-        artifactCacheKey: cacheKey,
+        artifactCacheKey,
         draft: draftContent,
         promptVersion: 'critique-v2',
       });
@@ -694,7 +701,7 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
 
     const finalArtifactTool = createUnitArtifactTool(unit.objectives);
     const finalCacheKey = createCacheKey('unit-final-response', {
-        artifactCacheKey: cacheKey,
+      artifactCacheKey,
         refinedDraft,
         promptVersion: 'final-structured-v4-objective-enum',
       });
@@ -720,13 +727,17 @@ Learner DSA Level: ${learnerProfile.dsaLevel}
     console.log('✅ Pass 3: 格式精修完成。');
 
     try {
-      const finalUnit = await buildGeneratedUnit(unit, finalRes, sources);
+      const finalUnit = await buildGeneratedUnit(unit, finalRes, sources, {
+        verifyReferenceSolution: validationMode === 'full',
+      });
 
       await llmCache.set(cacheKey, finalUnit);
       return finalUnit;
     } catch (parseErr) {
       console.warn('Generated artifact failed validation. Asking for one bounded structured repair.', parseErr);
-      const repairedUnit = await repairGeneratedUnit(unit, finalRes, parseErr, sources, provider);
+      const repairedUnit = await repairGeneratedUnit(unit, finalRes, parseErr, sources, provider, {
+        verifyReferenceSolution: validationMode === 'full',
+      });
       await llmCache.set(cacheKey, repairedUnit);
       return repairedUnit;
     }
@@ -755,6 +766,13 @@ function getUnitCacheKey(unit: SeedUnit, plan: LearningPlan, sources?: Source[])
       ? sources.map((source) => ({ id: source.id, hash: source.hash })).sort((left, right) => left.id.localeCompare(right.id))
       : 'pending-source-pack',
   });
+}
+
+function getValidatedUnitCacheKey(
+  artifactCacheKey: string,
+  validationMode: 'full' | 'content-only'
+): string {
+  return createCacheKey('validated-unit-artifact', { artifactCacheKey, validationMode });
 }
 
 export async function generateRemediationUnit(
@@ -996,9 +1014,10 @@ function buildRemediationOutline(failedUnit: SeedUnit, assessment: AssessmentRes
 async function buildGeneratedUnit(
   unit: SeedUnit,
   response: Awaited<ReturnType<LLMProvider['chat']>>,
-  sources: Source[]
+  sources: Source[],
+  options: { verifyReferenceSolution?: boolean } = {}
 ): Promise<SeedUnit> {
-  const parsed = parseUnitArtifact(response);
+  const parsed = normalizeGeneratedArtifactEvidence(parseUnitArtifact(response));
   const content = parsed.content.trim();
   const language = normalizeExerciseLanguage(parsed.exercise.language);
   const isNativeLanguage = NATIVE_RUNNER_LANGUAGES.includes(language as typeof NATIVE_RUNNER_LANGUAGES[number]);
@@ -1026,7 +1045,9 @@ async function buildGeneratedUnit(
     parsed.citations,
     sources
   );
-  await verifyReferenceSolution(exercise, parsed.referenceSolution);
+  if (options.verifyReferenceSolution !== false) {
+    await verifyReferenceSolution(exercise, parsed.referenceSolution);
+  }
 
   return {
     ...unit,
@@ -1047,9 +1068,10 @@ async function repairGeneratedUnit(
   brokenResponse: Awaited<ReturnType<LLMProvider['chat']>>,
   validationError: unknown,
   sources: Source[],
-  provider: LLMProvider
+  provider: LLMProvider,
+  options: { verifyReferenceSolution?: boolean } = {}
 ): Promise<SeedUnit> {
-  if (isAssessmentOnlyQualityError(validationError)) {
+  if (isAssessmentRepairableQualityError(validationError)) {
     let artifact = parseUnitArtifact(brokenResponse);
     let currentValidationError = validationError;
     const assessmentRepairTool = createUnitAssessmentRepairTool(unit.objectives);
@@ -1073,12 +1095,28 @@ async function repairGeneratedUnit(
       );
 
       try {
-        return await buildGeneratedUnit(unit, mergedResponse, sources);
+        return await buildGeneratedUnit(unit, mergedResponse, sources, options);
       } catch (error) {
         if (isCitationOnlyQualityError(error)) {
-          return repairGeneratedUnitCitations(unit, parseUnitArtifact(mergedResponse), error, sources, provider);
+          return repairGeneratedUnitCitations(unit, parseUnitArtifact(mergedResponse), error, sources, provider, options);
         }
-        if (round === maxRepairRounds || !isAssessmentOnlyQualityError(error)) throw error;
+        if (round === maxRepairRounds) {
+          const parsedMergedArtifact = parseUnitArtifact(mergedResponse);
+          const fallbackRepair = isAssessmentRepairableQualityError(error)
+            ? fallbackConflictingChoicesToShortAnswer(parsedMergedArtifact, error)
+            : undefined;
+          if (!fallbackRepair) throw error;
+          return buildGeneratedUnit(
+            unit,
+            mergeAssessmentRepair(
+              parsedMergedArtifact,
+              normalizeAssessmentRepairEvidence(parsedMergedArtifact, fallbackRepair)
+            ),
+            sources,
+            options
+          );
+        }
+        if (!isAssessmentRepairableQualityError(error)) throw error;
         console.warn(`Assessment repair round ${round} still failed quality validation. Retrying once with focused feedback.`, error);
         artifact = parseUnitArtifact(mergedResponse);
         currentValidationError = error;
@@ -1089,7 +1127,7 @@ async function repairGeneratedUnit(
   }
 
   if (isCitationOnlyQualityError(validationError)) {
-    return repairGeneratedUnitCitations(unit, parseUnitArtifact(brokenResponse), validationError, sources, provider);
+    return repairGeneratedUnitCitations(unit, parseUnitArtifact(brokenResponse), validationError, sources, provider, options);
   }
 
   const projectRepairRules = unit.type === 'project'
@@ -1139,9 +1177,15 @@ async function repairGeneratedUnit(
   }`
     : '';
 
-  const repairPrompt = `
+  const buildArtifactRepairPrompt = (
+    repairError: unknown,
+    previousResponse: Awaited<ReturnType<LLMProvider['chat']>>,
+    round: number
+  ) => `
 The previous FCAgent unit generation response could not be parsed or failed quality validation.
 Repair it into the exact required format below. Keep the same educational intent, but make it valid, runnable, and concise.
+
+Repair round: ${round} of 3.
 
 Rules:
 - Exact objective IDs (copy verbatim; never translate or paraphrase): ${JSON.stringify(unit.objectives)}
@@ -1186,10 +1230,10 @@ Required format:
 ...
 
 The original attempt failed strict validation with this error:
-${validationError instanceof Error ? validationError.message : String(validationError)}
+${repairError instanceof Error ? repairError.message : String(repairError)}
 
 Original structured arguments, if any:
-${brokenResponse.tool_calls?.find((call) => call.function.name === unitArtifactTool.function.name)?.function.arguments ?? 'No structured arguments were returned.'}
+${previousResponse.tool_calls?.find((call) => call.function.name === unitArtifactTool.function.name)?.function.arguments ?? 'No structured arguments were returned.'}
 
 Available source IDs:
 ${sources.map((source) => `${source.id}: ${source.title}`).join('\n')}
@@ -1198,17 +1242,34 @@ Do not return Markdown sections or raw JSON. Call \`submit_unit_artifact\` exact
 `.trim();
 
   const artifactRepairTool = createUnitArtifactTool(unit.objectives);
-  const repairRes = await provider.chat([
-    { role: 'system', content: 'You repair malformed curriculum artifacts. Submit the repaired artifact through the required structured-output tool.' },
-    { role: 'user', content: repairPrompt },
-  ], {
-    temperature: 0.1,
-    ...LLM_POLICIES.ARTIFACT_REPAIR,
-    tools: [artifactRepairTool],
-    toolChoice: { type: 'function', function: { name: artifactRepairTool.function.name } },
-  });
+  let previousResponse = brokenResponse;
+  let repairError = validationError;
+  const maxArtifactRepairRounds = 3;
+  for (let round = 1; round <= maxArtifactRepairRounds; round += 1) {
+    const repairRes = await provider.chat([
+      { role: 'system', content: 'You repair malformed curriculum artifacts. Submit exactly one valid structured-output tool call.' },
+      { role: 'user', content: buildArtifactRepairPrompt(repairError, previousResponse, round) },
+    ], {
+      temperature: 0.1,
+      ...LLM_POLICIES.ARTIFACT_REPAIR,
+      tools: [artifactRepairTool],
+      toolChoice: { type: 'function', function: { name: artifactRepairTool.function.name } },
+    });
 
-  return buildGeneratedUnit(unit, repairRes, sources);
+    try {
+      return await buildGeneratedUnit(unit, repairRes, sources, options);
+    } catch (error) {
+      if (isAssessmentRepairableQualityError(error) || isCitationOnlyQualityError(error)) {
+        return repairGeneratedUnit(unit, repairRes, error, sources, provider, options);
+      }
+      if (round === maxArtifactRepairRounds) throw error;
+      console.warn('Structured artifact repair returned invalid arguments. Retrying once with focused parser feedback.', error);
+      previousResponse = repairRes;
+      repairError = error;
+    }
+  }
+
+  throw repairError;
 }
 
 async function repairGeneratedUnitCitations(
@@ -1216,7 +1277,8 @@ async function repairGeneratedUnitCitations(
   artifact: ReturnType<typeof parseUnitArtifact>,
   validationError: GeneratedUnitQualityError,
   sources: Source[],
-  provider: LLMProvider
+  provider: LLMProvider,
+  options: { verifyReferenceSolution?: boolean } = {}
 ): Promise<SeedUnit> {
   const claimCandidates = extractCitationClaimCandidates(artifact.content);
   if (claimCandidates.length === 0) {
@@ -1250,8 +1312,14 @@ async function repairGeneratedUnitCitations(
       supportedRepair.citations.length > 0 ? supportedRepair : parsedRepair
     );
     try {
-      return await buildGeneratedUnit(unit, mergedResponse, sources);
+      return await buildGeneratedUnit(unit, mergedResponse, sources, options);
     } catch (error) {
+      if (isAssessmentRepairableQualityError(error)) {
+        return repairGeneratedUnit(unit, mergedResponse, error, sources, provider, options);
+      }
+      if (isObjectiveCoverageQualityError(error)) {
+        return repairGeneratedUnit(unit, mergedResponse, error, sources, provider, options);
+      }
       if (round === maxRepairRounds || !isCitationOnlyQualityError(error)) throw error;
       console.warn(`Citation repair round ${round} still failed quality validation. Retrying once with focused feedback.`, error);
       currentArtifact = parseUnitArtifact(mergedResponse);

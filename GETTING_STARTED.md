@@ -172,9 +172,10 @@ fc next
 
 ### 5. `start [unitId]` — 解锁或拉取指定单元
 
-* **描述**：加载指定单元。若该单元为首次加载，将从网上爬取最新的标准规范（如 MDN、W3C 规范），并在后台重构 2-3 次自动生成专属课件与测试用例文件。生成结果会经过结构化解析、Zod 校验、内容长度/测试用例/Hint/入口函数等质量检查；如果模型输出格式不合格，系统会自动请求一次结构化修复后再落盘。Project 关卡会额外校验 `ProjectSpec`，并写出 `PROJECT.md`。
+* **描述**：加载指定单元。若该单元为首次加载，将联网获取可信来源，并按风险执行 Draft、Critique（可跳过）和 Polish。生成结果会经过结构化解析、Zod 校验、目标覆盖、事实引用、题目诊断度、三类测试和参考解答实跑等质量门；失败时按 assessment、citation、objective 或完整 artifact 类型执行有界修复，仍不合格则禁止发布。Project 关卡会额外校验 `ProjectSpec`，并写出 `PROJECT.md`。
 * **参数**：
   * `[unitId]`（可选）：传入特定单元 ID (例如 `go-concurrency-basics`) 可强制跳转。
+  * `--content-only`：执行完整内容生成与质量门，但跳过参考解答的本地编译/运行；结果隔离写入 `.fuckcolloge/previews/<unitId>/`，不更新计划、正式 manifest 或 `solution.*`。
 
 ### 6. `lesson [unitId]` — 终端阅览讲义
 
@@ -226,11 +227,13 @@ fc next
   * `--stagger-ms <number>`：每个生成任务的启动间隔，默认 `1000` 毫秒，用于平滑 API 连接峰值。
   * `--requests-per-minute <number>`：每分钟最多启动多少个生成任务，默认 `60`；与启动间隔同时生效，取更保守的限制。
   * `--failure-threshold <number>`：连续限流、超时、网络或提供方 5xx 达到该次数后熔断剩余队列，默认 `3`。认证、配置和质量校验错误不会触发熔断。
+  * `--content-only`：对计划中的全部单元生成隔离内容预览，保留来源、Pass 1～3、结构、题目、引用、目标覆盖及局部修复门，但跳过参考解答实跑。预览写入 `.fuckcolloge/previews/<unitId>/`，不修改正式计划、manifest 或 `solution.*`。
   * `--reset-solution`：显式覆盖已有学习者答案；默认会要求确认，也可结合 `--yes` 在自动化环境确认。
 * **示例**：
   ```powershell
   fc generate-all --concurrency 2 --stagger-ms 1500
   fc generate-all --requests-per-minute 30 --failure-threshold 3
+  fc generate-all --content-only --concurrency 2 --stagger-ms 1500
   ```
 
 ### 15. `generation status` / `generation retry` / `generation recover` / `generation metrics` — 生成作业恢复与指标

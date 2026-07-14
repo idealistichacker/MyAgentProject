@@ -92,13 +92,25 @@ export function assertGeneratedUnitQuality(
   for (const objective of unit.objectives) {
     const coverage = coveredObjectives.get(objective);
     if (!coverage) {
-      throw new Error(`Generated unit has no evidence for objective "${objective}".`);
+      throw new GeneratedUnitQualityError([{
+        code: 'objective.evidence.missing',
+        severity: 'error',
+        message: `Generated unit has no evidence for objective "${objective}".`,
+      }]);
     }
     if (!content.includes(coverage.lessonEvidence) || !content.includes(coverage.exampleEvidence)) {
-      throw new Error(`Generated evidence for objective "${objective}" is not present in the lesson content.`);
+      throw new GeneratedUnitQualityError([{
+        code: 'objective.evidence.notInLesson',
+        severity: 'error',
+        message: `Generated evidence for objective "${objective}" is not present in the lesson content.`,
+      }]);
     }
     if (coverage.assessmentIds.some((id) => !assessmentIds.has(id))) {
-      throw new Error(`Generated objective coverage for "${objective}" references an unknown assessment.`);
+      throw new GeneratedUnitQualityError([{
+        code: 'objective.assessment.unknown',
+        severity: 'error',
+        message: `Generated objective coverage for "${objective}" references an unknown assessment.`,
+      }]);
     }
   }
 

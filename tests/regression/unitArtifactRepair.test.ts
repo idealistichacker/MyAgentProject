@@ -5,10 +5,14 @@ import {
   buildAssessmentRepairPrompt,
   buildCitationRepairPrompt,
   extractCitationClaimCandidates,
+  fallbackConflictingChoicesToShortAnswer,
   isAssessmentOnlyQualityError,
+  isAssessmentRepairableQualityError,
   isCitationOnlyQualityError,
+  isObjectiveCoverageQualityError,
   mergeAssessmentRepair,
   mergeCitationRepair,
+  normalizeGeneratedArtifactEvidence,
   normalizeAssessmentRepairEvidence,
   retainSupportedCitationClaims,
 } from '../../src/agents/unitArtifactRepair.js';
@@ -26,9 +30,45 @@ test('routes quiz-only quality failures to the lightweight assessment repair', (
 
   assert.equal(isAssessmentOnlyQualityError(quizFailure), true);
   assert.equal(isAssessmentOnlyQualityError(mixedFailure), false);
+  assert.equal(isAssessmentRepairableQualityError(quizFailure), true);
+  const objectiveFailure = new GeneratedUnitQualityError([{
+    code: 'objective.evidence.notInLesson', message: 'invalid evidence', severity: 'error',
+  }]);
+  assert.equal(isAssessmentRepairableQualityError(objectiveFailure), false);
+  assert.equal(isObjectiveCoverageQualityError(objectiveFailure), true);
   assert.equal(isCitationOnlyQualityError(new GeneratedUnitQualityError([
     { code: 'fact.claim.notInLesson', message: 'invalid citation', severity: 'error' },
   ])), true);
+});
+
+test('deterministically converts persistent conflicting choices to short answer', () => {
+  const artifact = {
+    quiz: [{
+      id: 'q4',
+      type: 'choice' as const,
+      question: '哪种做法不会阻塞异步运行时？',
+      options: ['直接调用阻塞函数', '使用异步 API', '持锁等待', '调用阻塞函数并等待'],
+      answer: '使用异步 API',
+      explanation: '异步 API 会让出执行权。',
+      objectiveIds: ['objective-a'],
+      misconception: '认为 async 会自动消除阻塞',
+      rubric: '指出应使用异步 API 并解释原因。',
+      distractorRationales: [],
+    }],
+    objectiveCoverage: [],
+  } as unknown as GeneratedUnitArtifact;
+  const error = new GeneratedUnitQualityError([{
+    code: 'quiz.choice.distractor.tooSimilar',
+    message: 'Choice quiz "q4" contains options 1 and 4 that are too lexically similar to diagnose distinct reasoning.',
+    severity: 'error',
+  }]);
+
+  const repaired = fallbackConflictingChoicesToShortAnswer(artifact, error);
+
+  assert.equal(repaired?.quiz[0]?.type, 'short-answer');
+  assert.equal(repaired?.quiz[0]?.options, undefined);
+  assert.deepEqual(repaired?.quiz[0]?.distractorRationales, []);
+  assert.match(repaired?.quiz[0]?.question ?? '', /说明理由/);
 });
 
 test('merges repaired assessment fields without regenerating the lesson or solution', () => {
@@ -213,6 +253,20 @@ test('citation repair preserves the generated artifact and requires verbatim les
   assert.equal(merged.citations[0]?.claim, 'Python 列表是有序且可变的集合。');
 });
 
+test('citation candidates exclude headings and incomplete lead-in fragments', () => {
+  const candidates = extractCitationClaimCandidates([
+    '# 告别GC的温柔乡：所有权初体验',
+    '它通过编译期检查的规则管理内存：',
+    '1. **每个值有且仅有一个所有者**——所有权是排他的。',
+    '2. **当所有者离开作用域，值被自动`drop`**——编译器会释放对应资源。',
+  ].join('\n'));
+
+  assert.deepEqual(candidates, [
+    '**每个值有且仅有一个所有者**——所有权是排他的。',
+    '**当所有者离开作用域，值被自动`drop`**——编译器会释放对应资源。',
+  ]);
+});
+
 test('drops unsupported citation claims while preserving primary-supported claims', () => {
   const sources = [
     {
@@ -306,4 +360,61 @@ test('normalizes objective evidence to verbatim lesson text and valid assessment
   assert.equal(normalized.objectiveCoverage[0]?.lessonEvidence, '列表像购物清单，Agent用它存储**一系列**东西：待测文件列表、历史修复记录。');
   assert.equal(normalized.objectiveCoverage[0]?.exampleEvidence, "bug_info = ['test_login', 'KeyError', 'username']");
   assert.deepEqual(normalized.objectiveCoverage[0]?.assessmentIds, ['q1']);
+});
+
+test('normalizes initial artifact evidence before citation repair validation', () => {
+  const artifact = {
+    content: [
+      '# Ownership',
+      'Rust 的所有权规则要求**每个值只能有一个所有者**。',
+      '```rust',
+      'let moved = value;',
+      '```',
+    ].join('\n'),
+    quiz: [{
+      id: 'q1',
+      type: 'short-answer' as const,
+      question: '所有权规则是什么？',
+      answer: '每个值只能有一个所有者。',
+      explanation: '所有权是排他的。',
+      objectiveIds: ['objective-a'],
+      misconception: '认为值可以同时有多个所有者',
+      rubric: '说明单一所有者规则。',
+      distractorRationales: [],
+    }],
+    exercise: {
+      id: 'exercise-1',
+      language: 'rust',
+      entrypoint: 'solve',
+      description: 'Move a value',
+      starterCode: 'fn solve() {}',
+      assertionMode: 'return' as const,
+      testCases: [
+        { name: 'normal', category: 'normal' as const, input: [], expected: true },
+        { name: 'edge', category: 'edge' as const, input: [], expected: true },
+        { name: 'misconception', category: 'misconception' as const, input: [], expected: false },
+      ],
+      hints: ['Read the move', 'Check the owner'],
+      difficulty: 'introductory' as const,
+      conceptTags: ['ownership'],
+      commonPitfalls: ['using a moved value'],
+      estimatedMinutes: 10,
+    },
+    objectiveCoverage: [{
+      objectiveId: 'objective-a',
+      lessonEvidence: 'Rust 的所有权规则要求每个值只能有一个所有者。',
+      exampleEvidence: 'let moved = value;',
+      assessmentIds: ['q1'],
+    }],
+    citations: [{ sourceId: 'source-a', claim: 'Rust 的所有权规则要求**每个值只能有一个所有者**。' }],
+    referenceSolution: 'fn solve() {}',
+  } as GeneratedUnitArtifact;
+
+  const normalized = normalizeGeneratedArtifactEvidence(artifact);
+
+  assert.equal(
+    normalized.objectiveCoverage[0]?.lessonEvidence,
+    'Rust 的所有权规则要求**每个值只能有一个所有者**。'
+  );
+  assert.equal(normalized.objectiveCoverage[0]?.exampleEvidence, 'let moved = value;');
 });

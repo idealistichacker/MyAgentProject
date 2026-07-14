@@ -33,7 +33,7 @@ export async function runRustExercise(
         timeout: TIMEOUTS.RUNNER_COMPILE_RUST,
       });
     } catch (compileErr: any) {
-      const stderr = compileErr.stderr || compileErr.message;
+      const stderr = formatRustCompilerError(compileErr);
       return {
         unitId,
         stdout: compileErr.stdout ?? '',
@@ -90,6 +90,13 @@ export async function runRustExercise(
       passed: false,
     };
   }
+}
+
+export function formatRustCompilerError(error: NodeJS.ErrnoException & { stderr?: string }): string {
+  if (error.code === 'ENOENT') {
+    return 'Rust compiler "rustc" was not found on PATH. Install the Rust toolchain from https://rustup.rs and restart the terminal before generating or submitting Rust exercises.';
+  }
+  return error.stderr || error.message || 'unknown Rust compiler error';
 }
 
 function buildTestSource(exercise: ExerciseSpec): string {

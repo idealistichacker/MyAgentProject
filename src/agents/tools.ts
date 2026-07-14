@@ -15,6 +15,21 @@ const execAsync = promisify(exec);
 const MAX_SEARCH_RESULT_CHARS = 6000;
 const FRESH_SOURCE_TTL_MS = 24 * 60 * 60 * 1000;
 const STALE_SOURCE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SOURCE_PACK_CACHE_VERSION = 'v4';
+const TAVILY_MAX_ATTEMPTS = 3;
+const RUST_QUERY_PATTERN = /\brust\b|\bimpl\s+blocks?\b|\bResult\s*</i;
+const OFFICIAL_DOCUMENTATION_DOMAINS: Array<{ pattern: RegExp; domains: string[] }> = [
+  { pattern: /\baxum\b/i, domains: ['docs.rs'] },
+  { pattern: /\btokio\b/i, domains: ['tokio.rs', 'docs.rs'] },
+  { pattern: /\bsqlx\b/i, domains: ['docs.rs'] },
+  { pattern: /\bredis\b/i, domains: ['docs.rs'] },
+  { pattern: RUST_QUERY_PATTERN, domains: ['doc.rust-lang.org'] },
+  { pattern: /\bpython\b/i, domains: ['docs.python.org'] },
+  { pattern: /\b(?:typescript|javascript)\b/i, domains: ['www.typescriptlang.org', 'developer.mozilla.org'] },
+  { pattern: /\bnode(?:\.js|js)?\b/i, domains: ['nodejs.org'] },
+  { pattern: /\bgo(?:lang)?\b/i, domains: ['go.dev'] },
+  { pattern: /\bjava\b/i, domains: ['docs.oracle.com', 'openjdk.org'] },
+];
 
 interface SearchCacheAdapter {
   get<T>(key: string): Promise<T | null>;
@@ -111,12 +126,12 @@ export class WebSearchTool implements Tool {
     }
 
     const normalizedQuery = query.trim().replace(/\s+/g, ' ');
-    const cacheKey = `source-pack:v2:${this.provider}:${normalizedQuery.toLowerCase()}`;
-    const staleCacheKey = `source-pack-stale:v2:${this.provider}:${normalizedQuery.toLowerCase()}`;
+    const cacheKey = `source-pack:${SOURCE_PACK_CACHE_VERSION}:${this.provider}:${normalizedQuery.toLowerCase()}`;
+    const staleCacheKey = `source-pack-stale:${SOURCE_PACK_CACHE_VERSION}:${this.provider}:${normalizedQuery.toLowerCase()}`;
     const cachedResult = await this.cache.get<unknown>(cacheKey);
     if (cachedResult) {
       const validated = normalizeSourcePack(cachedResult, normalizedQuery);
-      if (validated.length > 0) {
+      if (this.provider !== 'tavily' ? validated.length > 0 : isSourcePackReady(validated)) {
         console.log(color.gray(`\n  [Cache HIT] WebSearchTool -> "${query}"`));
         return validated;
       }
@@ -126,14 +141,16 @@ export class WebSearchTool implements Tool {
     try {
       const result = await this.cache.getOrSet(cacheKey, async () => {
         const sources = normalizeSourcePack(await this.fetchSources(normalizedQuery), normalizedQuery);
-        if (sources.length === 0) throw new Error('Search returned no valid sources after normalization.');
+        if (this.provider === 'tavily' && !isSourcePackReady(sources)) {
+          throw new Error('Search results need one primary source or two independent publishers after normalization.');
+        }
         await this.cache.set(staleCacheKey, sources, { ttlMs: STALE_SOURCE_TTL_MS });
         return sources;
       }, { ttlMs: FRESH_SOURCE_TTL_MS });
       return normalizeSourcePack(result.value, normalizedQuery);
     } catch (error) {
       const staleSources = normalizeSourcePack(await this.cache.get<unknown>(staleCacheKey), normalizedQuery);
-      if (staleSources.length > 0) {
+      if (this.provider !== 'tavily' ? staleSources.length > 0 : isSourcePackReady(staleSources)) {
         console.warn(color.yellow(`\n  [STALE CACHE] WebSearchTool -> "${query}" (${error instanceof Error ? error.message : String(error)})`));
         return staleSources.map((source) => ({ ...source, freshness: 'stale' as const }));
       }
@@ -149,37 +166,26 @@ export class WebSearchTool implements Tool {
         throw new Error('Tavily API key is missing. Please configure it using `fc init`.');
       }
       try {
-        const response = await this.fetchImplementation('https://api.tavily.com/search', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            api_key: this.apiKey,
-            query: query,
-            search_depth: 'basic',
-            include_answer: false,
-            max_results: 3
-          }),
-          signal: AbortSignal.timeout(TIMEOUTS.WEB_SEARCH),
-        });
-        if (!response.ok) {
-          throw new Error(`Tavily search failed with status ${response.status}`);
+        sources = await this.fetchTavilySources(query);
+        if (!sources.some((source) => source.trust === 'primary')) {
+          const officialDomains = officialDomainsForQuery(query);
+          if (officialDomains.length > 0) {
+            try {
+              sources.push(...await this.fetchTavilySources(officialDocumentationQuery(query), officialDomains));
+            } catch (error) {
+              console.warn(color.yellow(`Official documentation search failed; retaining validated broad sources (${error instanceof Error ? error.message : String(error)}).`));
+            }
+          }
         }
-        const data = await response.json() as any;
-        if (!data.results || data.results.length === 0) {
-          throw new Error('No Tavily search results found.');
-        } else {
-          sources = data.results.slice(0, 5).flatMap((result: any, index: number) =>
-            safeToSource({
-              id: `src-${index + 1}`,
-              url: result.url,
-              title: result.title,
-              publisher: publisherFromUrl(result.url),
-              trust: classifySourceTrust(result.url),
-              excerpt: result.content,
-            })
-          );
+        if (!isSourcePackReady(normalizeSourcePack(sources, query))) {
+          for (const officialPage of officialPagesForQuery(query)) {
+            try {
+              sources.push(await this.fetchOfficialPageSource(officialPage, sources.length + 1));
+              if (isSourcePackReady(normalizeSourcePack(sources, query))) break;
+            } catch (error) {
+              console.warn(color.yellow(`Direct official documentation retrieval failed for ${officialPage}; trying the next source (${error instanceof Error ? error.message : String(error)}).`));
+            }
+          }
         }
       } catch (error) {
         throw new Error(`Tavily search error: ${error instanceof Error ? error.message : String(error)}`);
@@ -217,6 +223,131 @@ export class WebSearchTool implements Tool {
     }
     return sources;
   }
+
+  private async fetchTavilySources(query: string, includeDomains?: string[]): Promise<Source[]> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= TAVILY_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await this.fetchImplementation('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            api_key: this.apiKey,
+            query,
+            search_depth: 'basic',
+            include_answer: false,
+            max_results: 5,
+            ...(includeDomains?.length ? { include_domains: includeDomains } : {}),
+          }),
+          signal: AbortSignal.timeout(TIMEOUTS.WEB_SEARCH),
+        });
+        if (!response.ok) {
+          const error = new Error(`Tavily search failed with status ${response.status}`) as Error & { retryable?: boolean };
+          error.retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+          throw error;
+        }
+        const data = await response.json() as { results?: Array<{ url: string; title: string; content: string }> };
+        if (!data.results?.length) {
+          throw new Error('No Tavily search results found.');
+        }
+        return data.results.slice(0, 5).flatMap((result, index) =>
+          safeToSource({
+            id: `src-${index + 1}`,
+            url: result.url,
+            title: result.title,
+            publisher: publisherFromUrl(result.url),
+            trust: classifySourceTrust(result.url),
+            excerpt: result.content,
+          })
+        );
+      } catch (error) {
+        lastError = error;
+        if (attempt === TAVILY_MAX_ATTEMPTS || !isRetryableTavilyError(error)) throw error;
+        await sleep(250 * (2 ** (attempt - 1)));
+      }
+    }
+    throw lastError;
+  }
+
+  private async fetchOfficialPageSource(url: string, index: number): Promise<Source> {
+    const response = await this.fetchImplementation(url, {
+      headers: { 'User-Agent': 'FCAgent/0.1 curriculum-source-verifier' },
+      signal: AbortSignal.timeout(TIMEOUTS.WEB_SEARCH),
+    });
+    if (!response.ok) {
+      throw new Error(`Official documentation request failed with status ${response.status}`);
+    }
+    const html = await response.text();
+    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]*>/g, ' ').trim()
+      || `Official documentation from ${publisherFromUrl(url)}`;
+    const excerpt = html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const source = safeToSource({
+      id: `src-${index}`,
+      url,
+      title,
+      publisher: publisherFromUrl(url),
+      trust: 'primary',
+      excerpt,
+    })[0];
+    if (!source || source.excerpt.length < 40) {
+      throw new Error('Official documentation page did not contain enough readable text.');
+    }
+    return source;
+  }
+}
+
+export function officialDomainsForQuery(query: string): string[] {
+  return [...new Set(OFFICIAL_DOCUMENTATION_DOMAINS
+    .filter((candidate) => candidate.pattern.test(query))
+    .flatMap((candidate) => candidate.domains))];
+}
+
+function officialDocumentationQuery(query: string): string {
+  const technicalTerms = query.match(/[a-z][a-z0-9_:.?<>/+-]*/gi)?.join(' ') ?? query;
+  return `${technicalTerms} official documentation`.slice(0, 600);
+}
+
+function officialPagesForQuery(query: string): string[] {
+  const pages: string[] = [];
+  if (/\baxum\b/i.test(query)) pages.push('https://docs.rs/axum/latest/axum/');
+  if (/\btokio\b/i.test(query)) pages.push('https://tokio.rs/tokio/tutorial');
+  if (/\bsqlx\b/i.test(query)) pages.push('https://docs.rs/sqlx/latest/sqlx/struct.Pool.html');
+  if (/\bredis\b/i.test(query)) pages.push('https://docs.rs/redis/latest/redis/');
+  if (RUST_QUERY_PATTERN.test(query) && /\b(?:structs?|impl|methods?)\b/i.test(query)) {
+    pages.push('https://doc.rust-lang.org/book/ch05-03-method-syntax.html');
+  }
+  if (RUST_QUERY_PATTERN.test(query) && /\b(?:result|errors?|operator)\b/i.test(query)) {
+    pages.push('https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html');
+  }
+  if (RUST_QUERY_PATTERN.test(query) && /\b(?:async|await|future)\b/i.test(query)) {
+    pages.push('https://doc.rust-lang.org/book/ch17-00-async-await.html');
+  }
+  if (RUST_QUERY_PATTERN.test(query)) pages.push('https://doc.rust-lang.org/book/');
+  return [...new Set(pages)];
+}
+
+function isSourcePackReady(sources: Source[]): boolean {
+  if (sources.some((source) => source.trust === 'primary')) return true;
+  return new Set(sources.map((source) => source.publisher.toLowerCase())).size >= 2;
+}
+
+function isRetryableTavilyError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof Error)) return false;
+  if ((error as Error & { retryable?: boolean }).retryable) return true;
+  return error.name === 'AbortError' || error.name === 'TimeoutError';
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 export function formatSourcePack(sources: Source[]): string {

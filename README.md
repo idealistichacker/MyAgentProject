@@ -11,9 +11,9 @@
 1. **个性化诊断与知识目标图 (Diagnose, Plan & Objective Graph)**：基于大模型分析你的编程底子、算法基础、**预计总学习时长（周）**及近期目标，生成 2 至 10 个单元的动态课程树。每个后续单元通过 `prerequisiteObjectiveIds` 引用前置单元的精确目标，禁止未知或前向引用；中后期 Project 必须综合至少两个前置单元，并在里程碑中实际使用声明的前置目标。
 2. **质量驱动课件生成 (Risk-Adaptive Learning Loop)**：动态联网检索资料后先生成 Draft，并用确定性规则评估长度、目标覆盖、结构、示例、边界和误区。只有高置信草稿才跳过 Critique；存在风险时仍执行深度提炼，最后统一进入结构化 Polish、Zod 校验、内容质量闸门和按错误类型执行的有界局部修复。Project 单元还会额外生成 `ProjectSpec`，落盘为 `PROJECT.md`，包含里程碑、交付物、文件清单和 rubric。
 3. **多语言执行器沙盒 (Polyglot Runner)**：底层解耦硬编码，基于调度器架构自动运行并验证不同语言的作业代码：
-   - **原生本地支持**：TypeScript (`tsx`), Python (`unittest`), Bash (`shell`), Rust (`rustc`) 可直接在本地编译与断言。
+   - **原生本地支持**：TypeScript (`tsx`), Python (`unittest`), Bash (`shell`), Rust (`rustc`) 可直接在本地编译与断言。生成或提交 Rust 练习前必须先安装 [Rust 工具链](https://rustup.rs)，并确认新终端中 `rustc --version` 可执行。
    - **Piston 云端引擎支持**：对于 C++, Java, Go, Ruby, Swift 等数十种小众或主流语言，系统会自动生成测试断言代码并无缝投递至 Piston API 沙箱进行云端执行，**实现零本地依赖的万物皆可学**！
-4. **版本化缓存与可信来源包 (Versioned Cache & Source Pack)**：缓存键包含模型、提示词版本、schema 与来源策略版本；来源会重新校验、清洗提示注入、规范化 URL、去重并按可信度与相关性排序。检索使用 24 小时新鲜缓存与 30 天应急缓存，提供方短暂故障时会明确标记并复用已验证旧包；`stale` 状态会随课程持久化并由 `fc audit` 告警，发布 manifest 同时记录来源 URL、hash 与策略版本。同一并发请求仍通过 single-flight 合并。
+4. **版本化缓存与可信来源包 (Versioned Cache & Source Pack)**：缓存键包含模型、提示词版本、schema 与来源策略版本；来源会重新校验、清洗提示注入、规范化 URL、去重并按可信度与相关性排序。检索使用 24 小时新鲜缓存与 30 天应急缓存，Tavily 瞬时网络/限流/5xx 会有界重试；技术主题缺少可靠来源时会补充官方域名检索，并对已知 Rust/Tokio/Axum/SQLx/Redis 文档执行官方页面兜底。`stale` 状态会随课程持久化并由 `fc audit` 告警，发布 manifest 同时记录来源 URL、hash 与策略版本。同一并发请求仍通过 single-flight 合并。
 5. **交互式 AI 助教批改 (Assessment & TA Reviewer)**：不仅检测代码测试是否通过，还会自动收集并**支持数字/字母/括号多种格式归一化校验**选择题（Quiz）答案。大模型扮演极具共情力与专业度的 AI TA，提供多阶段渐进式 Hints（根据尝试次数提供概念指引、方向锁定、或伪代码提示）以及有温度的诊断反馈。
 6. **自适应补救路线 (Adaptive Remediation)**：当同一单元连续失败到第 2 次时，系统会根据失败测试、Quiz 错题和诊断结果生成一个短小的 `remediation` 补救单元，自动插回学习计划；通关补救单元后会通过 `nextIfPassed` 路由回原单元重新挑战。
 7. **课程质量审计 (Curriculum Audit)**：提供 `fc audit` 本地质量闸门，扫描当前计划里的讲义、Quiz、练习测试、ProjectSpec、Remediation 路由和 fallback 标记，输出质量分与可操作问题清单，也支持 `--json` 接入脚本。
@@ -69,8 +69,15 @@ npm run dev -- plan
 # 开启当前学习单元，生成讲义与代码模板
 npm run dev -- start
 
+# 仅检查内容质量：保留检索、Pass 1~3、结构/题目/引用/目标覆盖门，跳过参考解答实跑
+# 预览写入 .fuckcolloge/previews/<unitId>/，不会更新计划、manifest 或 solution.*
+npm run dev -- start --content-only
+
 # 【可选】一键并发离线生成大纲中所有单元的讲义与代码骨架以供预览
 npm run dev -- generate-all
+
+# 批量生成所有单元的隔离内容预览；跳过参考解答实跑，不修改正式课程和学习者答案
+npm run dev -- generate-all --content-only
 
 # 【可选】提高预生成吞吐：最多允许 4 个并发，按启动间隔做限流
 npm run dev -- generate-all --concurrency 2 --stagger-ms 1500

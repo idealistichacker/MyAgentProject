@@ -4,12 +4,23 @@ import { GeneratedUnitQualityError } from '../agents/generatedUnitQuality.js';
 import { loadPlan } from '../state/fsState.js';
 import type { LLMProvider } from '../providers/types.js';
 import { InstrumentedProvider } from '../providers/instrumentedProvider.js';
-import { qualityReportSchema, type GenerationCheckpoint, type GenerationJob, type GenerationMetrics, type QualityReport, type SeedUnit } from '../types.js';
+import {
+  qualityReportSchema,
+  type ArtifactManifest,
+  type GenerationCheckpoint,
+  type GenerationJob,
+  type GenerationMetrics,
+  type LearningPlan,
+  type QualityReport,
+  type SeedUnit,
+} from '../types.js';
 import { stableStringify } from '../utils/cache.js';
 import {
   createGenerationJob,
   createPassedQualityReport,
   publishUnitArtifacts,
+  writePreviewUnitArtifacts,
+  type PreviewUnitArtifacts,
   saveGenerationJob,
   type PublishedUnitArtifacts,
 } from './publisher.js';
@@ -18,12 +29,13 @@ export interface GenerateAndPublishOptions {
   provider?: LLMProvider;
   resetSolution?: boolean;
   resumeFromJob?: GenerationJob;
+  contentOnly?: boolean;
 }
 
 export interface GenerateAndPublishResult {
   unit: SeedUnit;
   job: GenerationJob;
-  artifacts: PublishedUnitArtifacts;
+  artifacts: PublishedUnitArtifacts | PreviewUnitArtifacts;
 }
 
 export async function generateAndPublishUnit(
@@ -39,12 +51,7 @@ export async function generateAndPublishUnit(
     throw new Error(`Unknown unit "${unitId}".`);
   }
 
-  const projectUnit = plan.units.find((candidate) => candidate.type === 'project');
-  const inputHash = hashInput({
-    unit,
-    learnerProfile: plan.learnerProfile,
-    project: projectUnit ? { id: projectUnit.id, title: projectUnit.title, description: projectUnit.description } : null,
-  });
+  const inputHash = getGenerationInputHash(plan, unit);
   if (options.resumeFromJob) {
     if (options.resumeFromJob.unitId !== unit.id) {
       throw new Error(`Cannot resume job "${options.resumeFromJob.id}" for a different unit.`);
@@ -52,16 +59,25 @@ export async function generateAndPublishUnit(
     if (options.resumeFromJob.inputHash !== inputHash) {
       throw new Error(`Cannot resume job "${options.resumeFromJob.id}" because its generation input has changed.`);
     }
+    const requestedMode = options.contentOnly ? 'content-only' : 'full';
+    if (options.resumeFromJob.validationMode !== requestedMode) {
+      throw new Error(`Cannot resume job "${options.resumeFromJob.id}" with a different validation mode.`);
+    }
   }
   const startedAt = Date.now();
   const stages: Record<string, number> = {};
   const instrumentedProvider = options.provider ? new InstrumentedProvider(options.provider) : undefined;
-  let job = createGenerationJob(unit.id, inputHash, options.resumeFromJob);
+  let job = createGenerationJob(
+    unit.id,
+    inputHash,
+    options.resumeFromJob,
+    options.contentOnly ? 'content-only' : 'full'
+  );
   saveGenerationJob(job);
 
   try {
     let artifact = unit;
-    let status: 'published' | 'offline' = 'offline';
+    let status: 'published' | 'preview' | 'offline' = options.contentOnly ? 'preview' : 'offline';
     let qualityReport: QualityReport;
     if (!isPublishableOfflineUnit(unit)) {
       if (!options.provider) {
@@ -71,13 +87,14 @@ export async function generateAndPublishUnit(
       saveGenerationJob(job);
       const generationStartedAt = Date.now();
       artifact = await generateUnitContent(unit, plan, instrumentedProvider, {
+        validationMode: options.contentOnly ? 'content-only' : 'full',
         onCheckpoint: (checkpoint) => {
           job = recordGenerationCheckpoint(job, checkpoint);
           saveGenerationJob(job);
         },
       });
       stages.generation = Date.now() - generationStartedAt;
-      status = 'published';
+      status = options.contentOnly ? 'preview' : 'published';
     }
 
     const validationStartedAt = Date.now();
@@ -86,6 +103,9 @@ export async function generateAndPublishUnit(
     qualityReport = createPassedQualityReport([
       'schema validation',
       'content and exercise quality gate',
+      options.contentOnly
+        ? 'reference solution execution skipped for content-only preview'
+        : 'reference solution execution',
       'artifact publication readiness',
     ]);
     job = {
@@ -97,17 +117,25 @@ export async function generateAndPublishUnit(
     saveGenerationJob(job);
 
     const publicationStartedAt = Date.now();
-    job = transition(job, 'publishing', 'publishing');
-    saveGenerationJob(job);
-    const artifacts = publishUnitArtifacts(artifact, {
-      inputHash,
-      job,
-      qualityReport,
-      status,
-      resetSolution: options.resetSolution,
-      expectedPlanRevision: plan.revision,
-    });
-    stages.publication = Date.now() - publicationStartedAt;
+    let artifacts: PublishedUnitArtifacts | PreviewUnitArtifacts;
+    if (status === 'preview') {
+      job = transition(job, 'preview', 'previewing');
+      saveGenerationJob(job);
+      artifacts = writePreviewUnitArtifacts(artifact);
+      stages.preview = Date.now() - publicationStartedAt;
+    } else {
+      job = transition(job, 'publishing', 'publishing');
+      saveGenerationJob(job);
+      artifacts = publishUnitArtifacts(artifact, {
+        inputHash,
+        job,
+        qualityReport,
+        status,
+        resetSolution: options.resetSolution,
+        expectedPlanRevision: plan.revision,
+      });
+      stages.publication = Date.now() - publicationStartedAt;
+    }
 
     job = {
       ...transition(job, status, 'completed'),
@@ -131,6 +159,67 @@ export async function generateAndPublishUnit(
     saveGenerationJob(job);
     throw error;
   }
+}
+
+export function getGenerationInputHash(plan: LearningPlan, unit: SeedUnit): string {
+  const projectUnit = plan.units.find((candidate) => candidate.type === 'project');
+  return hashInput({
+    unit: plan.origin === 'generated' ? generatedUnitSpecification(unit) : unit,
+    learnerProfile: plan.learnerProfile,
+    project: projectUnit
+      ? { id: projectUnit.id, title: projectUnit.title, description: projectUnit.description }
+      : null,
+  });
+}
+
+export function isArtifactManifestReusable(
+  manifest: ArtifactManifest | undefined,
+  plan: LearningPlan,
+  unit: SeedUnit
+): boolean {
+  if (manifest?.status !== 'published' && manifest?.status !== 'offline') {
+    return false;
+  }
+  return manifest.inputHash === getGenerationInputHash(plan, unit);
+}
+
+export function shouldGenerateUnit(
+  manifest: ArtifactManifest | undefined,
+  plan: LearningPlan,
+  unit: SeedUnit,
+  options: { force?: boolean; contentOnly?: boolean } = {}
+): boolean {
+  return Boolean(options.contentOnly || options.force)
+    || !isArtifactManifestReusable(manifest, plan, unit);
+}
+
+function generatedUnitSpecification(unit: SeedUnit): Pick<
+  SeedUnit,
+  | 'id'
+  | 'type'
+  | 'title'
+  | 'description'
+  | 'prerequisites'
+  | 'objectives'
+  | 'prerequisiteObjectiveIds'
+  | 'passCriteria'
+  | 'remediationForUnitId'
+  | 'nextIfPassed'
+  | 'nextIfFailed'
+> {
+  return {
+    id: unit.id,
+    type: unit.type,
+    title: unit.title,
+    description: unit.description,
+    prerequisites: unit.prerequisites,
+    objectives: unit.objectives,
+    prerequisiteObjectiveIds: unit.prerequisiteObjectiveIds,
+    passCriteria: unit.passCriteria,
+    remediationForUnitId: unit.remediationForUnitId,
+    nextIfPassed: unit.nextIfPassed,
+    nextIfFailed: unit.nextIfFailed,
+  };
 }
 
 export function qualityReportFromGenerationError(error: unknown): QualityReport | undefined {

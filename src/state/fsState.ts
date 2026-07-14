@@ -13,6 +13,7 @@ import {
   getRecoveryDir,
   getLearnerPath,
   getPlanPath,
+  getPreviewsDir,
   getStatePath,
   getTmpDir,
 } from '../utils/paths.js';
@@ -47,6 +48,7 @@ export function ensureProjectDirs(): void {
     getManifestsDir(),
     getLocksDir(),
     getRecoveryDir(),
+    getPreviewsDir(),
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -124,7 +126,7 @@ export function writeTextFile(filePath: string, content: string): void {
     fs.fsyncSync(descriptor);
     fs.closeSync(descriptor);
     descriptor = undefined;
-    fs.renameSync(tempPath, filePath);
+    renameAtomicFileWithRetry(tempPath, filePath);
   } catch (error) {
     if (descriptor !== undefined) {
       fs.closeSync(descriptor);
@@ -134,6 +136,34 @@ export function writeTextFile(filePath: string, content: string): void {
     }
     throw error;
   }
+}
+
+export function renameAtomicFileWithRetry(
+  sourcePath: string,
+  destinationPath: string,
+  dependencies: {
+    rename?: (source: string, destination: string) => void;
+    sleep?: (milliseconds: number) => void;
+  } = {}
+): void {
+  const rename = dependencies.rename ?? fs.renameSync;
+  const sleep = dependencies.sleep ?? sleepSync;
+  const maximumAttempts = 5;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      rename(sourcePath, destinationPath);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const retryable = code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
+      if (!retryable || attempt === maximumAttempts) throw error;
+      sleep(25 * (2 ** (attempt - 1)));
+    }
+  }
+}
+
+function sleepSync(milliseconds: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
 export function withFileLock<T>(

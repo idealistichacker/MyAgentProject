@@ -30,6 +30,10 @@ import {
   getLessonPath,
   getManifestsDir,
   getPlanPath,
+  getPreviewArtifactPath,
+  getPreviewLessonPath,
+  getPreviewProjectSpecPath,
+  getPreviewStarterPath,
   getProjectSpecPath,
   getPublicationLockPath,
   getPublicationRecoveryDir,
@@ -55,6 +59,14 @@ export interface PublishedUnitArtifacts {
   manifest: ArtifactManifest;
 }
 
+export interface PreviewUnitArtifacts {
+  lessonPath: string;
+  starterPath?: string;
+  projectSpecPath?: string;
+  artifactPath: string;
+  solutionPreserved: true;
+}
+
 export interface PublicationRecoveryResult {
   unitId: string;
   action: 'finalized' | 'rolled-back' | 'manual-required' | 'recovery-failed';
@@ -70,7 +82,8 @@ export interface PublicationRecoveryInspection {
 export function createGenerationJob(
   unitId: string,
   inputHash: string,
-  parentJob?: GenerationJob
+  parentJob?: GenerationJob,
+  validationMode: 'full' | 'content-only' = parentJob?.validationMode ?? 'full'
 ): GenerationJob {
   const now = new Date().toISOString();
   return generationJobSchema.parse({
@@ -80,6 +93,7 @@ export function createGenerationJob(
     stage: 'planned',
     attempt: parentJob ? parentJob.attempt + 1 : 1,
     parentJobId: parentJob?.id,
+    validationMode,
     inputHash,
     startedAt: now,
     updatedAt: now,
@@ -399,6 +413,33 @@ export function publishUnitArtifacts(
       throw error;
     }
   });
+}
+
+export function writePreviewUnitArtifacts(unit: SeedUnit): PreviewUnitArtifacts {
+  const lessonPath = getPreviewLessonPath(unit.id);
+  const artifactPath = getPreviewArtifactPath(unit.id);
+  const extension = unit.exercise ? getExtensionForLanguage(unit.exercise.language) : undefined;
+  const starterPath = extension ? getPreviewStarterPath(unit.id, extension) : undefined;
+  const projectSpecPath = unit.type === 'project' && unit.project
+    ? getPreviewProjectSpecPath(unit.id)
+    : undefined;
+
+  writeTextFile(lessonPath, renderLessonMarkdown(unit));
+  writeJson(artifactPath, unit);
+  if (starterPath && unit.exercise) {
+    writeTextFile(starterPath, unit.exercise.starterCode);
+  }
+  if (projectSpecPath) {
+    writeTextFile(projectSpecPath, renderProjectSpecMarkdown(unit));
+  }
+
+  return {
+    lessonPath,
+    starterPath,
+    projectSpecPath,
+    artifactPath,
+    solutionPreserved: true,
+  };
 }
 
 export function createPassedQualityReport(checks: string[]): QualityReport {

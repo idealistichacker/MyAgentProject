@@ -1,5 +1,7 @@
+import assert from 'node:assert/strict';
 import test from 'node:test';
 import { verifyReferenceSolution } from '../../src/runner/referenceVerifier.js';
+import { formatRustCompilerError } from '../../src/runner/rustRunner.js';
 import type { ExerciseSpec } from '../../src/types.js';
 
 test('runs a TypeScript reference solution against all generated tests', async () => {
@@ -49,4 +51,13 @@ test('runs Python tests containing nested JSON and apostrophes', async () => {
       '',
     ].join('\n')
   );
+});
+
+test('reports an actionable error when the Rust compiler is unavailable', () => {
+  const error = Object.assign(new Error('spawn rustc ENOENT'), { code: 'ENOENT' });
+  const message = formatRustCompilerError(error);
+
+  assert.match(message, /rustc/i);
+  assert.match(message, /rustup\.rs/i);
+  assert.match(message, /restart the terminal/i);
 });
