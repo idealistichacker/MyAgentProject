@@ -13,7 +13,9 @@ export async function runBashExercise(
   exerciseDir: string
 ): Promise<ExerciseRunResult> {
   const testPath = getTestPath(unitId, '.sh');
-  const testSource = buildTestSource(exercise);
+  const testSource = exercise.testCode && exercise.testCode.trim().length > 0
+    ? exercise.testCode
+    : buildTestSource(exercise);
   writeTextFile(testPath, testSource);
 
   try {

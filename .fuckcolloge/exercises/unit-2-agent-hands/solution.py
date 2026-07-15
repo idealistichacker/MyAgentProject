@@ -55,20 +55,23 @@ def confine_path(workspace: Path, user_path: str) -> Path:
     #         bypassing security checks in lower layers.
     #         Check if '\x00' is in user_path. If so, raise ValueError
     #         with the message "null byte in path".
-    # TODO: implement null byte check
+    if "\x00" in user_path:
+        raise ValueError("null byte in path")
 
     # Step 2: Join user_path to workspace and resolve.
     #         Use (workspace / user_path).resolve(strict=False) to get the
     #         real path. strict=False allows paths to non-existent files
     #         (needed for write_file to create new files).
-    # TODO: compute candidate = (workspace / user_path).resolve(strict=False)
+    candidate = (workspace / user_path).resolve(strict=False)
 
     # Step 3: Verify the candidate is within workspace.
     #         Try candidate.relative_to(workspace). If it raises ValueError,
     #         the path has escaped — raise PermissionError with a clear message
     #         like f"path escapes workspace: {candidate}".
-    # TODO: implement the boundary check
+    try:
+        candidate.relative_to(workspace)
+    except ValueError:
+        raise PermissionError(f"path escapes workspace: {candidate}")
 
     # Step 4: Return the safe, resolved path.
-    # TODO: return candidate
-    pass
+    return candidate

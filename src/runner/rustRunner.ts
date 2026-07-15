@@ -15,7 +15,9 @@ export async function runRustExercise(
   exerciseDir: string
 ): Promise<ExerciseRunResult> {
   const testPath = path.join(exerciseDir, 'test.rs');
-  const testSource = buildTestSource(exercise);
+  const testSource = exercise.testCode && exercise.testCode.trim().length > 0
+    ? exercise.testCode
+    : buildTestSource(exercise);
   writeTextFile(testPath, testSource);
 
   // Default to false unless proven passed
