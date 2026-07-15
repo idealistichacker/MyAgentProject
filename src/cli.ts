@@ -21,6 +21,8 @@ import { createProvider } from './providers/types.js';
 import type { LLMProvider } from './providers/types.js';
 import fs from 'node:fs';
 import { runExercise } from './runner/runnerFactory.js';
+import { inspectSubmissionFiles } from './runner/submissionInspection.js';
+import { runAssessmentFeedbackFlow } from './assessment/feedbackFlow.js';
 import {
   ensureProjectDirs,
   loadConfig,
@@ -346,11 +348,21 @@ program.command('submit [unitId]')
       state.lastAssessmentId = assessment.id;
       state.updatedAt = assessment.createdAt;
 
-      const remediationNotice = await maybeInsertRemediation(unit, assessment, plan, state, provider, attemptCount);
-      saveState(state);
-      printAssessment(assessment);
-
-      console.log(color.yellow('\n⚠️ 有前置知识测试未通过！你需要先完全掌握这些概念才能解锁后续的代码评测哦！\n请复习本单元的讲义后再重新执行 `fc submit` 解锁练习。'));
+      const remediationNotice = await runAssessmentFeedbackFlow({
+        persistAssessment: () => saveState(state),
+        presentAssessment: () => {
+          printAssessment(assessment);
+          console.log(color.yellow('\n⚠️ 有前置知识测试未通过！你需要先完全掌握这些概念才能解锁后续的代码评测哦！\n请复习本单元的讲义后再重新执行 `fc submit` 解锁练习。'));
+        },
+        prepareRemediation: async () => {
+          const notice = await maybeInsertRemediation(unit, assessment, plan, state, provider, attemptCount);
+          if (notice) saveState(state);
+          return notice;
+        },
+        onRemediationFailure: (error) => {
+          console.warn('补救单元生成失败；本次诊断和提交次数已经保存。', error);
+        },
+      });
       if (remediationNotice) {
         note(`${remediationNotice}\n执行 ${color.cyan('`fc start`')} 开始针对性补救，通关后会回到原单元。`, '自适应补救路线');
       }
@@ -358,17 +370,21 @@ program.command('submit [unitId]')
       return;
     }
 
+    const submissionFiles = inspectSubmissionFiles(unit.id, unit.title, unit.exercise.language);
+    console.log(color.gray(`即将测试 solution: ${submissionFiles.solutionPath}`));
+    if (submissionFiles.matchesStarter) {
+      console.warn(color.yellow('⚠ 当前 solution 与 starter 完全相同，可能尚未开始实现。'));
+    }
+
     const s = spinner();
     s.start('正在运行本地测试断言...');
-    const exerciseDir = getExerciseDir(unit.id, unit.title);
-    const runResult = await runExercise(unit.id, unit.exercise, exerciseDir);
+    const runResult = await runExercise(unit.id, unit.exercise, submissionFiles.exerciseDir);
     s.stop(color.green('✔ 本地测试执行完毕'));
     
     s.start('FCAgent AssessmentReviewer 正在多维分析你的表现...');
     let learnerCode = '';
     try {
-      const extension = getExtensionForLanguage(unit.exercise.language);
-      learnerCode = fs.readFileSync(getSolutionPath(unit.id, extension, unit.title), 'utf-8');
+      learnerCode = fs.readFileSync(submissionFiles.solutionPath, 'utf-8');
     } catch (err) {
       console.warn('Could not read solution code:', err);
     }
@@ -390,10 +406,18 @@ program.command('submit [unitId]')
       }
     }
 
-    const remediationNotice = await maybeInsertRemediation(unit, assessment, plan, state, provider, attemptCount);
-    saveState(state);
-
-    printAssessment(assessment, runResult.stdout, runResult.stderr);
+    const remediationNotice = await runAssessmentFeedbackFlow({
+      persistAssessment: () => saveState(state),
+      presentAssessment: () => printAssessment(assessment, runResult.stdout, runResult.stderr),
+      prepareRemediation: async () => {
+        const notice = await maybeInsertRemediation(unit, assessment, plan, state, provider, attemptCount);
+        if (notice) saveState(state);
+        return notice;
+      },
+      onRemediationFailure: (error) => {
+        console.warn('补救单元生成失败；本次诊断和提交次数已经保存。', error);
+      },
+    });
     
     if (assessment.passed) {
       outro(color.green('🎉 恭喜通关本单元！执行 `fc next` 进入下一关！'));
@@ -813,23 +837,23 @@ async function maybeInsertRemediation(
     return '';
   }
 
-  try {
-    const existingRemediationIndex = plan.units.findIndex((item) => item.remediationForUnitId === unit.id);
-    if (existingRemediationIndex !== -1) {
-      const updatedPlan = updatePlan(plan.revision, (draft) => {
-        const currentRemediationIndex = draft.units.findIndex((item) => item.remediationForUnitId === unit.id);
-        if (currentRemediationIndex === -1) {
-          throw new Error(`Remediation unit for "${unit.id}" disappeared during update.`);
-        }
-        draft.currentIndex = currentRemediationIndex;
-      });
-      Object.assign(plan, updatedPlan);
-      state.currentUnitId = updatedPlan.units[updatedPlan.currentIndex].id;
-      state.updatedAt = updatedPlan.updatedAt;
-      return `已切换到补救单元：${state.currentUnitId}`;
-    }
+  const existingRemediationIndex = plan.units.findIndex((item) => item.remediationForUnitId === unit.id);
+  if (existingRemediationIndex !== -1) {
+    const updatedPlan = updatePlan(plan.revision, (draft) => {
+      const currentRemediationIndex = draft.units.findIndex((item) => item.remediationForUnitId === unit.id);
+      if (currentRemediationIndex === -1) {
+        throw new Error(`Remediation unit for "${unit.id}" disappeared during update.`);
+      }
+      draft.currentIndex = currentRemediationIndex;
+    });
+    Object.assign(plan, updatedPlan);
+    state.currentUnitId = updatedPlan.units[updatedPlan.currentIndex].id;
+    state.updatedAt = updatedPlan.updatedAt;
+    return `已切换到补救单元：${state.currentUnitId}`;
+  }
 
-    const remediationSpinner = spinner();
+  const remediationSpinner = spinner();
+  try {
     remediationSpinner.start('FCAgent 正在为这次失败生成一个短小补救单元...');
     const remediationUnit = await generateRemediationUnit(unit, assessment, plan, provider);
     const updatedPlan = updatePlan(plan.revision, (draft) => {
@@ -844,8 +868,8 @@ async function maybeInsertRemediation(
     remediationSpinner.stop(color.green('✔ 补救单元已插入学习路线'));
     return `已插入补救单元：${remediationUnit.id}`;
   } catch (err) {
-    console.warn('Failed to insert remediation unit:', err);
-    return '';
+    remediationSpinner.stop(color.red('✖ 补救单元生成失败'));
+    throw err;
   }
 }
 

@@ -111,7 +111,8 @@ npm run test:golden
 
 # (在本地编写 solution 文件，阅读 lesson；Project 单元还会生成 PROJECT.md)
 
-# 提交作业（将自动运行本地测试、回答 Quiz 并获得 AI TA 渐进式启发诊断）
+# 提交作业（会显示实际测试的主题化 solution 路径；未修改 starter 时会警告）
+# 评估完成后先保存并展示诊断，再尝试生成补救单元，补救失败不会丢失本次记录
 npm run dev -- submit
 
 # 【可选】主动跳过当前死磕的单元（尝试失败 5 次后，系统也会引导你跳过）
