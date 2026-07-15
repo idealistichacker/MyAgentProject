@@ -1,0 +1,144 @@
+{
+  "data": {
+    "id": "unit-5-agent-immune",
+    "type": "unit",
+    "title": "Agent的\"免疫系统\"——错误诊断与自动调试闭环优化",
+    "description": "你的Agent已经能跑起来了，但它可能像个新手医生——看到咳嗽就开感冒药，不管你是肺炎还是过敏。本单元为Agent打造'专科诊断能力'：错误分类与模式匹配、堆栈跟踪深度解析、常见bug模式库（off-by-one、NoneType、导入循环等）的构建，以及'修复策略选择'机制——让Agent不是盲目改代码，而是先诊断再下药。你还将学习如何设计'修复验证'步骤：修改后自动运行测试用例确认修复有效，避免'改了A坏了B'的连锁灾难。这是让你的Agent从'能用'进化到'好用'的关键一跃。",
+    "prerequisites": [
+      "unit-4-project"
+    ],
+    "objectives": [
+      "构建Python错误分类体系：语法错误/导入错误/运行时错误/逻辑错误的自动识别与分类",
+      "实现堆栈跟踪解析器，提取关键错误位置（文件名、行号、错误类型）并定位源码",
+      "设计'修复策略库'：针对不同错误类型预设修复模式与LLM提示模板",
+      "实现修复验证机制：修改后自动运行测试用例，确认修复有效且无回归"
+    ],
+    "references": [],
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    },
+    "content": "# Python 错误自动诊断与修复系统：从分类到验证\n\n> *\"你要造一个能自我修复的 Agent，它首先得能'看懂'自己犯了什么错。这一课，我们打造 Agent 的诊断之眼。\"*\n\n## 一、错误分类体系：四层模型与边界陷阱\n\nPython 的错误并非扁平集合，而是有严格层次。我们必须按**触发时机**与**可捕获性**建立四层分类：\n\n### 1.1 语法错误（SyntaxError 及其子类）\n\n在字节码编译阶段（`compile()`）触发，**早于任何运行时逻辑**。关键属性：\n\n```python\ntry:\n    compile(\"x +\", \"<test>\", \"exec\")\nexcept SyntaxError as e:\n    print(e.lineno, e.offset, e.text, e.filename)\n```\n\n**陷阱一**：`IndentationError` 与 `TabError` 是 `SyntaxError` 的子类，分类器若用 `type(e) is SyntaxError` 会漏判，必须用 `isinstance(e, SyntaxError)`。\n\n**陷阱二**：`SyntaxError` 可被 `try/except` 捕获，但捕获点与出错点不同——它发生在编译期，traceback 中通常只有一帧。解析器必须特殊处理：直接读取 `e.lineno` 与 `e.text`，而非依赖 `traceback.extract_tb`。\n\n### 1.2 导入错误（ImportError / ModuleNotFoundError）\n\n`ModuleNotFoundError` 是 `ImportError` 的子类（Python 3.6+）。分类时**先判子类再判父类**，否则信息丢失。常见根因有三：模块未安装、循环导入、`sys.path` 缺失。修复策略需区分对待——前两者靠环境/重构，后者靠路径注入。\n\n### 1.3 运行时错误（RuntimeError 的广义集合）\n\n指 `Exception` 树下除上述两类之外的所有异常：`NameError`、`TypeError`、`ValueError`、`ZeroDivisionError`、`AttributeError` 等。\n\n**关键陷阱**：`SystemExit` 与 `KeyboardInterrupt` 继承自 `BaseException` 而非 `Exception`。分类器若用 `except Exception` 兜底，会漏掉它们；若用 `except BaseException`，则会误吞用户 Ctrl+C。正确做法是显式枚举目标类型，或用 `Exception` 作为边界并单独标注 `BaseException` 子类为\"不可修复\"。\n\n### 1.4 逻辑错误（无异常，输出错误）\n\n最隐蔽——程序正常返回但结果错误。自动分类器无法靠 traceback 识别，必须依赖**测试断言失败**或**属性测试（property-based testing）**作为信号源。我们将 `AssertionError` 归入此类入口，但需注意：`AssertionError` 本身是运行时异常，分类器要结合\"是否来自测试代码\"做二次判定。\n\n### 分类决策树（伪码）\n\n```python\ndef classify(exc: BaseException) -> str:\n    if isinstance(exc, SyntaxError):\n        return \"syntax\"\n    if isinstance(exc, ImportError):\n        return \"import\"\n    if isinstance(exc, Exception):\n        # 需结合调用栈判断是否为逻辑错误\n        return \"logic\" if _from_test_assertion(exc) else \"runtime\"\n    return \"system\"  # SystemExit / KeyboardInterrupt\n```\n\n## 二、堆栈跟踪解析器：提取与定位\n\n### 2.1 核心数据结构\n\nPython 标准库 `traceback` 提供 `FrameSummary`，含 `filename`、`lineno`、`name`、`line` 四字段。解析器应基于 `traceback.extract_tb(tb)` 而非字符串正则——后者脆弱且版本敏感。\n\n```python\nimport sys, traceback\n\ndef parse(exc):\n    tb = exc.__traceback__\n    frames = traceback.extract_tb(tb)\n    # 最内层用户帧（过滤库代码）\n    user_frames = [f for f in frames if not _is_stdlib(f.filename)]\n    if not user_frames:\n        user_frames = frames\n    culprit = user_frames[-1]\n    return {\n        \"type\": type(exc).__name__,\n        \"message\": str(exc),\n        \"file\": culprit.filename,\n        \"line\": culprit.lineno,\n        \"func\": culprit.name,\n        \"source\": culprit.line,\n    }\n```\n\n### 2.2 关键陷阱\n\n**陷阱三——链式异常**：Python 3 引入 `__cause__`（显式 `raise ... from`）与 `__context__`（隐式）。解析器必须递归追溯，否则只看到包装层而错过根因。使用 `traceback.walk_tb` 或手动遍历 `__cause__`/`__context__`。\n\n**陷阱四——SyntaxError 无完整 traceback**：`exc.__traceback__` 可能为 `None` 或仅含编译器帧。此时必须回退到 `exc.lineno`、`exc.filename`、`exc.text`。\n\n**陷阱五——源码定位偏移**：`FrameSummary.line` 是已剥离缩进的源码行，但 `SyntaxError.offset` 指向原始行的字符位置。定位高亮时需保留原始缩进，否则列号错位。\n\n**陷阱六——exec/eval 动态代码**：`filename` 为 `\"<string>\"` 或 `\"<console>\"`，无对应磁盘文件。解析器需检测并降级为\"无法定位源码\"。\n\n## 三、修复策略库：分型模板\n\n不同错误类型需要差异化的 LLM 提示模板。核心原则：**提供充足上下文（错误行±5行）、完整 traceback、相关函数签名、测试期望**。\n\n| 错误类型 | 策略模式 | 提示模板要点 |\n|---------|---------|------------|\n| SyntaxError | 局部重写 | 提供出错行及偏移，要求仅修正语法，禁止改逻辑 |\n| ImportError | 环境诊断 | 提供完整 import 语句与 `sys.path`，区分缺失依赖/循环导入 |\n| NameError/AttributeError | 作用域分析 | 提供函数定义与调用上下文，检查拼写与作用域泄漏 |\n| TypeError | 签名比对 | 提供函数签名与实参类型，要求类型推断与修正 |\n| 逻辑错误 | 断言驱动 | 提供失败测试用例与实际输出，要求最小化修改使测试通过 |\n\n**陷阱七——LLM 倾向过度修改**。模板中必须显式约束：\"仅修改与错误直接相关的行，禁止重构无关代码\"，并在系统提示中加入 diff 格式要求，便于后续精确应用。\n\n## 四、修复验证机制：防回归闭环\n\n### 4.1 验证流程\n\n1. **快照基线**：修复前运行完整测试套件，记录通过/失败集合。\n2. **应用补丁**：以 diff 形式修改源码，保留原始备份。\n3. **重跑测试**：优先运行原失败用例，确认转绿；再跑全套件。\n4. **回归判定**：对比基线，任何原通过用例变为失败即判定回归。\n5. **回滚或保留**：回归则自动回滚，并记录失败原因供下一轮策略选择。\n\n```python\ndef verify(patch_applied, failing_test, full_suite):\n    baseline = run_suite(full_suite)  # 修复前快照\n    if not patch_applied:\n        return False, \"patch failed\"\n    new_result = run_suite(full_suite)\n    if not new_result[failing_test].passed:\n        return False, \"target test still fails\"\n    regressions = [t for t in baseline.passed if not new_result[t].passed]\n    if regressions:\n        return False, f\"regressions: {regressions}\"\n    return True, \"fixed without regression\"\n```\n\n### 4.2 关键陷阱\n\n**陷阱八——测试本身有随机性或依赖外部状态**（网络、时间、文件系统）。验证前需固定随机种子、mock 外部依赖，否则基线不稳定，回归判定失效。\n\n**陷阱九——修复引入新测试通过但破坏不变量**。仅靠现有测试不足，应补充**属性测试**或**不变量断言**作为额外守卫。\n\n**陷阱十——无限修复循环**。LLM 反复尝试不同补丁却始终失败。必须设置最大重试次数（如 3 次），并在每次失败后将失败原因追加到上下文，避免重复同一策略。\n\n## 五、总结\n\n本系统的核心难点不在单点技术，而在**分类—解析—修复—验证**闭环的鲁棒性。分类决策树处理异常继承层次；解析器应对链式异常与动态代码；策略库按错误分型约束 LLM 行为；验证机制以基线对比防回归。每一环节都有边界陷阱，唯有显式处理才能构建可信的自动修复工具。\n\n> *\"Agent 的眼睛看到的不应只是'出错了'，而是'在哪里、出了什么错、根因是什么'。下一课，我们将把这些诊断结果喂给 LLM 大脑，让它决定如何动手修复。\"*",
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "你的 Agent 在修复一个有 bug 的项目时，捕获到了 IndentationError。分类器使用 `type(e) is SyntaxError` 来判断是否为语法错误。会发生什么？",
+        "options": [
+          "A) 正确识别为语法错误，因为 IndentationError 就是 SyntaxError",
+          "B) 无法识别——`type(IndentationError()) is SyntaxError` 为 False，分类器漏判",
+          "C) 抛出 TypeError，因为类型不兼容",
+          "D) IndentationError 根本不会被 except 捕获"
+        ],
+        "answer": "B",
+        "explanation": "IndentationError 是 SyntaxError 的子类，但 `type(e) is SyntaxError` 做的是精确类型匹配，不检查继承关系。必须使用 `isinstance(e, SyntaxError)` 才能正确识别子类。这是分类器最常见的边界陷阱。"
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "Agent 捕获到一个异常：`ValueError(\"invalid_value\")`，其 `__cause__` 为 `KeyError(\"missing_key\")`（通过 `raise ValueError(...) from KeyError(...)` 产生）。Agent 应该将哪个异常作为修复分析的核心目标？",
+        "options": [
+          "A) ValueError——因为它是最后抛出的，traceback 最顶层就是它",
+          "B) KeyError——因为 `__cause__` 表示显式因果链，根因才是修复的真正靶点",
+          "C) 两个都要修，缺一不可",
+          "D) 随机选一个，LLM 会自己判断"
+        ],
+        "answer": "B",
+        "explanation": "`__cause__` 表示显式因果链（raise...from），根因是修复的真正目标。只修包装层而不修根因会导致问题反复出现。解析器必须递归追溯 `__cause__` 和 `__context__` 链，否则只看到表象而错过病根。"
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "Agent 的修复验证流程中，以下哪种情况被判定为\"回归（regression）\"并触发自动回滚？",
+        "options": [
+          "A) 原失败测试仍然失败——修复没起作用",
+          "B) 原失败测试通过，但原本通过的测试变为失败——修复引入了新问题",
+          "C) 所有测试通过——修复成功",
+          "D) 修复过程中 LLM 返回了空响应"
+        ],
+        "answer": "B",
+        "explanation": "回归的定义是：修复引入的变更导致原本通过的测试失败。原失败测试仍失败只是\"未修复\"，不是回归。回归是最危险的——你修了一个 bug，却引入了新 bug。验证机制必须对比修复前后的基线快照来检测回归。"
+      },
+      {
+        "id": "q4",
+        "type": "choice",
+        "question": "Agent 使用 `except Exception` 作为兜底捕获。用户在 Agent 运行时按了 Ctrl+C 想中断它。会发生什么？",
+        "options": [
+          "A) Agent 正常捕获 KeyboardInterrupt 并尝试\"修复\"它",
+          "B) KeyboardInterrupt 继承自 BaseException 而非 Exception，不会被捕获，Agent 被正常中断",
+          "C) Agent 崩溃并抛出 SystemExit",
+          "D) 没有任何反应，Agent 继续运行"
+        ],
+        "answer": "B",
+        "explanation": "KeyboardInterrupt 继承自 BaseException 而非 Exception，`except Exception` 不会捕获它。这是 Python 的设计哲学——Ctrl+C 应该能可靠地中断程序，而不是被业务代码吞掉。分类器应将 BaseException 的非 Exception 子类标注为\"不可修复/系统级\"。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "diagnose_error",
+      "description": "造物主的诊断之眼——实现 Agent 的异常分类与根因追溯模块。你的 Agent 在执行代码时会捕获各种异常，此函数负责将异常分类到四层模型中的正确类别，并沿因果链追溯根因。这是 ReAct 循环中 Observe 阶段的核心组件——没有准确的诊断，后续的 Think 和 Act 就是无的放矢。",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "syntax_error_classification",
+          "input": [
+            "SyntaxError"
+          ],
+          "expected": "category=syntax"
+        },
+        {
+          "name": "indentation_error_subclass",
+          "input": [
+            "IndentationError"
+          ],
+          "expected": "category=syntax"
+        },
+        {
+          "name": "module_not_found_subclass",
+          "input": [
+            "ModuleNotFoundError"
+          ],
+          "expected": "category=import"
+        },
+        {
+          "name": "name_error_runtime",
+          "input": [
+            "NameError"
+          ],
+          "expected": "category=runtime"
+        },
+        {
+          "name": "system_exit_base_exception",
+          "input": [
+            "SystemExit"
+          ],
+          "expected": "category=system"
+        },
+        {
+          "name": "chained_exception_root_cause",
+          "input": [
+            "ValueError with KeyError cause"
+          ],
+          "expected": "root_cause_type=KeyError"
+        },
+        {
+          "name": "implicit_context_root_cause",
+          "input": [
+            "TypeError with IndexError context"
+          ],
+          "expected": "root_cause_type=IndexError"
+        }
+      ],
+      "hints": [
+        "使用 isinstance 而非 type() is 来检查类型——记住 IndentationError 是 SyntaxError 的子类，ModuleNotFoundError 是 ImportError 的子类。",
+        "分类顺序很重要：先判 SyntaxError，再判 ImportError，再判 Exception，最后兜底 BaseException。如果先判 Exception，所有子类都会被它截获。",
+        "追溯根因时，优先沿 __cause__ 链（显式 raise...from），若为 None 再沿 __context__ 链（隐式）。用 while 循环走到链的尽头。",
+        "SystemExit 和 KeyboardInterrupt 继承自 BaseException 而非 Exception——你的分类器必须能区分它们。"
+      ],
+      "testCode": "import json\nimport sys\nimport os\n\n# Import user's solution\nsys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))\nfrom solution import diagnose_error\n\ndef run_test(name, fn):\n    try:\n        passed, expected, actual = fn()\n        return {\"name\": name, \"passed\": passed, \"expected\": expected, \"actual\": actual, \"message\": \"\" if passed else \"mismatch\"}\n    except Exception as e:\n        return {\"name\": name, \"passed\": False, \"expected\": \"no exception\", \"actual\": str(e), \"message\": f\"{type(e).__name__}: {e}\"}\n\ntests = []\n\n# Test 1: SyntaxError classification\ndef t1():\n    exc = SyntaxError(\"invalid syntax\")\n    r = diagnose_error(exc)\n    ok = r.get(\"category\") == \"syntax\" and r.get(\"error_type\") == \"SyntaxError\"\n    return ok, \"category=syntax, error_type=SyntaxError\", f\"category={r.get('category')}, error_type={r.get('error_type')}\"\ntests.append(run_test(\"syntax_error_classification\", t1))\n\n# Test 2: IndentationError (subclass of SyntaxError) — must use isinstance\ndef t2():\n    exc = IndentationError(\"unexpected indent\")\n    r = diagnose_error(exc)\n    ok = r.get(\"category\") == \"syntax\"\n    return ok, \"category=syntax\", f\"category={r.get('category')}\"\ntests.append(run_test(\"indentation_error_subclass\", t2))\n\n# Test 3: ModuleNotFoundError (subclass of ImportError)\ndef t3():\n    exc = ModuleNotFoundError(\"No module named 'foo'\")\n    r = diagnose_error(exc)\n    ok = r.get(\"category\") == \"import\"\n    return ok, \"category=import\", f\"category={r.get('category')}\"\ntests.append(run_test(\"module_not_found_subclass\", t3))\n\n# Test 4: NameError (runtime)\ndef t4():\n    exc = NameError(\"name 'x' is not defined\")\n    r = diagnose_error(exc)\n    ok = r.get(\"category\") == \"runtime\"\n    return ok, \"category=runtime\", f\"category={r.get('category')}\"\ntests.append(run_test(\"name_error_runtime\", t4))\n\n# Test 5: SystemExit (BaseException, not Exception)\ndef t5():\n    exc = SystemExit(1)\n    r = diagnose_error(exc)\n    ok = r.get(\"category\") == \"system\"\n    return ok, \"category=system\", f\"category={r.get('category')}\"\ntests.append(run_test(\"system_exit_base_exception\", t5))\n\n# Test 6: Chained exception — explicit __cause__\ndef t6():\n    root = KeyError(\"missing key\")\n    wrapper = ValueError(\"bad value\")\n    wrapper.__cause__ = root\n    r = diagnose_error(wrapper)\n    ok = r.get(\"root_cause_type\") == \"KeyError\"\n    return ok, \"root_cause_type=KeyError\", f\"root_cause_type={r.get('root_cause_type')}\"\ntests.append(run_test(\"chained_exception_root_cause\", t6))\n\n# Test 7: Implicit chaining via __context__ (no __cause__)\ndef t7():\n    inner = IndexError(\"list index out of range\")\n    outer = TypeError(\"bad type\")\n    outer.__context__ = inner\n    outer.__cause__ = None\n    r = diagnose_error(outer)\n    ok = r.get(\"root_cause_type\") == \"IndexError\"\n    return ok, \"root_cause_type=IndexError\", f\"root_cause_type={r.get('root_cause_type')}\"\ntests.append(run_test(\"implicit_context_root_cause\", t7))\n\n# Test 8: No chaining — root cause is self\ndef t8():\n    exc = ZeroDivisionError(\"division by zero\")\n    r = diagnose_error(exc)\n    ok = r.get(\"root_cause_type\") == \"ZeroDivisionError\" and r.get(\"category\") == \"runtime\"\n    return ok, \"root_cause_type=ZeroDivisionError, category=runtime\", f\"root_cause_type={r.get('root_cause_type')}, category={r.get('category')}\"\ntests.append(run_test(\"no_chain_self_root\", t8))\n\n# Test 9: Deep chain — multiple __cause__ links\ndef t9():\n    root = FileNotFoundError(\"config.json\")\n    mid = RuntimeError(\"init failed\")\n    mid.__cause__ = root\n    top = ValueError(\"app crashed\")\n    top.__cause__ = mid\n    r = diagnose_error(top)\n    ok = r.get(\"root_cause_type\") == \"FileNotFoundError\"\n    return ok, \"root_cause_type=FileNotFoundError\", f\"root_cause_type={r.get('root_cause_type')}\"\ntests.append(run_test(\"deep_chain_root_cause\", t9))\n\n# Test 10: KeyboardInterrupt — BaseException subclass\ndef t10():\n    exc = KeyboardInterrupt()\n    r = diagnose_error(exc)\n    ok = r.get(\"category\") == \"system\"\n    return ok, \"category=system\", f\"category={r.get('category')}\"\ntests.append(run_test(\"keyboard_interrupt_base_exception\", t10))\n\nfor t in tests:\n    print(json.dumps(t))",
+      "starterCode": "def diagnose_error(exc):\n    \"\"\"\n    造物主的诊断之眼 —— 异常分类与根因追溯\n\n    你正在构建自我修复 Agent 的\"视觉皮层\"。当 Agent 执行代码并捕获异常时，\n    此函数负责将异常分类并追溯根因，为后续的修复策略选择提供决策依据。\n\n    这是 ReAct 循环中 Observe 阶段的核心组件——没有准确的诊断，\n    后续的 Think 和 Act 就是无的放矢。\n\n    分类规则（四层模型）：\n    - \"syntax\":  SyntaxError 及其子类（IndentationError, TabError）\n    - \"import\":  ImportError 及其子类（ModuleNotFoundError）\n    - \"runtime\": Exception 树下的其他运行时异常（NameError, TypeError 等）\n    - \"system\":  BaseException 的非 Exception 子类（SystemExit, KeyboardInterrupt）\n\n    根因追溯规则：\n    - 优先沿 __cause__ 链（显式 raise ... from）追溯\n    - 若 __cause__ 为 None，沿 __context__ 链（隐式）追溯\n    - 若两者皆无，根因即为异常本身\n\n    返回字典格式：\n    {\n        \"category\": str,          # 分类标签\n        \"error_type\": str,        # 异常类名\n        \"message\": str,           # 异常消息（str(exc)）\n        \"root_cause_type\": str,   # 根因异常类名\n    }\n\n    Examples:\n    >>> diagnose_error(SyntaxError(\"oops\"))\n    {'category': 'syntax', 'error_type': 'SyntaxError', 'message': 'oops', 'root_cause_type': 'SyntaxError'}\n\n    >>> diagnose_error(ModuleNotFoundError(\"no module\"))\n    {'category': 'import', 'error_type': 'ModuleNotFoundError', 'message': 'no module', 'root_cause_type': 'ModuleNotFoundError'}\n\n    >>> diagnose_error(SystemExit(1))\n    {'category': 'system', 'error_type': 'SystemExit', 'message': '1', 'root_cause_type': 'SystemExit'}\n\n    >>> root = KeyError(\"missing\")\n    >>> wrapper = ValueError(\"bad\")\n    >>> wrapper.__cause__ = root\n    >>> diagnose_error(wrapper)\n    {'category': 'runtime', 'error_type': 'ValueError', 'message': 'bad', 'root_cause_type': 'KeyError'}\n    \"\"\"\n    # TODO: Step 1 — 确定异常分类\n    # 提示：注意继承层次！判断顺序至关重要：\n    #   先判 SyntaxError（覆盖 IndentationError/TabError 子类）\n    #   再判 ImportError（覆盖 ModuleNotFoundError 子类）\n    #   再判 Exception（覆盖所有普通运行时异常）\n    #   最后兜底——属于 BaseException 但不属于 Exception（SystemExit/KeyboardInterrupt）\n    # 务必使用 isinstance 而非 type() is，否则子类漏判！\n    category = None\n\n    # TODO: Step 2 — 提取异常类型名与消息\n    # 提示：type(exc).__name__ 获取类名，str(exc) 获取消息\n    error_type = None\n    message = None\n\n    # TODO: Step 3 — 追溯根因\n    # 提示：先沿 __cause__ 链追溯（显式链，raise...from 产生），\n    #       若 __cause__ 为 None，再沿 __context__ 链追溯（隐式链）。\n    #       用 while 循环走到链的尽头——根因的 __cause__ 和 __context__ 都为 None。\n    #       安全访问：使用 getattr(exc, \"__cause__\", None)\n    #       注意：__cause__ 可能是 None（未设置），也可能是一个异常对象。\n    #             只有当它是一个异常对象时，才继续追溯。\n    root_cause = exc  # 默认根因是自身\n\n    # TODO: Step 4 — 组装并返回诊断报告\n    return {\n        \"category\": category,\n        \"error_type\": error_type,\n        \"message\": message,\n        \"root_cause_type\": type(root_cause).__name__,\n    }"
+    }
+  },
+  "expiry": 1783418227735
+}

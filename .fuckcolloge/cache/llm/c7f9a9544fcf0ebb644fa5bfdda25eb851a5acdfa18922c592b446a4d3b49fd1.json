@@ -1,0 +1,143 @@
+{
+  "data": {
+    "id": "unit-2-agent-hands",
+    "type": "unit",
+    "title": "给Agent装上\"眼睛和手\"——文件系统感知与操作",
+    "description": "一个看不见代码的Agent就像蒙眼修炸弹——刺激但没用。本单元为你的Agent打造'感知器官'和'操作器官'：用Python标准库os、pathlib、ast模块实现项目文件的读取、目录树遍历、代码结构解析（AST），以及安全的文件写入与备份机制。你将学会让Agent'看懂'一个项目的结构，理解哪些文件是入口、哪些是模块、哪些是配置。这些能力是Project中Agent'读取项目文件→理解代码→定位问题'链条的关键拼图——没有这双'手'，Agent连bug在哪都找不到。",
+    "prerequisites": [
+      "unit-1-agent-brain"
+    ],
+    "objectives": [
+      "使用pathlib和os实现递归目录遍历与项目结构可视化",
+      "用ast模块解析Python源码的函数/类/导入结构，提取代码摘要",
+      "实现文件读取工具（read_file）和文件写入工具（write_file）的封装，供LLM调用",
+      "设计文件操作的安全边界：路径限制、备份机制、防止误删"
+    ],
+    "references": [],
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    },
+    "content": "# 文件操作与代码解析：构建 LLM 友好的文件工具链\n\n## 一、递归目录遍历与项目结构可视化\n\n### 1.1 `pathlib` vs `os.walk`：选型与陷阱\n\n`pathlib.Path.rglob()` 返回惰性生成器，适合现代代码；`os.walk()` 则提供三元组 `(dirpath, dirnames, filenames)`，其最大优势是**可在遍历中就地修改 `dirnames` 来剪枝**：\n\n```python\nimport os\nfrom pathlib import Path\n\ndef walk_safe(root: Path):\n    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):\n        # 就地剪枝：跳过 .git、__pycache__、node_modules\n        dirnames[:] = [d for d in dirnames if d not in {'.git', '__pycache__', 'node_modules', '.venv'}]\n        for f in filenames:\n            yield Path(dirpath) / f\n```\n\n**Gotcha #1：符号链接死循环。** `os.walk` 默认 `followlinks=False`，但 `Path.rglob()` 会跟随符号链接，可能在循环链接中无限递归。生产代码必须显式跟踪已访问的 `st_ino + st_dev` 集合，或限制递归深度。\n\n**Gotcha #2：`rglob('*')` 同时返回目录与文件。** 必须用 `p.is_file()` 过滤；且 `is_file()` 会跟随符号链接，需配合 `is_symlink()` 判断。\n\n**Gotcha #3：权限错误。** 遍历用户主目录时极易遇到 `PermissionError`。务必用 `try/except` 包裹，否则整个遍历会中断。\n\n### 1.2 树状可视化\n\n```python\ndef render_tree(root: Path, prefix: str = \"\", ignore: set[str] = {'.git'}):\n    if not root.is_dir():\n        return\n    children = sorted([p for p in root.iterdir() if p.name not in ignore],\n                      key=lambda p: (not p.is_dir(), p.name.lower()))\n    for i, child in enumerate(children):\n        is_last = (i == len(children) - 1)\n        connector = \"└── \" if is_last else \"├── \"\n        print(prefix + connector + child.name + (\"/\" if child.is_dir() else \"\"))\n        if child.is_dir():\n            extension = \"    \" if is_last else \"│   \"\n            render_tree(child, prefix + extension, ignore)\n```\n\n注意：`iterdir()` 不保证顺序，必须显式排序以保证输出可复现（这对 LLM 的可重现工具调用尤为重要）。\n\n---\n\n## 二、AST 解析：提取 Python 代码摘要\n\n### 2.1 核心节点类型\n\n| 节点 | 含义 | 关键属性 |\n|------|------|---------|\n| `ast.Module` | 文件根 | `body` |\n| `ast.FunctionDef` / `AsyncFunctionDef` | 函数 | `name`, `args`, `decorator_list`, `returns`, `body` |\n| `ast.ClassDef` | 类 | `name`, `bases`, `decorator_list`, `body` |\n| `ast.Import` | `import x` | `names` (每个有 `.name`, `.asname`) |\n| `ast.ImportFrom` | `from x import y` | `module`, `names`, `level` (相对导入层数) |\n\n### 2.2 使用 `NodeVisitor` 结构化遍历\n\n```python\nimport ast\n\nclass SummaryVisitor(ast.NodeVisitor):\n    def __init__(self):\n        self.functions, self.classes, self.imports = [], [], []\n\n    def visit_FunctionDef(self, node):\n        args = [a.arg for a in node.args.args]\n        ret = ast.unparse(node.returns) if node.returns else None\n        self.functions.append({\n            \"name\": node.name, \"line\": node.lineno,\n            \"end_line\": node.end_lineno,  # Python 3.8+\n            \"args\": args, \"returns\": ret,\n            \"docstring\": ast.get_docstring(node),\n        })\n        self.generic_visit(node)  # 必须调用，否则不会进入嵌套定义\n\n    def visit_ClassDef(self, node):\n        self.classes.append({\n            \"name\": node.name, \"line\": node.lineno,\n            \"bases\": [ast.unparse(b) for b in node.bases],\n            \"docstring\": ast.get_docstring(node),\n        })\n        self.generic_visit(node)\n\n    def visit_Import(self, node):\n        for n in node.names:\n            self.imports.append(n.asname or n.name)\n        self.generic_visit(node)\n\n    def visit_ImportFrom(self, node):\n        mod = \".\" * node.level + (node.module or \"\")\n        for n in node.names:\n            self.imports.append(f\"{mod}.{n.name}\")\n        self.generic_visit(node)\n\ndef summarize(src: str):\n    tree = ast.parse(src)  # 可能抛 SyntaxError、ValueError(空字符串)\n    v = SummaryVisitor()\n    v.visit(tree)\n    return v\n```\n\n**Gotcha #4：忘记 `generic_visit`。** 不调用则不会递归到嵌套函数/类，导致摘要遗漏。`ast.walk` 是 BFS，不区分层级，适合\"全量扫描\"但丢失结构信息。\n\n**Gotcha #5：`ast.get_docstring` 仅对模块/类/函数首条字符串字面量生效**，且需 `clean_indent=True`（默认）。\n\n**Gotcha #6：装饰器与异步函数。** `async def` 是 `AsyncFunctionDef`，与 `FunctionDef` 不互为子类，必须分别 `visit`。\n\n**Gotcha #7：`ast.unparse`（3.9+）才能把节点还原为源码字符串**；3.8 以下需用 `astor` 第三方库。\n\n**Gotcha #8：SyntaxError 处理。** 解析任意用户文件时必须捕获 `SyntaxError` 并提取 `lineno`、`offset`、`msg`，否则 LLM 工具会因单个坏文件崩溃。\n\n---\n\n## 三、`read_file` / `write_file` 工具封装\n\n### 3.1 read_file：为 LLM 优化的读取\n\n```python\ndef read_file(path: str, start: int = 1, end: int | None = None,\n              max_chars: int = 200_000) -> dict:\n    p = _confine(path)\n    raw = p.read_bytes()\n    # 处理 BOM：utf-8-sig 自动剥离 BOM\n    try:\n        text = raw.decode('utf-8-sig')\n    except UnicodeDecodeError:\n        text = raw.decode('latin-1', errors='replace')  # 兜底，绝不抛错\n    lines = text.splitlines(keepends=True)\n    end = end or len(lines)\n    sliced = ''.join(lines[start-1:end])\n    if len(sliced) > max_chars:\n        sliced = sliced[:max_chars] + \"\\n...[truncated]\"\n    return {\"path\": str(p), \"content\": sliced,\n            \"total_lines\": len(lines), \"start\": start, \"end\": end}\n```\n\n**Gotcha #9：行号从 1 开始。** LLM 引用代码时使用 1-based 行号，切片时记得 `start-1`。\n\n**Gotcha #10：`splitlines()` 会把 `\\r\\n`、`\\r`、`\\n`、`\\v`、`\\f` 等都当换行符**，可能与源文件实际行号不一致。严格场景应使用 `splitlines(keepends=True)` 后只识别 `\\n`。\n\n**Gotcha #11：BOM 与编码。** Windows 上 Notepad 保存的 UTF-8 文件含 BOM (`\\ufeff`)，直接 `decode('utf-8')` 会在首行留下不可见字符，导致 LLM 误判缩进。`utf-8-sig` 是解药。\n\n### 3.2 write_file：原子写入\n\n```python\nimport os, tempfile, shutil\n\ndef write_file(path: str, content: str, backup: bool = True) -> dict:\n    p = _confine(path)\n    p.parent.mkdir(parents=True, exist_ok=True)\n    if backup and p.exists():\n        bak = p.with_suffix(p.suffix + f'.bak.{int(time.time())}')\n        shutil.copy2(p, bak)\n    # 原子写：先写临时文件再 rename，避免崩溃留下半写文件\n    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix='.tmp_')\n    try:\n        with os.fdopen(fd, 'w', encoding='utf-8', newline='\\n') as f:\n            f.write(content)\n        os.replace(tmp, p)  # 原子操作（POSIX & Windows）\n    except Exception:\n        os.unlink(tmp); raise\n    return {\"path\": str(p), \"bytes\": len(content.encode('utf-8'))}\n```\n\n**Gotcha #12：`newline='\\n'`。** 不指定时 Python 默认 `newline=None` 会做 universal newline 转换，在 Windows 上把 `\\n` 写成 `\\r\\n`，破坏哈希一致性。LLM 工具应强制 `newline='\\n'`。\n\n**Gotcha #13：`os.replace` vs `os.rename`。** `rename` 在 Windows 上目标存在时会失败；`replace` 跨平台原子覆盖。\n\n---\n\n## 四、安全边界设计\n\n### 4.1 路径限制（核心防线）\n\n```python\nfrom pathlib import Path\n\nWORKSPACE = Path('/workspace').resolve()\n\ndef _confine(user_path: str) -> Path:\n    # 1. 拒绝 null 字节（C 层截断攻击）\n    if '\\x00' in user_path:\n        raise ValueError(\"null byte in path\")\n    # 2. 拼接后 resolve，解析所有 .. 和符号链接\n    candidate = (WORKSPACE / user_path).resolve(strict=False)\n    # 3. 严格前缀检查\n    try:\n        candidate.relative_to(WORKSPACE)\n    except ValueError:\n        raise PermissionError(f\"path escapes workspace: {candidate}\")\n    return candidate\n```\n\n**Gotcha #14：`resolve()` 会跟随符号链接。** 这正是安全所需——攻击者用 `workspace/evil_symlink -> /etc/passwd` 试图逃逸时，`resolve()` 会暴露真实路径。但 `strict=False` 必须设置，否则对不存在文件路径会抛 `FileNotFoundError`，导致 `write_file` 无法创建新文件。\n\n**Gotcha #15：`is_relative_to` (3.9+) 等价于 `relative_to` + try/except**，但语义更清晰。\n\n**Gotcha #16：TOCTOU 竞态。** \"检查后使用\"窗口期内符号链接可能被替换。高安全场景需用 `os.open` + `O_NOFOLLOW` 打开最终分量，或使用 `os.fwalk`。LLM 工具场景下风险较低，但应知晓。\n\n### 4.2 防误删：软删除策略\n\n```python\nTRASH = WORKSPACE / '.trash'\nTRASH.mkdir(exist_ok=True)\n\ndef safe_delete(path: str) -> dict:\n    p = _confine(path)\n    if p == WORKSPACE:\n        raise PermissionError(\"refuse to delete workspace root\")\n    dest = TRASH / f\"{p.name}.{int(time.time())}.{uuid.uuid4().hex[:6]}\"\n    shutil.move(str(p), str(dest))\n    return {\"moved_to\": str(dest), \"recoverable\": True}\n```\n\n**Gotcha #17：拒绝删除工作区根目录。** 即使路径合法，也应硬编码拒绝根目录与 `.trash` 自身。\n\n**Gotcha #18：`shutil.move` 跨文件系统会退化为 copy+delete**，大文件可能很慢且非原子；同分区移动才是原子的 `rename`。\n\n### 4.3 备份机制\n\n- **版本化备份**：`file.py.bak.<unix_ts>`，保留最近 N 份。\n- **内容寻址**：对写入前内容计算 `sha256`，存入 `.trash/sha256/`，去重节省空间。\n- **回滚接口**：暴露 `restore(path, version='latest')` 给 LLM，使其能自我纠错。\n\n---\n\n## 五、综合实践：项目摘要工具\n\n将上述模块组合，可构建一个供 LLM 调用的 `project_summary` 工具：\n\n```python\ndef project_summary(root: str) -> dict:\n    r = _confine(root)\n    tree = render_tree(r)  # 字符串形式\n    py_files = [p for p in walk_safe(r) if p.suffix == '.py']\n    summaries = {}\n    for pf in py_files[:200]:  # 上限保护\n        try:\n            summaries[str(pf.relative_to(r))] = summarize(pf.read_text('utf-8')).__dict__\n        except (SyntaxError, UnicodeDecodeError) as e:\n            summaries[str(pf.relative_to(r))] = {\"error\": str(e)}\n    return {\"tree\": tree, \"files\": summaries, \"total_py\": len(py_files)}\n```\n\n此设计满足 CS61A 风格的工程严谨性：**惰性求值、显式错误处理、可复现输出、最小权限原则**。LLM 拿到结构化摘要后，可自主决定 `read_file` 哪一段、`write_file` 改哪一行，形成 agentic 闭环。",
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "Agent Alpha is scanning a project directory using `Path.rglob('*')` and gets stuck in an infinite loop — there's a circular symlink (`./loop -> ./loop`). What's the best fix for the Agent's file traversal tool?",
+        "options": [
+          "A) Add a manual depth counter to rglob and stop after 20 levels of recursion",
+          "B) Switch to `os.walk(followlinks=False)` and prune unwanted directories by modifying `dirnames` in-place during iteration",
+          "C) Use `shutil.rmtree` to delete all symlinks before walking the tree",
+          "D) Convert all symlinks to hard links first, then walk normally"
+        ],
+        "answer": "B",
+        "explanation": "`os.walk` defaults to `followlinks=False`, which prevents following symlinks entirely. Additionally, modifying `dirnames` in-place (e.g., `dirnames[:] = [d for d in dirnames if d not in IGNORE]`) prunes directories during traversal without extra passes. `Path.rglob()` follows symlinks by default and has no built-in cycle detection — a dangerous combination for Agent file tools that must run unattended."
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "Agent Alpha calls `ast.parse()` to extract function names from a Python file, but the file has a syntax error on line 42. What should a well-designed Agent tool do?",
+        "options": [
+          "A) Let the exception propagate — the Agent should crash and restart from scratch",
+          "B) `ast.parse` silently returns a partial AST containing only the valid nodes before the error",
+          "C) Catch `SyntaxError`, extract `.lineno` and `.msg`, and return structured error info to the LLM so it can decide whether to read and fix the file",
+          "D) Delete the broken file so it doesn't cause problems for future scans"
+        ],
+        "answer": "C",
+        "explanation": "`ast.parse` raises `SyntaxError` on invalid syntax, with attributes like `.lineno`, `.offset`, and `.msg` that pinpoint the error. A robust Agent tool must catch this and return structured error info to the LLM. The LLM can then decide to `read_file` around that line and attempt a fix — this is exactly the Observe→Think→Act loop the self-repairing Agent needs."
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "Agent Alpha writes a bug fix to `bug.py` using `open(path, 'w')` on Windows. The LLM then verifies the file's SHA-256 hash, but it doesn't match the content it sent. What went wrong?",
+        "options": [
+          "A) The LLM's hash function is fundamentally broken",
+          "B) Python's default `newline=None` translates `\\n` to `\\r\\n` on Windows, silently changing the byte content of the file",
+          "C) `open(path, 'w')` automatically prepends a UTF-8 BOM on Windows",
+          "D) The Windows NTFS file system compresses file content automatically after write"
+        ],
+        "answer": "B",
+        "explanation": "Python's universal newline mode (`newline=None`, the default for `open()` in text mode) converts `\\n` to the platform's native line ending (`\\r\\n` on Windows) on write. This changes the byte content and breaks hash verification. The fix: always pass `newline='\\n'` when writing files in an Agent tool, ensuring byte-for-byte consistency across platforms."
+      },
+      {
+        "id": "q4",
+        "type": "choice",
+        "question": "The LLM sends Agent Alpha the path `../../.ssh/id_rsa` to read. After `confine_path(workspace, '../../.ssh/id_rsa')` processes it, what happens?",
+        "options": [
+          "A) The path is resolved to the real `.ssh/id_rsa` and access is granted — the Agent can read any file on the system",
+          "B) `confine_path` resolves the path, detects it escapes the workspace boundary via `relative_to()`, and raises `PermissionError`",
+          "C) The path is silently rewritten to `workspace/.ssh/id_rsa` and access is granted to the safe copy",
+          "D) The Agent reads the file but logs a warning for the human operator to review later"
+        ],
+        "answer": "B",
+        "explanation": "`confine_path` joins the user path to the workspace root, resolves it (expanding `..` and following symlinks), then checks if the result is still within the workspace via `relative_to()`. Since `../../.ssh/id_rsa` resolves outside the workspace, `relative_to()` raises `ValueError`, which the function converts to `PermissionError`. This is the Agent's core security boundary — without it, a malicious or confused LLM could read or write anywhere on the system."
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "confine_path",
+      "description": "Forge the Workspace Shield — the Agent's most critical security boundary. Before the Agent can read or write any file, every path from the LLM must pass through `confine_path`. This function ensures no operation escapes the designated workspace. A single path traversal attack (`../../.ssh/id_rsa`) could compromise the entire system. Implement this security checkpoint: reject null bytes, resolve the path against the workspace root, and verify the resolved path stays within bounds.",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "normal_file",
+          "input": [
+            "workspace",
+            "src/main.py"
+          ],
+          "expected": "resolved path within workspace"
+        },
+        {
+          "name": "escape_dotdot",
+          "input": [
+            "workspace",
+            "../../../etc/passwd"
+          ],
+          "expected": "PermissionError"
+        },
+        {
+          "name": "escape_nested",
+          "input": [
+            "workspace",
+            "src/../../../etc/passwd"
+          ],
+          "expected": "PermissionError"
+        },
+        {
+          "name": "new_file",
+          "input": [
+            "workspace",
+            "new_file.py"
+          ],
+          "expected": "resolved path (file need not exist)"
+        },
+        {
+          "name": "null_byte",
+          "input": [
+            "workspace",
+            "src\\x00evil"
+          ],
+          "expected": "ValueError"
+        },
+        {
+          "name": "deep_nested",
+          "input": [
+            "workspace",
+            "a/b/c/d.py"
+          ],
+          "expected": "resolved path within workspace"
+        }
+      ],
+      "hints": [
+        "Null bytes can truncate paths at the C level — check for '\\x00' first, before any path operations.",
+        "Use `(workspace / user_path).resolve(strict=False)` — `strict=False` allows paths to files that don't exist yet (needed for write_file to create new files).",
+        "Use `candidate.relative_to(workspace)` to check containment — if it raises `ValueError`, the path has escaped the workspace.",
+        "Remember: `resolve()` follows symlinks, which is exactly what you want — it exposes the real destination of any symlink trickery."
+      ],
+      "testCode": "import json\nimport os\nimport tempfile\nimport shutil\nfrom pathlib import Path\n\ntry:\n    from solution import confine_path\nexcept ImportError as e:\n    tests = [\"normal_file\", \"escape_dotdot\", \"escape_nested\", \"new_file\", \"null_byte\", \"deep_nested\"]\n    for t in tests:\n        print(json.dumps({\"name\": t, \"passed\": False, \"message\": f\"Import error: {e}\", \"expected\": \"...\", \"actual\": \"...\"}))\n    raise SystemExit(0)\n\ntmpdir = tempfile.mkdtemp(prefix=\"agent_ws_\")\nworkspace = Path(tmpdir).resolve()\n(workspace / \"src\").mkdir(parents=True, exist_ok=True)\n(workspace / \"src\" / \"main.py\").write_text(\"print('hello')\")\n(workspace / \"a\" / \"b\" / \"c\").mkdir(parents=True, exist_ok=True)\n\ndef tr(name, passed, expected=\"\", actual=\"\", message=\"\"):\n    print(json.dumps({\"name\": name, \"passed\": passed, \"expected\": expected, \"actual\": actual, \"message\": message}))\n\n# Test 1: Normal file path within workspace\ntry:\n    result = confine_path(workspace, \"src/main.py\")\n    expected = str(workspace / \"src\" / \"main.py\")\n    tr(\"normal_file\", str(result) == expected, expected, str(result))\nexcept Exception as e:\n    tr(\"normal_file\", False, str(workspace / \"src\" / \"main.py\"), \"\", f\"{type(e).__name__}: {e}\")\n\n# Test 2: Escape via ..\ntry:\n    result = confine_path(workspace, \"../../../etc/passwd\")\n    tr(\"escape_dotdot\", False, \"PermissionError\", str(result), \"Should have raised PermissionError\")\nexcept PermissionError:\n    tr(\"escape_dotdot\", True, \"PermissionError\", \"PermissionError\")\nexcept Exception as e:\n    tr(\"escape_dotdot\", False, \"PermissionError\", type(e).__name__, f\"Wrong exception: {e}\")\n\n# Test 3: Escape via nested ..\ntry:\n    result = confine_path(workspace, \"src/../../../etc/passwd\")\n    tr(\"escape_nested\", False, \"PermissionError\", str(result), \"Should have raised PermissionError\")\nexcept PermissionError:\n    tr(\"escape_nested\", True, \"PermissionError\", \"PermissionError\")\nexcept Exception as e:\n    tr(\"escape_nested\", False, \"PermissionError\", type(e).__name__, f\"Wrong exception: {e}\")\n\n# Test 4: New file that doesn't exist yet\ntry:\n    result = confine_path(workspace, \"new_file.py\")\n    expected = str(workspace / \"new_file.py\")\n    tr(\"new_file\", str(result) == expected, expected, str(result))\nexcept Exception as e:\n    tr(\"new_file\", False, str(workspace / \"new_file.py\"), \"\", f\"{type(e).__name__}: {e}\")\n\n# Test 5: Null byte in path\ntry:\n    result = confine_path(workspace, \"src\\x00evil\")\n    tr(\"null_byte\", False, \"ValueError\", str(result), \"Should have raised ValueError\")\nexcept ValueError:\n    tr(\"null_byte\", True, \"ValueError\", \"ValueError\")\nexcept Exception as e:\n    tr(\"null_byte\", False, \"ValueError\", type(e).__name__, f\"Wrong exception: {e}\")\n\n# Test 6: Deep nested path within workspace\ntry:\n    result = confine_path(workspace, \"a/b/c/d.py\")\n    expected = str(workspace / \"a\" / \"b\" / \"c\" / \"d.py\")\n    tr(\"deep_nested\", str(result) == expected, expected, str(result))\nexcept Exception as e:\n    tr(\"deep_nested\", False, str(workspace / \"a\" / \"b\" / \"c\" / \"d.py\"), \"\", f\"{type(e).__name__}: {e}\")\n\nshutil.rmtree(tmpdir, ignore_errors=True)",
+      "starterCode": "from pathlib import Path\n\n\ndef confine_path(workspace: Path, user_path: str) -> Path:\n    \"\"\"\n    Forge the Workspace Shield — the Agent's most critical security boundary.\n\n    Before the Agent can read or write any file, every path from the LLM\n    must pass through this function. It ensures no operation escapes the\n    designated workspace, preventing path traversal attacks like\n    ``../../.ssh/id_rsa`` from compromising the system.\n\n    Security checks (performed in order):\n      1. Reject null bytes — they can truncate paths at the C level,\n         bypassing security checks in lower layers.\n      2. Join ``user_path`` to ``workspace`` and resolve the result.\n         ``resolve()`` expands ``..`` and follows symlinks, exposing\n         the true destination of any path trickery.\n      3. Verify the resolved path is still inside ``workspace`` using\n         ``relative_to()``. If it isn't, raise ``PermissionError``.\n\n    Args:\n        workspace:  The root directory the Agent is allowed to operate in.\n                    Must be an already-resolved absolute Path.\n        user_path:  A relative or absolute path string provided by the LLM.\n                    May point to a file that doesn't exist yet (for write_file).\n\n    Returns:\n        The resolved, verified Path object guaranteed to be within workspace.\n\n    Raises:\n        ValueError:      If ``user_path`` contains a null byte (``\\\\x00``).\n        PermissionError: If the resolved path escapes the workspace boundary.\n\n    Examples:\n        >>> from pathlib import Path\n        >>> ws = Path('/tmp/project')\n        >>> confine_path(ws, 'src/main.py')\n        PosixPath('/tmp/project/src/main.py')\n\n        >>> confine_path(ws, '../../../etc/passwd')\n        Traceback (most recent call last):\n            ...\n        PermissionError: path escapes workspace: /etc/passwd\n\n        >>> confine_path(ws, 'src\\\\x00evil')\n        Traceback (most recent call last):\n            ...\n        ValueError: null byte in path\n\n        >>> confine_path(ws, 'new_file.py')  # file doesn't exist yet — OK\n        PosixPath('/tmp/project/new_file.py')\n    \"\"\"\n    # Step 1: Reject null bytes — they can truncate paths at the C level,\n    #         bypassing security checks in lower layers.\n    #         Check if '\\x00' is in user_path. If so, raise ValueError\n    #         with the message \"null byte in path\".\n    # TODO: implement null byte check\n\n    # Step 2: Join user_path to workspace and resolve.\n    #         Use (workspace / user_path).resolve(strict=False) to get the\n    #         real path. strict=False allows paths to non-existent files\n    #         (needed for write_file to create new files).\n    # TODO: compute candidate = (workspace / user_path).resolve(strict=False)\n\n    # Step 3: Verify the candidate is within workspace.\n    #         Try candidate.relative_to(workspace). If it raises ValueError,\n    #         the path has escaped — raise PermissionError with a clear message\n    #         like f\"path escapes workspace: {candidate}\".\n    # TODO: implement the boundary check\n\n    # Step 4: Return the safe, resolved path.\n    # TODO: return candidate\n    pass"
+    }
+  },
+  "expiry": 1783417322274
+}

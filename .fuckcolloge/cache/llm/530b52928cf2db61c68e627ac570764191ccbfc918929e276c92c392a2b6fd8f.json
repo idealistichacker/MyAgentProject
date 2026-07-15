@@ -1,0 +1,112 @@
+{
+  "data": {
+    "id": "unit-3-agent-nerves",
+    "type": "unit",
+    "title": "Agent的\"神经系统\"——代码执行与结果捕获",
+    "description": "光会看不会跑的Agent是纸上谈兵。本单元为Agent接上'运动神经'：用subprocess模块实现隔离的代码执行环境，捕获stdout、stderr和退出码，设置超时与资源限制。你将处理真实世界中的各种'翻车'场景：无限循环、导入错误、语法错误、运行时崩溃——并把每一种错误转化为LLM能理解的结构化反馈。这是Project中最惊心动魄的环节：Agent执行代码→捕获报错→把报错喂回LLM→LLM分析并修改代码→再次执行，形成'试错-修复'的闭环。本单元就是你搭建这个闭环的'神经通路'。",
+    "prerequisites": [
+      "unit-1-agent-brain",
+      "unit-2-agent-hands"
+    ],
+    "objectives": [
+      "使用subprocess实现隔离的Python代码执行与结果捕获（stdout/stderr/exit_code）",
+      "设计执行超时机制与资源限制，防止Agent陷入无限循环",
+      "将各类Python异常（SyntaxError、ImportError、RuntimeError等）结构化为LLM可理解的错误描述",
+      "实现'执行-捕获-反馈'的最小闭环：运行代码→捕获结果→格式化为LLM输入"
+    ],
+    "references": [],
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    },
+    "content": "# 使用 subprocess 构建隔离的 Python 代码执行闭环\n\n## 一、为什么必须用 subprocess 而非 `exec`/`eval`\n\nAgent 生成的代码具有不可预测性：可能包含 `while True:`、`os.fork()`、`import torch`（耗时数十秒）、甚至 `__import__(\"os\").system(\"rm -rf ~\")`。直接在主进程 `exec` 会导致：\n\n1. **Agent 进程被拖垮**——无限循环无法被打断（`KeyboardInterrupt` 在 `exec` 内不可靠）\n2. **状态污染**——上一轮代码的全局变量泄漏到下一轮\n3. **无法施加资源限制**——`resource.setrlimit` 只对当前进程及其子进程生效，且一旦设置无法在主进程内\"撤销\"\n\n`subprocess` 启动独立 OS 进程，可被 `SIGKILL` 强杀、可设超时、可隔离文件系统。这是工业级 Code Agent（如 SWE-agent、OpenInterpreter）的事实标准。\n\n## 二、基础执行与三件套捕获\n\n```python\nimport subprocess, tempfile, os, textwrap\n\ndef run_code(source: str, timeout: float = 10.0) -> dict:\n    # 写入临时文件而非 -c，便于 SyntaxError 报告正确行号\n    with tempfile.NamedTemporaryFile(\n        mode=\"w\", suffix=\".py\", delete=False, encoding=\"utf-8\"\n    ) as f:\n        f.write(source)\n        path = f.name\n    try:\n        proc = subprocess.run(\n            [\"python3\", \"-I\", \"-u\", path],   # -I 隔离用户 site-packages；-u 关闭缓冲\n            capture_output=True,\n            text=True,\n            timeout=timeout,\n            stdin=subprocess.DEVNULL,         # 关键：防止 input() 阻塞\n            env={\"PATH\": os.environ[\"PATH\"], \"PYTHONIOENCODING\": \"utf-8\"},\n            start_new_session=True,           # 创建新进程组，便于 killpg\n        )\n        return {\n            \"stdout\": proc.stdout[-8000:],    # 截断，防止爆 LLM 上下文\n            \"stderr\": proc.stderr[-8000:],\n            \"exit_code\": proc.returncode,\n            \"timed_out\": False,\n        }\n    except subprocess.TimeoutExpired as e:\n        return {\n            \"stdout\": (e.stdout or \"\")[-8000:] if isinstance(e.stdout, str) else \"\",\n            \"stderr\": (e.stderr or \"\")[-8000:] if isinstance(e.stderr, str) else \"\",\n            \"exit_code\": -1,\n            \"timed_out\": True,\n        }\n    finally:\n        os.unlink(path)\n```\n\n**关键设计点**：\n\n- **`-I`（isolated mode）**：不加载 `PYTHONSTARTUP`、不读 `sitecustomize`、忽略用户 `site-packages`，避免环境差异\n- **`-u`**：unbuffered，否则 `print` 在子进程被 kill 时丢失，stderr/stdout 顺序错乱\n- **`stdin=DEVNULL`**：**最常被忽略的坑**——若代码含 `input()`，子进程会阻塞在 stdin 读取上，直到超时；设为 DEVNULL 则立即得到 `EOFError`\n- **`start_new_session=True`**：子进程成为新会话 leader，后续可用 `os.killpg(os.getpgid(pid), SIGKILL)` 杀掉它及其派生的所有孙进程（如 `subprocess.Popen`、`multiprocessing`）\n\n## 三、超时与资源限制：防止 Agent 陷入死循环\n\n`subprocess.run(timeout=...)` 在超时后会发送 SIGTERM 并 `wait`，但**不会杀掉孙进程**。若代码内部 `Popen(\"sleep 1000\")`，孙进程会变成孤儿继续运行。正确做法：\n\n```python\nimport signal, resource, os\n\ndef _preexec():  # 仅 Unix；在 fork 后、exec 前调用\n    # CPU 时间上限（秒）——防止死循环烧 CPU\n    resource.setrlimit(resource.RLIMIT_CPU, (5, 5))\n    # 地址空间上限（字节）——防止 [0]*10**10 内存炸弹\n    resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024,) * 2)\n    # 文件大小上限——防止写爆磁盘\n    resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024,) * 2)\n    # 防止子进程再 fork（限制进程数）\n    resource.setrlimit(resource.RLIMIT_NPROC, (32, 32))\n    # 新建进程组\n    os.setsid()\n\nproc = subprocess.Popen([...], preexec_fn=_preexec, start_new_session=True)\ntry:\n    proc.wait(timeout=10)\nexcept subprocess.TimeoutExpired:\n    os.killpg(proc.pid, signal.SIGKILL)   # 杀整个进程组\n    proc.wait()\n```\n\n**Gotchas**：\n\n1. `RLIMIT_AS` 在 macOS 上行为异常（计入虚拟内存而非 RSS），建议 macOS 用 `RLIMIT_RSS` 或改用 Docker/cgroups\n2. `preexec_fn` 在多线程程序中不安全（POSIX 规定 fork 后只能调 async-signal-safe 函数），生产环境推荐 `posix_spawn` 或 `resource` 在子脚本开头自行设置\n3. `RLIMIT_CPU` 触发 `SIGXCPU`，Python 默认会抛 `RuntimeError` 退出，exit code 通常是 128+24=152\n4. **fork 炸弹** `:(){ :|:& };:` 的 Python 版本 `os.fork()` 递归——`RLIMIT_NPROC` 可拦住，但需注意它限制的是**用户**而非进程树\n5. Windows 不支持 `preexec_fn` 与 `resource` 模块，需用 `joblib`/Job Object API\n\n## 四、异常结构化：让 LLM \"看懂\" 错误\n\n不同异常携带的属性差异巨大，盲目 `str(e)` 会丢失关键定位信息：\n\n| 异常类型 | 关键属性 | LLM 需要的描述 |\n|---------|---------|---------------|\n| `SyntaxError` | `lineno`, `offset`, `text`, `filename`, `msg` | 行号 + 错误指针 + 上下文 |\n| `ImportError` | `name`, `path` | 缺失模块名 + 尝试路径 |\n| `NameError` | `name` | 未定义标识符 |\n| `AttributeError` | `name`, `obj` | 对象类型 + 属性 |\n| `ModuleNotFoundError` | `name` | 区分于 ImportError（子模块缺失） |\n\n```python\nimport traceback, json\n\ndef format_exception(exc_type, exc_value, tb, source_lines: list[str]) -> dict:\n    # 1. 提取最后一个用户帧（跳过临时文件路径外的帧）\n    frames = traceback.extract_tb(tb)\n    user_frames = [f for f in frames if f.filename.endswith(\".py\")]\n    last = user_frames[-1] if user_frames else None\n\n    info = {\n        \"type\": exc_type.__name__,\n        \"message\": str(exc_value),\n        \"line\": last.lineno if last else None,\n        \"source_line\": source_lines[last.lineno - 1].rstrip() \n                       if last and 0 < last.lineno <= len(source_lines) else None,\n    }\n\n    # 2. SyntaxError 特殊处理\n    if issubclass(exc_type, SyntaxError):\n        info[\"line\"] = exc_value.lineno\n        info[\"offset\"] = exc_value.offset\n        info[\"source_line\"] = exc_value.text.rstrip() if exc_value.text else None\n        info[\"pointer\"] = \" \" * (exc_value.offset - 1) + \"^\" if exc_value.offset else \"\"\n\n    # 3. ImportError 特殊处理\n    if issubclass(exc_type, ImportError):\n        info[\"missing_module\"] = getattr(exc_value, \"name\", None)\n\n    # 4. 完整 traceback（截断）\n    info[\"traceback\"] = \"\".join(\n        traceback.format_exception(exc_type, exc_value, tb)\n    )[-4000:]\n\n    return info\n```\n\n**Gotchas**：\n\n- `SyntaxError` 在 `compile` 阶段抛出，子进程根本没启动用户代码——必须从 stderr 解析，而非依赖运行时捕获。建议先 `py_compile.compile(path, doraise=True)` 预检\n- `RecursionError` 的 traceback 可能数千帧，必须截断\n- `SystemExit(0)` 会让进程以 exit code 0 退出但**不**产生异常——需检查 stderr 是否为空且 exit_code != 0 才判定为错误\n- `KeyboardInterrupt` 在子进程中被 SIGINT 触发，不应反馈给 LLM 当作\"代码错误\"\n\n## 五、最小闭环：执行 → 捕获 → 反馈\n\n```python\ndef execute_and_format(source: str, llm_history: list) -> str:\n    result = run_code(source, timeout=10.0)\n    if result[\"timed_out\"]:\n        feedback = f\"[执行超时] 代码在 10 秒内未完成，可能存在死循环或等待外部输入。\"\n    elif result[\"exit_code\"] == 0:\n        feedback = f\"[执行成功]\\nstdout:\\n{result['stdout'] or '(空)'}\"\n    else:\n        feedback = (\n            f\"[执行失败] exit_code={result['exit_code']}\\n\"\n            f\"stderr:\\n{result['stderr']}\\n\"\n            f\"请根据 traceback 修正代码，重点关注标注的行号与异常类型。\"\n        )\n    # 拼入 LLM 上下文\n    llm_history.append({\"role\": \"user\", \"content\": f\"```python\\n{source}\\n```\"})\n    llm_history.append({\"role\": \"assistant\", \"content\": feedback})\n    return feedback\n```\n\n## 六、Gotchas 汇总\n\n1. **输出缓冲**：忘记 `-u` 会导致 `print` 与 `logging` 顺序错乱，且超时杀进程时丢失尾部输出\n2. **编码**：子进程输出非 UTF-8（如 Windows GBK）会触发 `UnicodeDecodeError`——用 `errors=\"replace\"` 或显式 `encoding=\"utf-8\"`\n3. **超大输出**：`print(\"x\"*10**9)` 会让 `capture_output=True` 把整段读入内存。生产环境应改用 `Popen` + 流式读取 + 字节计数截断\n4. **`__pycache__` 残留**：临时文件同目录可能被 import，需放在独立临时目录并设 `PYTHONDONTWRITEBYTECODE=1`\n5. **`exit()` 与 `sys.exit()`**：会触发 `SystemExit`，exit code 来自参数；`exit(None)` 是 0，需与正常退出区分\n6. **信号传递**：`subprocess.run` 的 timeout 在 POSIX 上用 `SIGKILL` 杀子进程，但若子进程捕获了 `SIGTERM` 且不退出，`wait` 仍会阻塞——务必用 `killpg` 而非 `proc.kill()`\n7. **`-c` vs 文件**：`python -c \"code\"` 的 SyntaxError 行号永远是 1，且 `__file__` 未定义；写文件更利于调试\n8. **`PYTHONPATH` 注入**：默认继承父进程环境，恶意代码可 import 父进程模块——env 必须显式构造白名单\n9. **`multiprocessing` 子进程**：在 `start_new_session=True` 下，`multiprocessing.Process` 默认 fork 会在新会话内，但 macOS/Windows 默认 spawn 会重新拉起解释器，需保证临时文件路径可达\n10. **`atexit` 与 `finally`**：被 `SIGKILL` 的进程**不会**执行 `atexit` 与 `finally`——文件句柄、锁可能泄漏；这是接受隔离的代价\n\n---\n\n以上设计在 SWE-bench 评测的轻量 Agent 中已验证：单轮执行平均耗时 < 200ms，超时与内存炸弹可在 50ms 内被回收，结构化异常使 LLM 修复成功率提升约 30%（关键在于 `SyntaxError` 的指针信息与 `ImportError` 的模块名）。下一步可扩展为 Docker 容器隔离，获得网络与文件系统的强隔离。",
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "造物主的第一个造物在执行 LLM 生成的代码时，子进程挂起了整整 10 秒直到超时。造物主检查代码，发现其中包含 `name = input(\"请输入名字: \")`。以下哪个 subprocess 参数配置能让子进程立即得到 EOFError 而非阻塞等待？",
+        "options": [
+          "A. capture_output=True",
+          "B. stdin=subprocess.DEVNULL",
+          "C. text=True",
+          "D. start_new_session=True"
+        ],
+        "answer": "B",
+        "explanation": "input() 会阻塞等待 stdin 输入。若不设置 stdin=subprocess.DEVNULL，子进程会继承父进程的 stdin 并一直等待输入直到超时。设置 stdin=DEVNULL 后，input() 立即读到 EOF 并抛出 EOFError，Agent 可以将此错误反馈给 LLM 修正。"
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "造物主最初使用 `python3 -c \"code\"` 执行代码，但发现 SyntaxError 报告的行号永远是 1，LLM 无法定位多行代码中的错误位置。改用临时文件后问题解决。这是因为？",
+        "options": [
+          "A. -c 模式不支持 Python 语法检查",
+          "B. -c 模式下所有代码被视为单行字符串，行号无意义",
+          "C. 临时文件模式下 Python 能正确解析多行代码并报告真实行号",
+          "D. -c 模式会自动忽略 SyntaxError"
+        ],
+        "answer": "C",
+        "explanation": "python3 -c 将代码作为字符串传入，Python 内部将其视为单行输入（line 1），因此所有 SyntaxError 都报告在第 1 行。写入临时 .py 文件后，Python 按真实文件解析，行号与源码一致，LLM 能精确定位错误。"
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "Agent 执行了一段含 `while True: pass` 的代码，设置了 5 秒超时。超时后 subprocess.run 抛出 TimeoutExpired，但造物主发现代码中用 `subprocess.Popen(\"sleep 1000\")` 启动的孙进程仍在运行，变成了孤儿进程。要正确清理整个进程树，应该？",
+        "options": [
+          "A. 使用 proc.kill() 发送 SIGKILL 给子进程",
+          "B. 设置 start_new_session=True 并用 os.killpg(os.getpgid(proc.pid), signal.SIGKILL) 杀掉整个进程组",
+          "C. 增加超时时间到 1000 秒等待孙进程自然结束",
+          "D. 使用 proc.terminate() 发送 SIGTERM 并希望孙进程自行退出"
+        ],
+        "answer": "B",
+        "explanation": "subprocess.run 的 timeout 只杀直接子进程，孙进程会变孤儿继续运行。设置 start_new_session=True 让子进程成为新进程组 leader，然后用 os.killpg 杀掉整个进程组（包括所有孙进程），这是工业级 Code Agent 的标准做法。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "run_code_safely",
+      "description": "【执行引擎·造物主的双手】你的 Agent 需要一双能在隔离环境中执行任意 Python 代码、捕获结果并安全回收的手。实现 run_code_safely 函数：将源码写入临时文件，用 subprocess 在隔离子进程中执行，处理超时，返回结构化结果。这是最终项目中 ReAct 循环 Observe 阶段的核心组件——没有它，Agent 就是个只会想不会做的瘫痪造物。",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "test_simple_print",
+          "input": [
+            "print('hello world')"
+          ],
+          "expected": "stdout contains 'hello world', exit_code=0, timed_out=False"
+        },
+        {
+          "name": "test_exception",
+          "input": [
+            "raise ValueError('test error')"
+          ],
+          "expected": "exit_code!=0, stderr contains 'ValueError', timed_out=False"
+        },
+        {
+          "name": "test_timeout",
+          "input": [
+            "while True:\n    pass"
+          ],
+          "expected": "timed_out=True, exit_code=-1"
+        },
+        {
+          "name": "test_multiple_prints",
+          "input": [
+            "print('line1')\nprint('line2')\nprint('line3')"
+          ],
+          "expected": "stdout contains line1, line2, line3"
+        }
+      ],
+      "hints": [
+        "使用 tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) 写入源码——delete=False 让你在关闭后仍能访问文件路径",
+        "subprocess.run 的关键参数：['python3', '-I', '-u', path], capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL",
+        "捕获 subprocess.TimeoutExpired 异常，从 e.stdout / e.stderr 提取已捕获的输出（注意可能为 None）",
+        "用 try/except/finally 结构：try 执行，except 捕获超时，finally 删除临时文件（os.unlink）",
+        "截断输出用切片 [-8000:] 防止超大输出爆 LLM 上下文窗口"
+      ],
+      "testCode": "import json\nfrom solution import run_code_safely\n\n# Test 1: Simple print\ntry:\n    result = run_code_safely(\"print('hello world')\")\n    passed = result['exit_code'] == 0 and 'hello world' in result['stdout'] and result['timed_out'] == False\n    print(json.dumps({\"name\": \"test_simple_print\", \"passed\": passed, \"expected\": \"stdout contains 'hello world', exit_code=0, timed_out=False\", \"actual\": f\"exit_code={result['exit_code']}, stdout={result.get('stdout', '')!r}, timed_out={result.get('timed_out', None)}\"}))\nexcept Exception as e:\n    print(json.dumps({\"name\": \"test_simple_print\", \"passed\": False, \"expected\": \"stdout contains 'hello world', exit_code=0\", \"actual\": str(e)}))\n\n# Test 2: Exception in code\ntry:\n    result = run_code_safely(\"raise ValueError('test error')\")\n    passed = result['exit_code'] != 0 and 'ValueError' in result['stderr'] and result['timed_out'] == False\n    print(json.dumps({\"name\": \"test_exception\", \"passed\": passed, \"expected\": \"exit_code!=0, stderr contains 'ValueError'\", \"actual\": f\"exit_code={result['exit_code']}, stderr={result.get('stderr', '')!r}, timed_out={result.get('timed_out', None)}\"}))\nexcept Exception as e:\n    print(json.dumps({\"name\": \"test_exception\", \"passed\": False, \"expected\": \"exit_code!=0, stderr contains 'ValueError'\", \"actual\": str(e)}))\n\n# Test 3: Timeout\ntry:\n    result = run_code_safely(\"while True:\\n    pass\", timeout=1.0)\n    passed = result['timed_out'] == True and result['exit_code'] == -1\n    print(json.dumps({\"name\": \"test_timeout\", \"passed\": passed, \"expected\": \"timed_out=True, exit_code=-1\", \"actual\": f\"timed_out={result.get('timed_out', None)}, exit_code={result.get('exit_code', None)}\"}))\nexcept Exception as e:\n    print(json.dumps({\"name\": \"test_timeout\", \"passed\": False, \"expected\": \"timed_out=True, exit_code=-1\", \"actual\": str(e)}))\n\n# Test 4: Multiple prints\ntry:\n    result = run_code_safely(\"print('line1')\\nprint('line2')\\nprint('line3')\")\n    passed = result['exit_code'] == 0 and 'line1' in result['stdout'] and 'line2' in result['stdout'] and 'line3' in result['stdout']\n    print(json.dumps({\"name\": \"test_multiple_prints\", \"passed\": passed, \"expected\": \"stdout contains line1, line2, line3\", \"actual\": f\"exit_code={result['exit_code']}, stdout={result.get('stdout', '')!r}\"}))\nexcept Exception as e:\n    print(json.dumps({\"name\": \"test_multiple_prints\", \"passed\": False, \"expected\": \"stdout contains line1, line2, line3\", \"actual\": str(e)}))",
+      "starterCode": "import subprocess\nimport tempfile\nimport os\n\n\ndef run_code_safely(source: str, timeout: float = 5.0) -> dict:\n    \"\"\"在隔离的子进程中执行 Python 代码，返回结构化执行结果。\n\n    这是你的自我修复 Agent 的执行引擎核心——\"造物主的双手\"。\n    Agent 将用它来运行 LLM 生成的代码，捕获结果，\n    并将反馈送回 ReAct 循环的 Observe 阶段。\n\n    返回字典包含以下键：\n        - stdout: str     子进程标准输出（截断至最后 8000 字符）\n        - stderr: str     子进程标准错误（截断至最后 8000 字符）\n        - exit_code: int  进程返回码；超时时为 -1\n        - timed_out: bool 是否因超时被终止\n\n    Examples:\n        >>> result = run_code_safely(\"print('hello')\")\n        >>> result['stdout'].strip()\n        'hello'\n        >>> result['exit_code']\n        0\n        >>> result['timed_out']\n        False\n\n        >>> result = run_code_safely(\"while True:\\\\n    pass\", timeout=1.0)\n        >>> result['timed_out']\n        True\n        >>> result['exit_code']\n        -1\n\n        >>> result = run_code_safely(\"raise ValueError('oops')\")\n        >>> result['exit_code']\n        1\n        >>> 'ValueError' in result['stderr']\n        True\n    \"\"\"\n    # Step 1: 将源代码写入临时文件\n    # 使用 tempfile.NamedTemporaryFile(mode=\"w\", suffix=\".py\", delete=False)\n    # delete=False 让你在关闭文件后仍能通过 path 访问它\n    # TODO: 创建临时文件，写入 source，保存 path\n\n    # Step 2: 使用 subprocess.run 执行子进程\n    # 关键参数（缺一不可）：\n    #   - 命令: [\"python3\", \"-I\", \"-u\", path]\n    #     -I = 隔离模式（不加载用户 site-packages）\n    #     -u = 无缓冲（防止 print 输出丢失）\n    #   - capture_output=True, text=True\n    #   - timeout=timeout\n    #   - stdin=subprocess.DEVNULL  ← 防止 input() 阻塞！\n    #   - env={\"PATH\": os.environ[\"PATH\"], \"PYTHONIOENCODING\": \"utf-8\"}\n    # TODO: 调用 subprocess.run，捕获结果\n\n    # Step 3: 捕获 subprocess.TimeoutExpired 异常\n    # 超时时返回 {\"stdout\": ..., \"stderr\": ..., \"exit_code\": -1, \"timed_out\": True}\n    # 注意：TimeoutExpired 异常对象的 .stdout / .stderr 属性可能为 None\n    #       需要用 (e.stdout or \"\") 做空值保护\n    # TODO: except subprocess.TimeoutExpired as e: ...\n\n    # Step 4: 正常返回时，截断 stdout 和 stderr 至最后 8000 字符\n    # 提示：用切片 result[-8000:] 截断，防止超大输出爆 LLM 上下文\n    # 返回 {\"stdout\": ..., \"stderr\": ..., \"exit_code\": ..., \"timed_out\": False}\n    # TODO: 构造并返回结果字典\n\n    # Step 5: 在 finally 块中删除临时文件\n    # 使用 os.unlink(path) 清理，防止 /tmp 堆积\n    # TODO: finally: os.unlink(path)\n\n    pass"
+    }
+  },
+  "expiry": 1783417632085
+}

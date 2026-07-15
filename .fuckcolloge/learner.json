@@ -1,14 +1,14 @@
 {
-  "target": "最终学习目标：**用 Python 实现一个 Scheme 子集编译器，借助 LLVM 生成可直接运行的 .exe 文件。**",
-  "programmingLevel": "basic",
+  "target": "最终学习目标：用Python从零手搓一个编程Agent（不依赖LangChain等框架），实现读取项目文件、执行代码、根据报错自动调试并修改代码的闭环，前置基础为CS61A级Python能力与LLM API调用经验。",
+  "programmingLevel": "small-projects",
   "dsaLevel": "heard",
   "weeklyHours": "2-5",
   "totalWeeks": "5-8",
   "learningStyle": "example-first",
   "codePractice": "yes",
-  "pace": "steady",
+  "pace": "normal",
   "nearTermGoal": "无",
   "rawAnswers": {},
-  "summary": "你是一位手握 Python 却心怀编译原理的“魔法学徒”——基础编程已入门，数据结构与算法还只是“江湖传说”，但居然想用 LLVM 把 Scheme 子集炼成 .exe，这胆识我先给满分！你偏爱从实例中摸爬滚打，每周 2-5 小时稳扎稳打，5-8 周内就要让编译器跑起来，简直是“时间管理大师”兼“项目驱动型冒险家”。别怕 DSA 底子薄，咱们就用代码当砖块，边砌编译器边补内功，我保证这段旅程既有挑战又有满满的成就感。欢迎入坑，你的自制编译器正在未来向你招手呢！",
+  "summary": "你是一位刚从 CS61A 毕业的\"Python 少侠\"，手握基础编程内功和 LLM API 调用经验，居然要跳过所有框架直接手搓编程 Agent——这份\"不借助东风、自己刮风\"的胆识，我必须先敬你一杯！你偏爱看实例再动手，说明你是\"先看别人摔坑再自己跳\"的聪明型选手，但 DSA 底子薄加上每周只有 2-5 小时、5-8 周就要闭环，时间上属实是在刀尖上跳舞。不过别慌——你的目标本身就自带\"调试自己\"的属性，边造 Agent 边被 Agent 教，这种\"以毒攻毒\"的学习路径反而会让你对 Python 底层和 LLM 工程理解得比别人深三倍。欢迎入坑，未来的自制 Agent 正等着它的\"造物主\"给它写第一行代码呢！🚀",
   "createdAt": "2026-06-11T08:32:49.081Z"
 }

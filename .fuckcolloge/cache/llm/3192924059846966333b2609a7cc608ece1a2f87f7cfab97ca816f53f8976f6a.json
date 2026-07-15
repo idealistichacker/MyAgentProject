@@ -1,0 +1,138 @@
+{
+  "data": {
+    "id": "unit-6-agent-evolution",
+    "type": "unit",
+    "title": "Agent的\"进化之路\"——上下文记忆、多轮迭代与实战部署",
+    "description": "你的Agent已经是个合格的'bug杀手'了，但它还缺最后一块拼图：记忆与进化。本单元解决Agent在长任务中的'失忆症'——上下文窗口溢出、历史信息丢失、重复犯同样的错。你将实现滑动窗口记忆管理、错误历史摘要压缩、以及'经验回放'机制（把之前成功的修复模式存入知识库供后续复用）。最后，你将把Agent打包为CLI工具，支持配置文件驱动、多项目适配、日志记录与可视化执行轨迹。学完本单元，你的Agent不再是一个demo，而是一个你可以日常使用、持续进化的'编程搭档'——它甚至会比你更了解你的代码库的bug模式。",
+    "prerequisites": [
+      "unit-5-agent-immune"
+    ],
+    "objectives": [
+      "实现上下文窗口管理策略：滑动窗口、历史摘要压缩、关键信息保留机制",
+      "构建'经验知识库'：将成功修复的模式持久化存储，供后续任务复用",
+      "将Agent打包为CLI工具：支持配置文件、项目适配、日志记录与执行轨迹可视化",
+      "完成最终实战：让Agent处理一个真实开源项目的issue，从阅读issue→定位代码→修复→验证全流程自主完成"
+    ],
+    "references": [],
+    "passCriteria": {
+      "quizMinScore": 1,
+      "exerciseMustPass": true
+    },
+    "content": "# Agent的\"进化之路\"——上下文记忆、经验复用与实战部署\n\n## 🧠 开场：你的Agent得了\"金鱼脑\"\n\n上一单元你的Agent已能读文件、执行代码、根据报错修改——一个像样的ReAct循环跑起来了。但你可能遇到一个尴尬现象：\n\n> 第7轮迭代时，Agent修好了bug A；第12轮，它又把bug A重新引入了。\n\n这不是Agent\"蠢\"，而是它**失忆了**。LLM的上下文窗口有限——当对话轮次堆积，早期的关键决策被挤出窗口，Agent就像一条金鱼。\n\n本单元我们给Agent装上**三层记忆系统**，然后打包成可日常使用的CLI工具。\n\n---\n\n## 一、上下文窗口管理：给Agent\"工作记忆\"\n\n### 1.1 问题本质\n\nReAct循环每轮产生 `Thought → Action → Observation`。跑15轮，上下文轻松突破8K tokens。三种策略对比：\n\n| 策略 | 思路 | 代价 |\n|------|------|------|\n| **截断** | 只保留最近N轮 | 丢失早期关键决策 |\n| **摘要压缩** | 用LLM压缩旧对话 | 额外API调用，有信息损失 |\n| **滑动窗口+摘要** | 混合策略 | 实现稍复杂，但效果最佳 |\n\n### 1.2 滑动窗口+摘要压缩\n\n核心思想：**近期对话保留原文，远期对话压缩为摘要**。\n\n```python\nimport tiktoken\n\nclass ContextManager:\n    def __init__(self, max_recent_tokens: int = 4000, \n                 max_summary_tokens: int = 800):\n        self.recent_messages: list[dict] = []\n        self.summary: str = \"\"\n        self.max_recent_tokens = max_recent_tokens\n        self.max_summary_tokens = max_summary_tokens\n        self._enc = tiktoken.encoding_for_model(\"gpt-4o\")\n\n    def _count_tokens(self, messages: list[dict]) -> int:\n        total = 0\n        for msg in messages:\n            total += len(self._enc.encode(msg[\"content\"]))\n            total += 4  # 每条消息的结构开销\n        return total\n\n    def add(self, message: dict):\n        self.recent_messages.append(message)\n        # 按token而非条数判断，避免长Observation撑爆窗口\n        if self._count_tokens(self.recent_messages) > self.max_recent_tokens:\n            self._compress()\n\n    def _compress(self):\n        \"\"\"压缩最旧的2条消息到摘要中\"\"\"\n        to_compress = self.recent_messages[:2]\n        self.recent_messages = self.recent_messages[2:]\n        \n        # 将消息列表格式化为可读文本\n        conv_text = \"\\n\".join(\n            f\"[{m['role']}] {m['content'][:500]}\" for m in to_compress\n        )\n        prompt = (f\"当前摘要：{self.summary}\\n\\n新对话：\\n{conv_text}\\n\\n\"\n                  f\"请更新摘要（不超过{self.max_summary_tokens} tokens），\"\n                  f\"保留：关键决策、已确认的根因、已尝试且失败的方案、\"\n                  f\"已验证的修复。丢弃闲聊和冗余推理过程。\")\n        self.summary = llm_call(prompt)\n\n    def build_context(self) -> list[dict]:\n        context = []\n        if self.summary:\n            context.append({\"role\": \"system\",\n                           \"content\": f\"[历史摘要]\\n{self.summary}\"})\n        context.extend(self.recent_messages)\n        return context\n```\n\n> ⚠️ **Gotcha #1**：按消息条数管理窗口是常见陷阱。一条 `read_file` 的 Observation 可能包含2000+ tokens，而一条 Thought 可能只有50 tokens。**必须按token计数**，否则长输出会突然撑爆窗口。\n\n> ⚠️ **Gotcha #2**：摘要本身也会膨胀。如果 `len(self.summary)` 超过 `max_summary_tokens`，需要对摘要再做一次压缩——即\"摘要的摘要\"。实现时加一个 `_trim_summary()` 方法，在 `_compress()` 末尾调用。\n\n### 1.3 关键信息保留机制\n\n不是所有信息都该被压缩。以下信息应**永久保留**，直接注入system prompt：\n\n- **项目结构摘要**：文件树+关键模块职责\n- **已确认的根因**：如\"`divide()` 在 `x=0` 时未做检查\"\n- **已验证的修复**：如\"已将 `return a/b` 改为 `return a/b if b != 0 else 0`，测试通过\"\n- **操作禁忌**：如\"不要修改 `__init__.py`，它是自动生成的\"\n\n```python\nKEY_INFO_TEMPLATE = \"\"\"\n[项目上下文]\n{project_summary}\n\n[已确认事实]\n{confirmed_facts}\n\n[操作禁忌]\n{forbidden_actions}\n\"\"\"\n```\n\n> 💡 **设计原则**：摘要负责\"大概记得发生了什么\"，关键信息保留负责\"绝对不能忘的事实\"。两者互补——摘要是**有损压缩**，关键信息是**无损锚点**。\n\n> ⚠️ **Gotcha #3**：`confirmed_facts` 需要支持**追加和撤销**。如果Agent后来发现之前的\"已确认根因\"是错的，必须有机制更新它，否则错误信息会持续误导后续决策。实现一个 `update_fact(key, old_value, new_value)` 方法，并在摘要中记录\"推翻了之前的判断X\"。\n\n---\n\n## 二、经验知识库：让Agent\"吃一堑，长一智\"\n\n### 2.1 核心思想\n\n人类程序员修bug多了会形成**模式直觉**。我们让Agent也具备这种能力——**经验回放**。\n\n每次成功修复后，存储以下结构化经验：\n\n```python\n@dataclass\nclass FixExperience:\n    error_signature: str    # \"KeyError: 'config' in parser.py:42\"\n    error_type: str          # \"KeyError\" —— 用于粗粒度匹配\n    root_cause: str          # \"字典key拼写错误，应为'configs'\"\n    fix_pattern: str         # \"检查所有dict访问，使用.get()或校验key\"\n    fix_diff: str            # 具体代码改动\n    project_language: str    # \"python\" —— 避免跨语言误匹配\n    success: bool            # 是否通过测试\n    timestamp: str           # ISO格式时间戳\n```\n\n### 2.2 存储与检索\n\n```python\nclass ExperienceKB:\n    def __init__(self, path: str = \".agent_memory/experiences.json\"):\n        self.path = Path(path)\n        self.path.parent.mkdir(exist_ok=True)\n        self.experiences: list[dict] = self._load()\n\n    def save_experience(self, exp: FixExperience):\n        # 去重：相同error_signature + root_cause不重复存储\n        existing = {hash((e[\"error_signature\"], e[\"root_cause\"]))\n                    for e in self.experiences}\n        if hash((exp.error_signature, exp.root_cause)) not in existing:\n            self.experiences.append(asdict(exp))\n            self._flush()\n\n    def retrieve(self, error_msg: str, language: str,\n                 top_k: int = 3) -> list[dict]:\n        \"\"\"两阶段检索：先按error_type粗筛，再按关键词精排\"\"\"\n        # 提取错误类型（如KeyError, TypeError）\n        error_type = self._extract_error_type(error_msg)\n        candidates = [e for e in self.experiences\n                      if e[\"project_language\"] == language\n                      and e[\"error_type\"] == error_type]\n        \n        scored = []\n        error_words = set(error_msg.lower().split())\n        for exp in candidates:\n            sig_words = set(exp[\"error_signature\"].lower().split())\n            score = len(error_words & sig_words)  # 交集大小\n            if score > 0:\n                scored.append((score, exp))\n        scored.sort(key=lambda x: -x[0])\n        return [e for _, e in scored[:top_k]]\n```\n\n> ⚠️ **Gotcha #4**：朴素的字符串匹配会漏掉语义相似但措辞不同的错误。生产环境应升级为向量检索（如用 `sentence-transformers` 对 `error_signature` 编码，存入FAISS）。但作为教学起点，关键词匹配足够展示概念。\n\n> ⚠️ **Gotcha #5**：经验库会无限增长。设置上限（如保留最近500条），或定期清理 `success=False` 的经验——失败模式价值低且可能误导。\n\n### 2.3 注入Agent决策\n\n```python\nrelevant = kb.retrieve(current_error, language=\"python\")\nif relevant:\n    context.append({\"role\": \"system\", \"content\":\n        f\"[历史经验参考]\\n{format_experiences(relevant)}\\n\"\n        f\"请参考但不要盲从——当前bug可能与历史case表面相似但根因不同。\"})\n```\n\n> ⚠️ **Gotcha #6**：经验是**参考**而非**指令**。如果注入方式过于强势（如\"你必须按此方案修复\"），Agent会\"拿着锤子看什么都是钉子\"。用\"参考但不要盲从\"的措辞，让Agent保持独立判断。\n\n---\n\n## 三、CLI打包：从Demo到工具\n\n### 3.1 配置文件驱动\n\n```yaml\n# .agent_config.yml\nproject:\n  name: \"my-flask-app\"\n  language: \"python\"\n  test_command: \"pytest tests/\"\n  entry_point: \"app.py\"\n\nagent:\n  max_iterations: 15\n  model: \"gpt-4o\"\n  context_strategy: \"sliding_window\"\n  max_recent_tokens: 4000\n  experience_kb: true\n\nrules:\n  forbidden_files: [\"__init__.py\", \"migrations/\"]\n  preferred_fix_style: \"minimal_diff\"\n```\n\n### 3.2 CLI入口\n\n```python\nimport argparse, yaml, logging, sys\n\ndef main():\n    parser = argparse.ArgumentParser(description=\"🤖 自我修复编程Agent\")\n    parser.add_argument(\"--config\", default=\".agent_config.yml\")\n    parser.add_argument(\"--issue\", required=True,\n                       help=\"GitHub issue URL或本地文件路径\")\n    parser.add_argument(\"--verbose\", action=\"store_true\")\n    parser.add_argument(\"--dry-run\", action=\"store_true\",\n                       help=\"只分析不修改文件\")\n    args = parser.parse_args()\n\n    try:\n        config = yaml.safe_load(open(args.config))\n    except FileNotFoundError:\n        print(f\"❌ 配置文件 {args.config} 不存在\", file=sys.stderr)\n        sys.exit(1)\n\n    setup_logging(config, verbose=args.verbose)\n    agent = CodingAgent(config, dry_run=args.dry_run)\n    \n    try:\n        result = agent.run(issue=args.issue)\n    except KeyboardInterrupt:\n        print(\"\\n⚠️ 用户中断，保存当前进度...\")\n        agent.save_checkpoint()\n        sys.exit(130)\n    \n    print(f\"\\n{'✅' if result.success else '❌'} {result.summary}\")\n    print(f\"📊 执行轨迹已保存至 .agent_memory/traces/{result.trace_id}.md\")\n```\n\n> ⚠️ **Gotcha #7**：`--dry-run` 模式至关重要。Agent在分析阶段可能误判，dry-run让用户先审查方案再决定是否执行。生产级Agent应默认dry-run，需显式 `--apply` 才真正修改文件。\n\n### 3.3 执行轨迹可视化\n\n每轮迭代记录结构化日志：\n\n```python\ntrace_entry = {\n    \"round\": 3,\n    \"thought\": \"TypeError提示add()缺少参数，检查调用处...\",\n    \"action\": \"read_file(main.py:15-20)\",\n    \"observation\": \"add(x)  # 缺少第二个参数\",\n    \"decision\": \"修改为 add(x, 0)\",\n    \"context_tokens\": 3200,\n    \"experience_used\": True,\n    \"experience_source\": \"exp_0017\",\n    \"elapsed_seconds\": 4.2\n}\n```\n\n跑完后生成Markdown报告，包含每轮思考链、操作、token消耗——这是Agent的\"体检报告\"。\n\n> ⚠️ **Gotcha #8**：轨迹中记录 `experience_source` 极其重要。当Agent给出了错误修复，你需要追溯是哪条历史经验误导了它，然后从知识库中修正或删除该条目——形成闭环反馈。\n\n---\n\n## 四、最终实战：处理真实Issue\n\n把一切组装起来，全流程为：\n\n```\n读取Issue → 理解问题描述 → 搜索相关代码 → 定位根因\n→ 生成修复方案 → 应用修改 → 运行测试 → 验证通过 → 存入经验库\n```\n\n### 4.1 实战建议\n\n1. **选对Issue**：从 `good-first-issue` 标签开始，选有明确报错信息的issue。模糊的\"功能请求\"不适合作为入门实战。\n\n2. **分阶段验证**：不要让Agent一口气跑完15轮。前3轮观察它是否正确定位代码；如果方向偏了，及时中断并调整system prompt中的项目描述。\n\n3. **失败也是数据**：即使Agent没修好，执行轨迹也能帮你定位瓶颈——是上下文丢失？经验没命中？还是推理偏差？将这些失败case也存入知识库，标记 `success=False`，它们同样有价值。\n\n> 🎯 **这就是你的\"成人礼\"**：从手搓ReAct循环，到赋予记忆与进化能力，再到打包为可部署工具——你亲手造的不再是一个demo，而是一个**会学习、会记忆、会进化的编程搭档**。\n\n---\n\n## 📌 本单元核心要点\n\n1. **滑动窗口+摘要压缩**需按token计数，关键信息单独无损保留，摘要本身也要有上限管理\n2. **经验知识库**需去重、限长、两阶段检索，注入时措辞为\"参考\"而非\"指令\"\n3. **CLI工具**需配置驱动、dry-run保护、中断恢复、结构化轨迹——这些是demo与工具的分水岭\n4. 最终实战串联所有模块——这直接就是Final Project的核心交付物",
+    "quiz": [
+      {
+        "id": "q1",
+        "type": "choice",
+        "question": "你的Agent在第5轮成功修复了 divide() 的除零bug，但第12轮它又把除零检查删掉了。排查发现：上下文窗口8K tokens，第5轮的决策记录早已被挤出窗口。以下哪种策略能最有效防止此问题复发？",
+        "options": [
+          "A) 换一个128K上下文窗口的模型，一劳永逸",
+          "B) 实现滑动窗口+摘要压缩，并将'已验证的修复'作为关键信息永久注入system prompt",
+          "C) 将ReAct最大迭代次数砍到5轮，不让它跑那么久",
+          "D) 每轮都重新读取所有项目文件，确保信息不丢失"
+        ],
+        "answer": "B",
+        "explanation": "换大模型只是延缓溢出，不解决根本问题；砍迭代次数会限制Agent能力；每轮重读所有文件浪费大量token。滑动窗口+摘要压缩管理上下文生命周期，同时将已验证修复作为'无损锚点'永久保留——这是组合拳，既控制窗口增长又防止关键信息丢失。"
+      },
+      {
+        "id": "q2",
+        "type": "choice",
+        "question": "经验知识库中有一条记录：KeyError: 'config' → 根因是字典key拼写错误，应改为'configs'。现在Agent遇到 KeyError: 'configuration'，检索到这条经验后直接套用了'拼写错误'的修复方案——但这次根因其实是配置文件未加载。如何改进检索与注入策略来避免此类误判？",
+        "options": [
+          "A) 删掉这条经验记录，它已经误导过一次了",
+          "B) 升级为向量检索捕捉语义相似性，注入时用'参考但不要盲从'的措辞，让Agent保持独立判断",
+          "C) 彻底弃用经验知识库，每轮都从零推理",
+          "D) 只存储 success=False 的经验，成功的不存"
+        ],
+        "answer": "B",
+        "explanation": "单次误判不应删除经验——它在其他场景可能有用。问题出在检索粒度太粗（纯关键词匹配）和注入方式太强势。向量检索能区分'config拼写错误'与'configuration未加载'的语义差异；'参考但不要盲从'的措辞防止Agent'拿着锤子看什么都是钉子'。这是经验复用的核心设计哲学。"
+      },
+      {
+        "id": "q3",
+        "type": "choice",
+        "question": "你的Agent跑了20轮后，摘要从最初的100字膨胀到2000字，占据了上下文窗口的1/4。以下哪个是最佳处理方案？",
+        "options": [
+          "A) 直接清空摘要，从当前轮重新开始记忆",
+          "B) 调大 max_recent_tokens，给摘要腾出更多空间",
+          "C) 实现 _trim_summary() 方法：当摘要超过 max_summary_tokens 时，对摘要本身再做一次压缩",
+          "D) 放弃摘要机制，退化为纯截断策略只保留最近N轮"
+        ],
+        "answer": "C",
+        "explanation": "清空摘要会丢失全部历史记忆；调大窗口治标不治本，摘要会继续膨胀；放弃摘要退化为纯截断，丢失早期关键决策。对摘要本身做压缩（'摘要的摘要'）是正确做法——设上限、超限时再压缩一次，保留最关键信息，丢弃次要细节。这正是Gotcha #2强调的。"
+      }
+    ],
+    "exercise": {
+      "id": "ex-1",
+      "language": "python",
+      "entrypoint": "ContextManager",
+      "description": "【造物主试炼·第七关】给你的Agent装上工作记忆！实现 ContextManager 类——滑动窗口+摘要压缩的核心引擎。Agent每轮ReAct循环产生的 Thought→Action→Observation 都会经过它：近期消息保留原文，旧消息压缩为摘要。你的Agent能否记住第5轮修了什么bug，全靠这个类。这是Final Project中Agent'不失忆'的关键基础设施。",
+      "assertionMode": "return",
+      "testCases": [
+        {
+          "name": "test_token_counting_single",
+          "input": [
+            "count_tokens_single_msg"
+          ],
+          "expected": "6"
+        },
+        {
+          "name": "test_token_counting_multiple",
+          "input": [
+            "count_tokens_multi_msg"
+          ],
+          "expected": "11"
+        },
+        {
+          "name": "test_add_no_compression",
+          "input": [
+            "add_within_limit"
+          ],
+          "expected": "2_messages_empty_summary"
+        },
+        {
+          "name": "test_compression_triggers",
+          "input": [
+            "add_exceeds_limit"
+          ],
+          "expected": "non_empty_summary"
+        },
+        {
+          "name": "test_summary_in_context",
+          "input": [
+            "build_context_with_summary"
+          ],
+          "expected": "system_msg_with_SUMMARY"
+        },
+        {
+          "name": "test_recent_preserved",
+          "input": [
+            "recent_msg_after_compress"
+          ],
+          "expected": "new_message_three_preserved"
+        },
+        {
+          "name": "test_compression_format",
+          "input": [
+            "compress_format_check"
+          ],
+          "expected": "[user] old msg -> [assistant] old reply"
+        },
+        {
+          "name": "test_append_to_summary",
+          "input": [
+            "append_to_existing_summary"
+          ],
+          "expected": "[user] first msg -> [assistant] second msg -> [user] third msg"
+        }
+      ],
+      "hints": [
+        "token计数 = 每条消息的 content.split() 单词数 + 4（结构开销），对所有消息求和",
+        "add() 中用 while 循环：只要 token 数超限且 recent_messages 有超过2条，就持续调用 _compress()",
+        "_compress() 取前2条消息，格式化为 '[role] content[:50]'，用 ' -> ' 连接。如果已有摘要，追加到旧摘要后面",
+        "build_context() 先放摘要（如有），再放 recent_messages——摘要作为 system 消息，content 以 '[SUMMARY] ' 开头"
+      ],
+      "testCode": "import json\nfrom solution import ContextManager\n\ntests = []\n\n# Test 1: Token counting - single message\ncm = ContextManager()\ntokens = cm._count_tokens([{\"role\": \"user\", \"content\": \"hello world\"}])\ntests.append({\n    \"name\": \"test_token_counting_single\",\n    \"passed\": tokens == 6,\n    \"expected\": \"6\",\n    \"actual\": str(tokens),\n    \"message\": \"\" if tokens == 6 else f\"Expected 6 (2 words + 4 overhead), got {tokens}\"\n})\n\n# Test 2: Token counting - multiple messages\ntokens2 = cm._count_tokens([\n    {\"role\": \"user\", \"content\": \"hi there\"},\n    {\"role\": \"assistant\", \"content\": \"hello\"}\n])\ntests.append({\n    \"name\": \"test_token_counting_multiple\",\n    \"passed\": tokens2 == 11,\n    \"expected\": \"11\",\n    \"actual\": str(tokens2),\n    \"message\": \"\" if tokens2 == 11 else f\"Expected 11 (2+4 + 1+4), got {tokens2}\"\n})\n\n# Test 3: Basic add without compression\ncm3 = ContextManager(max_recent_tokens=1000)\ncm3.add({\"role\": \"user\", \"content\": \"Fix the bug\"})\ncm3.add({\"role\": \"assistant\", \"content\": \"On it\"})\ntests.append({\n    \"name\": \"test_add_no_compression\",\n    \"passed\": len(cm3.recent_messages) == 2 and cm3.summary == \"\",\n    \"expected\": \"2 messages, empty summary\",\n    \"actual\": f\"{len(cm3.recent_messages)} messages, summary='{cm3.summary}'\",\n    \"message\": \"\"\n})\n\n# Test 4: Compression triggers when token limit exceeded\ncm4 = ContextManager(max_recent_tokens=20)\ncm4.add({\"role\": \"user\", \"content\": \"fix bug A in main py file\"})\ncm4.add({\"role\": \"assistant\", \"content\": \"reading main py now\"})\ncm4.add({\"role\": \"user\", \"content\": \"also check utils py\"})\ntests.append({\n    \"name\": \"test_compression_triggers\",\n    \"passed\": cm4.summary != \"\",\n    \"expected\": \"non-empty summary\",\n    \"actual\": f\"summary='{cm4.summary}'\",\n    \"message\": \"\"\n})\n\n# Test 5: build_context includes summary as system message\ncm5 = ContextManager(max_recent_tokens=20)\ncm5.add({\"role\": \"user\", \"content\": \"first message here today\"})\ncm5.add({\"role\": \"assistant\", \"content\": \"second message here today\"})\ncm5.add({\"role\": \"user\", \"content\": \"third message here today\"})\nctx5 = cm5.build_context()\nhas_summary_msg = any(m[\"role\"] == \"system\" and \"[SUMMARY]\" in m.get(\"content\", \"\") for m in ctx5)\ntests.append({\n    \"name\": \"test_summary_in_context\",\n    \"passed\": has_summary_msg,\n    \"expected\": \"system message with [SUMMARY]\",\n    \"actual\": f\"has_summary={has_summary_msg}\",\n    \"message\": \"\"\n})\n\n# Test 6: Recent messages preserved after compression\ncm6 = ContextManager(max_recent_tokens=20)\ncm6.add({\"role\": \"user\", \"content\": \"old message one here\"})\ncm6.add({\"role\": \"assistant\", \"content\": \"old reply two here\"})\ncm6.add({\"role\": \"user\", \"content\": \"new message three\"})\nctx6 = cm6.build_context()\nrecent_contents = [m[\"content\"] for m in ctx6 if m[\"role\"] != \"system\"]\nhas_recent = \"new message three\" in recent_contents\ntests.append({\n    \"name\": \"test_recent_preserved\",\n    \"passed\": has_recent,\n    \"expected\": \"new message three preserved\",\n    \"actual\": f\"recent_contents={recent_contents}\",\n    \"message\": \"\"\n})\n\n# Test 7: Compression format is correct\ncm7 = ContextManager()\ncm7.recent_messages = [\n    {\"role\": \"user\", \"content\": \"old msg\"},\n    {\"role\": \"assistant\", \"content\": \"old reply\"}\n]\ncm7._compress()\nexpected7 = \"[user] old msg -> [assistant] old reply\"\ntests.append({\n    \"name\": \"test_compression_format\",\n    \"passed\": cm7.summary == expected7,\n    \"expected\": expected7,\n    \"actual\": cm7.summary,\n    \"message\": \"\"\n})\n\n# Test 8: Appending to existing summary\ncm8 = ContextManager()\ncm8.summary = \"[user] first msg\"\ncm8.recent_messages = [\n    {\"role\": \"assistant\", \"content\": \"second msg\"},\n    {\"role\": \"user\", \"content\": \"third msg\"}\n]\ncm8._compress()\nexpected8 = \"[user] first msg -> [assistant] second msg -> [user] third msg\"\ntests.append({\n    \"name\": \"test_append_to_summary\",\n    \"passed\": cm8.summary == expected8,\n    \"expected\": expected8,\n    \"actual\": cm8.summary,\n    \"message\": \"\"\n})\n\nfor t in tests:\n    print(json.dumps(t))",
+      "starterCode": "class ContextManager:\n    \"\"\"Agent的工作记忆管理器——滑动窗口+摘要压缩的核心引擎。\n\n    在ReAct循环中，Agent每轮产生 Thought→Action→Observation。\n    当对话堆积，早期关键决策会被挤出上下文窗口——Agent\"失忆\"了。\n    ContextManager 让Agent保留近期消息原文，将旧消息压缩为摘要，\n    确保关键决策不被遗忘。\n\n    简化说明：\n        - token计数：1 word = 1 token，每条消息额外 +4 tokens 结构开销\n        - 压缩格式：\"[role] content[:50]\"，多条用 \" -> \" 连接\n        - 摘要作为 system 消息注入，content 以 \"[SUMMARY] \" 开头\n\n    Examples:\n        >>> cm = ContextManager(max_recent_tokens=1000)\n        >>> cm.add({\"role\": \"user\", \"content\": \"Fix bug in main.py\"})\n        >>> cm.add({\"role\": \"assistant\", \"content\": \"Reading main.py\"})\n        >>> ctx = cm.build_context()\n        >>> len(ctx)\n        2\n\n        >>> cm = ContextManager(max_recent_tokens=15)\n        >>> cm.add({\"role\": \"user\", \"content\": \"hello world from agent\"})\n        >>> cm.add({\"role\": \"assistant\", \"content\": \"I will help\"})\n        >>> cm.add({\"role\": \"user\", \"content\": \"please fix it\"})\n        >>> cm.summary != \"\"\n        True\n\n        >>> cm2 = ContextManager()\n        >>> cm2.recent_messages = [{\"role\": \"user\", \"content\": \"old msg\"}, {\"role\": \"assistant\", \"content\": \"old reply\"}]\n        >>> cm2._compress()\n        >>> cm2.summary\n        '[user] old msg -> [assistant] old reply'\n    \"\"\"\n\n    def __init__(self, max_recent_tokens: int = 4000):\n        self.recent_messages: list[dict] = []\n        self.summary: str = \"\"\n        self.max_recent_tokens = max_recent_tokens\n\n    def _count_tokens(self, messages: list[dict]) -> int:\n        \"\"\"计算消息列表的token数。\n\n        规则：每条消息的 token 数 = content 的单词数 + 4（结构开销）。\n        对所有消息求和返回总数。\n\n        Examples:\n            >>> cm = ContextManager()\n            >>> cm._count_tokens([{\"role\": \"user\", \"content\": \"hello world\"}])\n            6\n            >>> cm._count_tokens([{\"role\": \"user\", \"content\": \"hi\"}, {\"role\": \"assistant\", \"content\": \"hey\"}])\n            10\n        \"\"\"\n        # TODO: Step 1 - 遍历 messages 中每条消息\n        # TODO: Step 2 - 对每条消息，计算 content.split() 的单词数，再加 4\n        # TODO: Step 3 - 累加所有消息的 token 数并返回\n        pass\n\n    def add(self, message: dict):\n        \"\"\"添加一条消息到工作记忆。如果总 token 数超过上限，触发压缩。\n\n        压缩循环：只要 token 数超限且 recent_messages 超过2条，\n        就持续调用 _compress()，直到不超限或只剩2条以下。\n\n        Examples:\n            >>> cm = ContextManager(max_recent_tokens=100)\n            >>> cm.add({\"role\": \"user\", \"content\": \"test\"})\n            >>> len(cm.recent_messages)\n            1\n            >>> cm.summary\n            ''\n        \"\"\"\n        # TODO: Step 1 - 将 message 追加到 self.recent_messages\n        # TODO: Step 2 - 进入 while 循环：条件为 _count_tokens(self.recent_messages) > self.max_recent_tokens 且 len(self.recent_messages) > 2\n        # TODO: Step 3 - 循环体内调用 self._compress()\n        pass\n\n    def _compress(self):\n        \"\"\"将最旧的2条消息压缩进摘要，从 recent_messages 中移除。\n\n        压缩格式：每条消息格式化为 \"[role] content[:50]\"，\n        多条之间用 \" -> \" 连接。\n        如果已有摘要，新压缩内容追加到旧摘要后面（用 \" -> \" 连接）。\n\n        Examples:\n            >>> cm = ContextManager()\n            >>> cm.recent_messages = [{\"role\": \"user\", \"content\": \"old msg\"}, {\"role\": \"assistant\", \"content\": \"old reply\"}]\n            >>> cm._compress()\n            >>> cm.summary\n            '[user] old msg -> [assistant] old reply'\n            >>> len(cm.recent_messages)\n            0\n\n            >>> cm2 = ContextManager()\n            >>> cm2.summary = \"[user] first\"\n            >>> cm2.recent_messages = [{\"role\": \"assistant\", \"content\": \"second\"}, {\"role\": \"user\", \"content\": \"third\"}]\n            >>> cm2._compress()\n            >>> cm2.summary\n            '[user] first -> [assistant] second -> [user] third'\n        \"\"\"\n        # TODO: Step 1 - 取出 self.recent_messages 的前2条作为待压缩消息\n        # TODO: Step 2 - 从 self.recent_messages 中移除这2条（保留剩余的）\n        # TODO: Step 3 - 将待压缩消息格式化：每条变为 \"[role] content[:50]\"\n        # TODO: Step 4 - 用 \" -> \" 连接所有格式化后的字符串，得到 new_part\n        # TODO: Step 5 - 如果 self.summary 非空，设为 self.summary + \" -> \" + new_part；否则设为 new_part\n        pass\n\n    def build_context(self) -> list[dict]:\n        \"\"\"构建最终发送给LLM的上下文消息列表。\n\n        结构：如果摘要非空，第一条为 system 消息 {\"role\": \"system\", \"content\": \"[SUMMARY] {摘要}\"}，\n        然后依次追加 recent_messages 中的所有消息。\n\n        Examples:\n            >>> cm = ContextManager()\n            >>> cm.add({\"role\": \"user\", \"content\": \"hello\"})\n            >>> ctx = cm.build_context()\n            >>> len(ctx)\n            1\n            >>> ctx[0][\"role\"]\n            'user'\n\n            >>> cm2 = ContextManager()\n            >>> cm2.summary = \"previous context\"\n            >>> cm2.recent_messages = [{\"role\": \"user\", \"content\": \"new msg\"}]\n            >>> ctx2 = cm2.build_context()\n            >>> ctx2[0][\"role\"]\n            'system'\n            >>> \"[SUMMARY]\" in ctx2[0][\"content\"]\n            True\n            >>> ctx2[1][\"content\"]\n            'new msg'\n        \"\"\"\n        # TODO: Step 1 - 创建空列表 context = []\n        # TODO: Step 2 - 如果 self.summary 非空，追加 {\"role\": \"system\", \"content\": f\"[SUMMARY] {self.summary}\"}\n        # TODO: Step 3 - 将 self.recent_messages 中的所有消息追加到 context\n        # TODO: Step 4 - 返回 context\n        pass"
+    }
+  },
+  "expiry": 1783418575245
+}
