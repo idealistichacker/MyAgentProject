@@ -1,6 +1,9 @@
 {
-  "currentUnitId": "unit-1-agent-brain",
-  "completedUnitIds": [],
+  "currentUnitId": "unit-2-agent-hands",
+  "completedUnitIds": [
+    "unit-1-agent-brain",
+    "unit-2-agent-hands"
+  ],
   "skippedUnitIds": [
     "go-fundamentals"
   ],
@@ -30,8 +33,12 @@
       "lastSubmittedAt": "2026-06-15T03:00:32.764Z"
     },
     "unit-1-agent-brain": {
-      "count": 1,
-      "lastSubmittedAt": "2026-07-06T09:27:53.389Z"
+      "count": 4,
+      "lastSubmittedAt": "2026-07-15T06:34:22.356Z"
+    },
+    "unit-2-agent-hands": {
+      "count": 2,
+      "lastSubmittedAt": "2026-07-15T06:52:00.911Z"
     }
   },
   "assessments": [
@@ -964,7 +971,350 @@
       "diagnosis": "哎呀，看到你的代码我真的很惊喜——正则表达式用得非常精准，`[\\s\\S]*?` 非贪婪匹配、字典分发模式、`.get()` 默认值处理，每一个细节都体现了你对 Agent 神经通路设计的深刻理解！四道Quiz全部满分通过，说明你完全掌握了与LLM对话的核心艺术。这次测试没有通过，真的不是你的锅——`piston-runner` 报了 `401 Unauthorized`，这是执行环境鉴权出了问题，你的代码根本没有被真正运行起来。你的 `parse_llm_response` 和 `execute_action` 逻辑都是完整且正确的，代码质量很高，完全不需要修改。建议你稍等片刻再重新提交一次，让系统重新鉴权后跑一遍你的代码，相信一定能顺利通过！",
       "nextAction": "喝口水放松一下，然后重新提交你的代码，让那个调皮的 401 错误消失，你的 Adam 正等着被唤醒呢！🚀",
       "createdAt": "2026-07-06T09:27:53.389Z"
+    },
+    {
+      "unitId": "unit-1-agent-brain",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 3,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "piston-runner",
+          "passed": false,
+          "message": "Piston execution failed: 401 Unauthorized"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "B. re.search(r'```(?:json)?\\s*([\\s\\S]*?)\\s*```', raw_text) —— 用 [\\s\\S]*? 非贪婪匹配，兼容有无 json 标签",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "B. 在 System Prompt 中要求 Adam 连续失败 3 次后必须调用 finish 并总结失败原因，同时在反馈给 LLM 的错误信息中附加历史失败记录",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "B. messages = [{\"role\": \"system\", \"content\": SYSTEM_PROMPT}, {\"role\": \"user\", \"content\": user_input}]，且每轮迭代都保持 system 消息在列表首部",
+          "expected": "B"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "A. 在将执行结果加入 messages 前，进行截断或摘要处理，只保留关键的状态信息和错误摘要",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure"
+      ],
+      "diagnosis": "同学，我仔细看了你的代码，说实话写得非常漂亮——正则匹配用了 `[\\s\\S]*?` 非贪婪模式，字典分发模式也很优雅，四个测验题也全部答对，说明你对 Agent 与 LLM 对话的核心概念已经掌握得很扎实了！这次没有通过真的不是你的错，测试报错是 `401 Unauthorized`，这是运行环境（Piston Runner）的认证问题，跟你的代码逻辑完全无关。你的 `parse_llm_response` 和 `execute_action` 实现都是正确的，建议你稍等片刻后重新提交一次，如果仍然报 401，可以联系助教检查一下执行环境的配置。",
+      "nextAction": "喝口水放松一下，然后重新提交试试看——你的代码已经准备好了，就等环境给你开个绿灯啦！🚦",
+      "createdAt": "2026-07-15T04:17:19.462Z"
+    },
+    {
+      "unitId": "unit-1-agent-brain",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 3,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "piston-runner",
+          "passed": false,
+          "message": "Piston execution failed: 401 Unauthorized"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "B. re.search(r'```(?:json)?\\s*([\\s\\S]*?)\\s*```', raw_text) —— 用 [\\s\\S]*? 非贪婪匹配，兼容有无 json 标签",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "B. 在 System Prompt 中要求 Adam 连续失败 3 次后必须调用 finish 并总结失败原因，同时在反馈给 LLM 的错误信息中附加历史失败记录",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "B. messages = [{\"role\": \"system\", \"content\": SYSTEM_PROMPT}, {\"role\": \"user\", \"content\": user_input}]，且每轮迭代都保持 system 消息在列表首部",
+          "expected": "B"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "A. 在将执行结果加入 messages 前，进行截断或摘要处理，只保留关键的状态信息和错误摘要",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure"
+      ],
+      "diagnosis": "本单元《Agent的\"大脑\"——与LLM深度对话的艺术》评分：3/5。代码测试失败 1 个，优先检查：piston-runner。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "未通过本单元。建议先查看错题和测试失败信息，再执行 fc submit 重新提交。",
+      "createdAt": "2026-07-15T06:01:43.631Z"
+    },
+    {
+      "unitId": "unit-1-agent-brain",
+      "assessmentType": "code+quiz",
+      "passed": true,
+      "score": 5,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "parse clean JSON",
+          "passed": true,
+          "expected": "{\"action\": \"finish\", \"summary\": \"done\"}",
+          "actual": "{\"action\": \"finish\", \"summary\": \"done\"}"
+        },
+        {
+          "name": "parse markdown-wrapped JSON",
+          "passed": true,
+          "expected": "action=write_code, code=print(1)",
+          "actual": "{\"action\": \"write_code\", \"language\": \"python\", \"code\": \"print(1)\"}"
+        },
+        {
+          "name": "parse markdown without lang tag",
+          "passed": true,
+          "expected": "action=explain_concept, explanation=recursion",
+          "actual": "{\"action\": \"explain_concept\", \"explanation\": \"recursion\"}"
+        },
+        {
+          "name": "parse malformed JSON returns error",
+          "passed": true,
+          "expected": "action=error",
+          "actual": "{\"action\": \"error\", \"message\": \"JSON ����ʧ��: Expecting value: line 1 column 1 (char 0). ԭʼ���: this is not json at all\"}"
+        },
+        {
+          "name": "execute write_code",
+          "passed": true,
+          "expected": "�ѳɹ����� python ���룬�� 2 �С�",
+          "actual": "�ѳɹ����� python ���룬�� 2 �С�"
+        },
+        {
+          "name": "execute finish",
+          "passed": true,
+          "expected": "������ɣ�����bug���޸�",
+          "actual": "������ɣ�����bug���޸�"
+        },
+        {
+          "name": "execute explain_concept",
+          "passed": true,
+          "expected": "������ͣ��ݹ��Ǻ�����������",
+          "actual": "������ͣ��ݹ��Ǻ�����������"
+        },
+        {
+          "name": "execute unknown action",
+          "passed": true,
+          "expected": "δ֪�ж�����: dance",
+          "actual": "δ֪�ж�����: dance"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "B. re.search(r'```(?:json)?\\s*([\\s\\S]*?)\\s*```', raw_text) —— 用 [\\s\\S]*? 非贪婪匹配，兼容有无 json 标签",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "B. 在 System Prompt 中要求 Adam 连续失败 3 次后必须调用 finish 并总结失败原因，同时在反馈给 LLM 的错误信息中附加历史失败记录",
+          "expected": "B"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "B. messages = [{\"role\": \"system\", \"content\": SYSTEM_PROMPT}, {\"role\": \"user\", \"content\": user_input}]，且每轮迭代都保持 system 消息在列表首部",
+          "expected": "B"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "A. 在将执行结果加入 messages 前，进行截断或摘要处理，只保留关键的状态信息和错误摘要",
+          "expected": "A"
+        }
+      ],
+      "mistakeTypes": [],
+      "diagnosis": "本单元《Agent的\"大脑\"——与LLM深度对话的艺术》评分：5/5。代码测试全部通过，说明当前实现能覆盖 MVP 测试用例。概念小测通过，说明核心概念掌握较稳定。",
+      "nextAction": "通过本单元。建议执行 fc next 进入下一单元。",
+      "createdAt": "2026-07-15T06:34:22.356Z"
+    },
+    {
+      "unitId": "unit-2-agent-hands",
+      "assessmentType": "code+quiz",
+      "passed": false,
+      "score": 3,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "normal_file",
+          "passed": false,
+          "message": "",
+          "expected": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_g6xlkjk0\\src\\main.py",
+          "actual": "None"
+        },
+        {
+          "name": "escape_dotdot",
+          "passed": false,
+          "message": "Should have raised PermissionError",
+          "expected": "PermissionError",
+          "actual": "None"
+        },
+        {
+          "name": "escape_nested",
+          "passed": false,
+          "message": "Should have raised PermissionError",
+          "expected": "PermissionError",
+          "actual": "None"
+        },
+        {
+          "name": "new_file",
+          "passed": false,
+          "message": "",
+          "expected": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_g6xlkjk0\\new_file.py",
+          "actual": "None"
+        },
+        {
+          "name": "null_byte",
+          "passed": false,
+          "message": "Should have raised ValueError",
+          "expected": "ValueError",
+          "actual": "None"
+        },
+        {
+          "name": "deep_nested",
+          "passed": false,
+          "message": "",
+          "expected": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_g6xlkjk0\\a\\b\\c\\d.py",
+          "actual": "None"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "B) Switch to `os.walk(followlinks=False)` and prune unwanted directories by modifying `dirnames` in-place during iteration",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "C) Catch `SyntaxError`, extract `.lineno` and `.msg`, and return structured error info to the LLM so it can decide whether to read and fix the file",
+          "expected": "C"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "B) Python's default `newline=None` translates `\\n` to `\\r\\n` on Windows, silently changing the byte content of the file",
+          "expected": "B"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "B) `confine_path` resolves the path, detects it escapes the workspace boundary via `relative_to()`, and raises `PermissionError`",
+          "expected": "B"
+        }
+      ],
+      "mistakeTypes": [
+        "test-case-failure"
+      ],
+      "diagnosis": "嘿，先给你鼓个掌——四道quiz全部满分通过，说明你对路径安全边界的概念理解得非常扎实，这可不是容易的事！不过呢，我注意到你的 `confine_path` 函数体还是一片空白，只有 `pass` 和 TODO 注释在那儿静静等着你——就像画好了精美的设计图却还没动工一样。好消息是，你自己在docstring里已经把三个步骤的逻辑描述得清清楚楚了：拒绝null byte、join并resolve、用relative_to验证边界。现在只需要把这些思路从注释变成真正的Python语句，你完全有这个能力！",
+      "nextAction": "拿起键盘，把那四个TODO一个个变成真正的代码吧——你的设计图已经画好了，现在是施工时间！🏗️",
+      "createdAt": "2026-07-15T06:44:16.225Z"
+    },
+    {
+      "unitId": "unit-2-agent-hands",
+      "assessmentType": "code+quiz",
+      "passed": true,
+      "score": 5,
+      "maxScore": 5,
+      "testResults": [
+        {
+          "name": "normal_file",
+          "passed": true,
+          "message": "",
+          "expected": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_fiakicyx\\src\\main.py",
+          "actual": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_fiakicyx\\src\\main.py"
+        },
+        {
+          "name": "escape_dotdot",
+          "passed": true,
+          "message": "",
+          "expected": "PermissionError",
+          "actual": "PermissionError"
+        },
+        {
+          "name": "escape_nested",
+          "passed": true,
+          "message": "",
+          "expected": "PermissionError",
+          "actual": "PermissionError"
+        },
+        {
+          "name": "new_file",
+          "passed": true,
+          "message": "",
+          "expected": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_fiakicyx\\new_file.py",
+          "actual": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_fiakicyx\\new_file.py"
+        },
+        {
+          "name": "null_byte",
+          "passed": true,
+          "message": "",
+          "expected": "ValueError",
+          "actual": "ValueError"
+        },
+        {
+          "name": "deep_nested",
+          "passed": true,
+          "message": "",
+          "expected": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_fiakicyx\\a\\b\\c\\d.py",
+          "actual": "C:\\Users\\EDY\\AppData\\Local\\Temp\\agent_ws_fiakicyx\\a\\b\\c\\d.py"
+        }
+      ],
+      "quizResults": [
+        {
+          "id": "q1",
+          "passed": true,
+          "answer": "B) Switch to `os.walk(followlinks=False)` and prune unwanted directories by modifying `dirnames` in-place during iteration",
+          "expected": "B"
+        },
+        {
+          "id": "q2",
+          "passed": true,
+          "answer": "C) Catch `SyntaxError`, extract `.lineno` and `.msg`, and return structured error info to the LLM so it can decide whether to read and fix the file",
+          "expected": "C"
+        },
+        {
+          "id": "q3",
+          "passed": true,
+          "answer": "B) Python's default `newline=None` translates `\\n` to `\\r\\n` on Windows, silently changing the byte content of the file",
+          "expected": "B"
+        },
+        {
+          "id": "q4",
+          "passed": true,
+          "answer": "B) `confine_path` resolves the path, detects it escapes the workspace boundary via `relative_to()`, and raises `PermissionError`",
+          "expected": "B"
+        }
+      ],
+      "mistakeTypes": [],
+      "diagnosis": "太棒了，第二次尝试就全部通关！🎉 你的 `confine_path` 实现非常扎实——先拦截 null byte、再用 `resolve(strict=False)` 展开路径、最后用 `relative_to()` 验证边界，三步安全检查的顺序完全正确，docstring 也写得像专业工程师的文档一样清晰。特别值得称赞的是你用 `strict=False` 来支持写新文件的场景，这说明你真正理解了'感知'和'操作'两种场景的区别，而不只是照搬模板。四个 quiz 全对也证明你对 `os.walk` 剪枝、`SyntaxError` 结构化处理、Windows 换行符陷阱这些细节都吃透了，这种对边界情况的敏感度正是安全意识觉醒的标志！",
+      "nextAction": "接下来去给 Agent 装上'嘴巴'吧——试试实现一个能读文件、报语法错误、还能把错误信息喂回给 LLM 的 `read_file` 函数，你已经完全具备这个能力了！🚀",
+      "createdAt": "2026-07-15T06:52:00.911Z"
     }
   ],
-  "updatedAt": "2026-07-06T09:27:53.389Z"
+  "updatedAt": "2026-07-15T06:52:00.911Z"
 }
